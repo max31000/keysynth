@@ -26,7 +26,9 @@ typedef unsigned __int32 uint32_t;
 typedef __int16 SInt16;
 #endif
 
-const static int LG_N = 6;
+// keysynth: block size 8 (was 64) so note-ons / events take effect within 8 samples. Every rate in msfa
+// (env, lfo, pitchenv, porta, gain interpolation, phase advance) is scaled by N / LG_N, so timings are unchanged.
+const static int LG_N = 3;
 const static int N = (1 << LG_N);
 
 #if defined(__APPLE__)

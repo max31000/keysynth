@@ -88,6 +88,8 @@ export interface EngineState {
   listDevices(): Promise<void>;
   setAudioDevice(deviceType: string, name: string, sampleRate?: number, bufferSize?: number): Promise<void>;
   rescanMidi(): Promise<void>;
+  /** ASIO driver panel (the only way to change the buffer of drivers like the Yamaha Steinberg USB ASIO). */
+  openAudioPanel(): Promise<void>;
   clearError(): void;
   refreshPlugins(): Promise<void>;
   reloadPlugin(name: string): Promise<void>;
@@ -288,6 +290,9 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
             break;
           case 'log':
             set({ logs: [...get().logs.slice(-49), msg] });
+            // Problems the player must see (failed sample loads, rejected buffer size) also go to the toast.
+            // Plugin errors are duplicated as plugin_status events and shown by the plugin toast instead.
+            if ((msg.level === 'error' || msg.level === 'warn') && !msg.message.startsWith('plugin ')) set({ lastError: msg.message });
             break;
           case 'error':
             if (msg.id === undefined) set({ lastError: `${msg.code}: ${msg.message}` });
@@ -526,6 +531,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
           return client.request(msg, { expect: 'devices', timeoutMs: 15000 });
         }),
       rescanMidi: () => structural(() => client.request({ type: 'rescan_midi' }, { expect: 'devices' })),
+      openAudioPanel: () => structural(() => client.request({ type: 'open_audio_panel' }, { expect: 'open_audio_panel_ok' })),
       clearError: () => set({ lastError: null }),
       refreshPlugins: () => structural(() => client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' })),
       reloadPlugin: (name) =>

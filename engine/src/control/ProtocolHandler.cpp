@@ -328,8 +328,31 @@ const std::map<std::string, Handler>& handlers() {
              const std::string err = c.s.audio()->setDevice(strField(c.msg, "device_type"), strField(c.msg, "name"), sr, bs);
              if (!err.empty()) throw PatchError("device_error", err);
              json d = c.s.devicesJson();
+             // JUCE silently falls back to the driver's preferred size when the request is not in the device's
+             // getAvailableBufferSizes() (ASIO drivers like the Yamaha Steinberg USB one list only their panel value).
+             json warn;
+             if (const int got = c.s.audio()->status().bufferSize; bs > 0 && got != bs) {
+                 std::string sizes;
+                 for (const auto& a : d["available"])
+                     if (a["type"] == d["current"]["type"])
+                         for (const auto& b : a["bufferSizes"]) sizes += (sizes.empty() ? "" : ", ") + std::to_string(b.get<int>());
+                 warn = {{"type", "log"},
+                         {"level", "warn"},
+                         {"message", "the driver did not accept a buffer of " + std::to_string(bs) + " samples (now " +
+                                         std::to_string(got) + "; offered: " + (sizes.empty() ? "?" : sizes) +
+                                         "). Set the buffer size in the driver's control panel (Open ASIO panel)."}};
+             }
              c.others(d);
              c.reply(std::move(d));
+             // A plain event after the reply (no id: the client's pending request resolves with `devices`).
+             if (!warn.is_null()) c.out.push_back({Outgoing::Target::Reply, std::move(warn)});
+         }},
+        {"open_audio_panel",
+         [](Ctx& c) {
+             if (!c.s.audio()) throw PatchError("not_available", "no audio host");
+             const std::string err = c.s.audio()->openControlPanel();
+             if (!err.empty()) throw PatchError("not_available", err);
+             c.reply({{"type", "open_audio_panel_ok"}});
          }},
         {"panic", [](Ctx& c) { c.s.engine().panic(); }},
         {"list_plugins",

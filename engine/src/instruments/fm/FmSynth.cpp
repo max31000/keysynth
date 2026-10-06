@@ -31,10 +31,12 @@ namespace vced = fm::vced;
 
 namespace {
 
-constexpr int kChunk = N; // MSFA block size (64)
-static_assert(kChunk == 64);
+constexpr int kChunk = N; // MSFA block size (8, third_party/msfa/synth.h): events take effect <= 7 samples late
+static_assert(kChunk == 8);
 constexpr float kBaseGain = 2.0f; // one full-level carrier ~ -12 dBFS
-constexpr int kQuietChunks = 16;        // released voice silent this long (~21 ms @ 48k) -> free it
+constexpr int kQuietSamples = 1024;     // released voice silent this long (~21 ms @ 48k) -> free it
+constexpr int kQuietChunks = kQuietSamples / kChunk;
+constexpr float kGainRampSamples = 64.0f; // volume changes ramp linearly over this many samples (no zipper)
 constexpr float kQuietLevel = 1.0e-4f;  // ~3 LSB of msfa's 16-bit voice output (-80 dBFS per voice)
 
 const std::vector<std::string> kCurves = {"-LIN", "-EXP", "+EXP", "+LIN"};
@@ -117,7 +119,7 @@ struct FmSynth::Impl {
         }
         bool isActive() const noexcept { return playing; }
 
-        // Adds one 64-sample chunk into `acc`.
+        // Adds one kChunk-sample chunk into `acc`.
         void render(float* acc, int32_t lfoVal, int32_t lfoDelay) noexcept {
             alignas(16) int32_t buf[kChunk];
             std::memset(buf, 0, sizeof(buf));
@@ -154,6 +156,7 @@ struct FmSynth::Impl {
     bool built = false;
     float gain = 0.0f;
     float gainTarget = 0.0f;
+    float gainStep = 0.0f; // per sample, set when gainTarget changes
     // DC blocker (the DX7 output stage is AC-coupled; 1:1 FM ratios and feedback produce DC).
     float dcCoef = 0.999f;
     float dcX1 = 0.0f, dcY1 = 0.0f;
@@ -256,17 +259,18 @@ struct FmSynth::Impl {
         const int32_t lfoVal = lfo.getsample();
         const int32_t lfoDelay = lfo.getdelay();
         alloc.forEachActive([&](Voice& v) { v.render(chunk, lfoVal, lfoDelay); });
-        // Gain ramp across the chunk (volume changes don't zipper).
-        const float g0 = gain;
-        const float step = (gainTarget - g0) / static_cast<float>(kChunk);
+        // Linear gain ramp towards gainTarget over kGainRampSamples (volume changes don't zipper).
         for (int j = 0; j < kChunk; ++j) {
-            const float x = chunk[j] * (g0 + step * static_cast<float>(j + 1));
+            if (gain != gainTarget) {
+                gain += gainStep;
+                if ((gainStep > 0.0f) == (gain >= gainTarget)) gain = gainTarget;
+            }
+            const float x = chunk[j] * gain;
             const float y = x - dcX1 + dcCoef * dcY1;
             dcX1 = x;
             dcY1 = std::fabs(y) < 1.0e-20f ? 0.0f : y; // flush denormals
             chunk[j] = y;
         }
-        gain = gainTarget;
         chunkPos = 0;
     }
 };
@@ -348,7 +352,18 @@ const ModuleInfo& FmSynth::moduleInfo() {
             {"groupOrder", {"Main", "Macro", "Op 1", "Op 2", "Op 3", "Op 4", "Op 5", "Op 6", "LFO", "Pitch EG",
                             "Global", "Controllers"}},
             {"front", {"alg", "feedback", "op1_level", "op2_level", "op3_level", "op4_level", "op5_level",
-                       "op6_level", "brightness", "attack", "release", "volume_db"}}};
+                       "op6_level", "brightness", "attack", "release", "volume_db"}},
+            // Tabbed panel (UI ModulePanel): one tab per operator.
+            {"tabs",
+             {{{"name", "Voice"}, {"groups", {"Main", "Macro"}}},
+              {{"name", "Op 1"}, {"groups", {"Op 1"}}},
+              {{"name", "Op 2"}, {"groups", {"Op 2"}}},
+              {{"name", "Op 3"}, {"groups", {"Op 3"}}},
+              {{"name", "Op 4"}, {"groups", {"Op 4"}}},
+              {{"name", "Op 5"}, {"groups", {"Op 5"}}},
+              {{"name", "Op 6"}, {"groups", {"Op 6"}}},
+              {{"name", "LFO / Pitch EG"}, {"groups", {"LFO", "Pitch EG"}}},
+              {{"name", "Global / Ctrl"}, {"groups", {"Global", "Controllers"}}}}}};
         return i;
     }();
     return info;
@@ -368,6 +383,7 @@ void FmSynth::prepare(double sampleRate, int /*maxBlock*/) {
     impl_->built = false;
     impl_->updatePatch(params());
     impl_->gain = impl_->gainTarget = kBaseGain * dsp::dbToGain(params().get(VolumeDb));
+    impl_->gainStep = 0.0f;
     reset();
 }
 
@@ -391,7 +407,11 @@ void FmSynth::process(AudioBlock& out, MidiEventSpan events, const ProcessContex
         im.alloc.setMode(mode);
     }
     im.alloc.setPolyphony(iparam(p, Voices));
-    im.gainTarget = kBaseGain * dsp::dbToGain(p.get(VolumeDb));
+    const float target = kBaseGain * dsp::dbToGain(p.get(VolumeDb));
+    if (target != im.gainTarget) {
+        im.gainTarget = target;
+        im.gainStep = (target - im.gain) / kGainRampSamples;
+    }
 
     size_t ev = 0;
     int pos = 0;
@@ -480,6 +500,7 @@ void FmSynth::applyVoice(const fm::Dx7Voice& v) {
 void FmSynth::loadState(const nlohmann::json& state) {
     state_ = state.is_object() ? state : nlohmann::json::object();
     stateError_.clear();
+    voiceApplied_ = false;
     // `applied: true` = the voice was already copied into the patch params (control side); don't overwrite edits.
     if (const auto ap = state_.find("applied"); ap != state_.end() && ap->is_boolean() && ap->get<bool>()) return;
     const auto it = state_.find("syx");
@@ -504,6 +525,8 @@ void FmSynth::loadState(const nlohmann::json& state) {
     }
     index = std::clamp(index, 0, static_cast<int>(r.voices.size()) - 1);
     applyVoice(r.voices[static_cast<size_t>(index)]);
+    state_["applied"] = true; // the patch adopts these params (GraphBuilder -> PatchModel::adoptModuleState)
+    voiceApplied_ = true;
 }
 
 } // namespace ks

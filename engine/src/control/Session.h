@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -98,6 +99,9 @@ public:
     // Drains note activity; returns a `midi` event or null when nothing happened.
     nlohmann::json pollMidi();
     nlohmann::json transportTelemetry() const; // { ppq, playing, step, bar }
+    // Reports new Module::loadError()s of the latest graph's modules once each via `log("error", ...)` (failed sample
+    // loads finish asynchronously, so this runs on the 30 Hz pump). Returns the number of new reports.
+    int pollModuleErrors();
 
 private:
     void logWarnings(const std::vector<std::string>& w);
@@ -115,6 +119,7 @@ private:
     Pattern pattern_;
     std::string patternPath_;
     bool patternEdited_ = false;
+    std::map<const Module*, std::string> reportedErrors_; // pollModuleErrors: module -> last reported error
 };
 
 } // namespace ks

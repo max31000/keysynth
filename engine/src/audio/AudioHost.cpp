@@ -3,6 +3,7 @@
 #include "core/RtCheck.h"
 #include "platform/ThreadPriority.h"
 
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 
@@ -15,7 +16,8 @@ nlohmann::json toJson(const AudioStatus& s) {
             {"bufferSize", s.bufferSize},
             {"inputLatencyMs", s.inputLatencyMs},
             {"outputLatencyMs", s.outputLatencyMs},
-            {"running", s.running}};
+            {"running", s.running},
+            {"hasControlPanel", s.hasControlPanel}};
 }
 
 namespace {
@@ -30,7 +32,10 @@ bool preferredAsioName(const juce::String& n) {
 AudioHost::AudioHost(Engine& engine, AppPaths paths, std::function<void()> onPrepared)
     : engine_(engine), paths_(std::move(paths)), onPrepared_(std::move(onPrepared)) {}
 
-AudioHost::~AudioHost() { stop(); }
+AudioHost::~AudioHost() {
+    cancelPendingUpdate();
+    stop();
+}
 
 nlohmann::json AudioHost::loadSettings() const {
     std::ifstream f(paths_.settingsFile, std::ios::binary);
@@ -131,7 +136,43 @@ AudioStatus AudioHost::status() const {
         s.outputLatencyMs = 1000.0 * dev->getOutputLatencyInSamples() / s.sampleRate;
     }
     s.running = running_.load() && dev->isPlaying();
+    s.hasControlPanel = dev->hasControlPanel();
     return s;
+}
+
+std::string AudioHost::openControlPanel() {
+    auto* dev = dm_.getCurrentAudioDevice();
+    if (dev == nullptr) return "no audio device is open";
+    if (!dev->hasControlPanel()) return "the " + str(dev->getTypeName()) + " device has no control panel";
+    // Deferred: the reply goes out first, and a modal driver panel then runs its own loop on the message thread.
+    panelRequested_.store(true);
+    triggerAsyncUpdate();
+    return {};
+}
+
+void AudioHost::showControlPanelNow() {
+    auto* dev = dm_.getCurrentAudioDevice();
+    if (dev == nullptr || !dev->hasControlPanel()) return;
+    // JUCE ASIO: true when the panel was modal (> 300 ms) — settings may have changed, reopen with the driver's
+    // (new) preferred buffer size: bufferSize 0 = device default. Non-modal panels (the Yamaha Steinberg driver
+    // opens a separate settings app) return at once; a later buffer change there makes the driver send a reset
+    // request, JUCE reopens the device and audioDeviceAboutToStart re-reports it.
+    if (dev->showControlPanel()) {
+        auto setup = dm_.getAudioDeviceSetup();
+        setup.bufferSize = 0;
+        dm_.closeAudioDevice();
+        const juce::String err = dm_.setAudioDeviceSetup(setup, true);
+        if (err.isNotEmpty()) std::fprintf(stderr, "audio: reopening after the control panel failed: %s\n", err.toRawUTF8());
+    }
+    changed_.store(true);
+}
+
+void AudioHost::handleAsyncUpdate() {
+    if (panelRequested_.exchange(false)) showControlPanelNow();
+    if (changed_.exchange(false)) {
+        if (dm_.getCurrentAudioDevice() != nullptr) saveSettings();
+        if (onChanged) onChanged();
+    }
 }
 
 AudioDeviceList AudioHost::listDevices() {
@@ -183,6 +224,9 @@ void AudioHost::audioDeviceAboutToStart(juce::AudioIODevice* device) {
     if (onPrepared_) onPrepared_();
     promoted_.store(false);
     running_.store(true);
+    // Re-query/report the device asynchronously (buffer size may have been changed by the driver's own panel).
+    changed_.store(true);
+    triggerAsyncUpdate();
 }
 
 void AudioHost::audioDeviceStopped() { running_.store(false); }

@@ -86,6 +86,7 @@ public:
         }
         s_.engine().collectGarbage(); // every 33 ms (ARCHITECTURE: <= 50 ms)
         if (plugins_) plugins_->poll(); // finished compiles -> registry; file watch every 500 ms; faults
+        s_.pollModuleErrors();          // failed sample loads etc. -> `log` error events
         const auto midi = s_.pollMidi();
         const auto tele = s_.pollTelemetry();
         if (srv_.clientCount() == 0) return;
@@ -198,10 +199,29 @@ int main(int argc, char** argv) {
         session.setAudio(audioHost.get());
         const auto st = audioHost->status();
         printStatus(st, "audio");
+        std::string sizes;
+        for (const auto& t : audioHost->listDevices().available)
+            if (t.type == st.type)
+                for (int b : t.bufferSizes) sizes += (sizes.empty() ? "" : ", ") + std::to_string(b);
+        std::printf("audio buffer sizes offered by the driver: %s\n", sizes.empty() ? "?" : sizes.c_str());
         if (args.buffer && st.bufferSize != *args.buffer)
             std::printf("audio note: requested buffer %d not accepted by the driver (ASIO drivers often only offer the "
-                        "size set in their control panel)\n",
+                        "size set in their control panel: UI 'Open ASIO panel')\n",
                         *args.buffer);
+        // Device restarted / panel closed: re-report to every client (buffer size may have changed).
+        audioHost->onChanged = [&session, &server, host = audioHost.get(), last = st]() mutable {
+            const auto now = host->status();
+            if (now.bufferSize != last.bufferSize || now.sampleRate != last.sampleRate || now.name != last.name) {
+                char msg[256];
+                std::snprintf(msg, sizeof msg, "audio: %s, %.0f Hz, buffer %d samples, output latency %.1f ms",
+                              now.name.c_str(), now.sampleRate, now.bufferSize, now.outputLatencyMs);
+                session.log("info", msg);
+            }
+            last = now;
+            if (server.clientCount() == 0) return;
+            server.broadcast(session.devicesJson());
+            server.broadcast(session.stateJson());
+        };
     }
 
     std::unique_ptr<ks::MidiHub> midi;

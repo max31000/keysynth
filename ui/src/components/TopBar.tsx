@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { actions, useEngine } from '../store';
 import { live, onFrame } from '../store/liveBus';
 import type { ParamSpec } from '../protocol/types';
+import { LATENCY_HINT, LATENCY_WARN_MS, bufferMs, latencyTooHigh } from '../lib/latency';
 import { Knob } from './Knob';
 
 const METRO_SPEC: ParamSpec = {
@@ -131,7 +132,7 @@ export function TopBar({ onAudioSettings }: { onAudioSettings: () => void }) {
   const stats = useEngine((s) => s.stats);
   const t = useEngine((s) => s.transport);
   const open = useEngine((s) => s.connection.status === 'open');
-  const latency = audio ? audio.inputLatencyMs + audio.outputLatencyMs : 0;
+  const slow = latencyTooHigh(audio);
 
   return (
     <header className="topbar">
@@ -151,15 +152,32 @@ export function TopBar({ onAudioSettings }: { onAudioSettings: () => void }) {
             <span className={`led ${audio.running ? 'on' : 'off'}`} />
             <span className="audio-dev">{audio.name}</span>
             <span className="chip mono sr">{(audio.sampleRate / 1000).toFixed(audio.sampleRate % 1000 ? 1 : 0)}k</span>
-            <span className="chip mono">{audio.bufferSize} smp</span>
-            <span className="chip mono accent" title={`in ${audio.inputLatencyMs} ms + out ${audio.outputLatencyMs} ms`}>
-              {latency.toFixed(1)} ms
+            <span className="chip mono" title={`buffer ${bufferMs(audio).toFixed(2)} ms`}>
+              {audio.bufferSize} smp
+            </span>
+            <span
+              className={`chip mono ${slow ? 'warn' : 'accent'}`}
+              title={`output latency (device-reported, incl. buffer ${bufferMs(audio).toFixed(2)} ms)`}
+            >
+              out {audio.outputLatencyMs.toFixed(1)} ms
             </span>
           </>
         ) : (
           <span className="muted">No audio device</span>
         )}
       </button>
+      {slow && audio && (
+        <div className="latency-badge" role="status">
+          <span className="latency-badge-text" title={`Output latency above ${LATENCY_WARN_MS} ms: ${LATENCY_HINT}`}>
+            ⚠ High latency
+          </span>
+          {audio.hasControlPanel && (
+            <button type="button" className="btn small" onClick={() => void actions().openAudioPanel()} title={LATENCY_HINT}>
+              Open ASIO panel
+            </button>
+          )}
+        </div>
+      )}
 
       <CpuMeter />
       <div className="stat" title="Buffer under/overruns since start">

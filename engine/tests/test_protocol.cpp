@@ -36,6 +36,12 @@ struct FakeAudio final : AudioControl {
         lastType = type;
         lastName = name;
         st.name = name;
+        return {}; // like a driver that only offers its control-panel buffer: bufferSize stays 64
+    }
+    int panelOpens = 0;
+    std::string openControlPanel() override {
+        if (!st.hasControlPanel) return "no panel";
+        ++panelOpens;
         return {};
     }
 };
@@ -219,6 +225,36 @@ TEST_CASE("protocol: presets list/load/save, get/set patch", "[protocol]") {
     REQUIRE(r["dirty"] == true);
 }
 
+TEST_CASE("protocol: fm .syx voice is adopted into the patch, later edits survive rebuilds", "[protocol][fm]") {
+    Fixture f;
+    json patch = f.reply({{"type", "get_patch"}})["patch"];
+    patch["layers"][0]["instrument"] = {{"type", "fm"},
+                                        {"params", json::object()},
+                                        {"state", {{"syx", "assets/dx7/keysynth-fm-factory.syx"}, {"voice", 0}}}};
+    json r = f.reply({{"type", "set_patch"}, {"patch", patch}});
+    REQUIRE(r["type"] == "state");
+    const json& inst = r["patch"]["layers"][0]["instrument"];
+    REQUIRE(inst["state"]["applied"] == true);
+    REQUIRE(inst["params"]["alg"] == 5.0); // BALLAD EP, not the default algorithm 1
+    const NodeId node = inst["node"].get<NodeId>();
+    auto moduleParam = [&](const char* id) {
+        const Module* m = f.session->engine().latestGraph()->findModule(node);
+        REQUIRE(m != nullptr);
+        return m->params().get(m->params().indexOf(id));
+    };
+    const Module* before = f.session->engine().latestGraph()->findModule(node);
+
+    // Edit, then a structural rebuild with reuse (add fx) and one without (device restart): the edit stays.
+    f.send({{"type", "set_param"}, {"node", node}, {"param", "alg"}, {"value", 17}});
+    r = f.reply({{"type", "add_fx"}, {"layer", f.firstLayer()}, {"module", "gain"}});
+    REQUIRE(r["type"] == "state");
+    REQUIRE(f.session->engine().latestGraph()->findModule(node) == before); // reused (state unchanged)
+    REQUIRE(moduleParam("alg") == 17.0f);
+    f.session->rebuild(false); // new module instance: loadState must skip the syx now
+    REQUIRE(moduleParam("alg") == 17.0f);
+    REQUIRE(f.reply({{"type", "get_patch"}})["patch"]["layers"][0]["instrument"]["params"]["alg"] == 17.0);
+}
+
 TEST_CASE("protocol: note, cc, transport, panic, devices", "[protocol]") {
     Fixture f;
     REQUIRE(f.send({{"type", "note"}, {"on", true}, {"note", 60}, {"velocity", 100}}).empty());
@@ -255,10 +291,31 @@ TEST_CASE("protocol: note, cc, transport, panic, devices", "[protocol]") {
     REQUIRE(d["available"][0]["bufferSizes"].size() == 2);
     d = f.reply({{"type", "rescan_midi"}});
     REQUIRE(f.midi.rescans == 1);
-    d = f.reply({{"type", "set_audio_device"}, {"device_type", "FakeType"}, {"name", "Other"}, {"buffer_size", 128}});
-    REQUIRE(d["type"] == "devices");
+    auto setOut = f.send({{"type", "set_audio_device"}, {"id", 11}, {"device_type", "FakeType"}, {"name", "Other"}, {"buffer_size", 128}});
+    d = f.reply({{"type", "list_devices"}});
     REQUIRE(f.audio.lastName == "Other");
+    // Reply first (with id), then a warning event without id: the fake "driver" kept its 64-sample buffer.
+    std::vector<json> replies;
+    for (auto& o : setOut)
+        if (o.target == Outgoing::Target::Reply) replies.push_back(o.message);
+    REQUIRE(replies.size() == 2);
+    REQUIRE(replies[0]["type"] == "devices");
+    REQUIRE(replies[0]["id"] == 11);
+    REQUIRE(replies[1]["type"] == "log");
+    REQUIRE(replies[1]["level"] == "warn");
+    REQUIRE(!replies[1].contains("id"));
+    REQUIRE(replies[1]["message"].get<std::string>().find("offered: 64, 128") != std::string::npos);
     REQUIRE(f.reply({{"type", "set_audio_device"}, {"device_type", "Nope"}, {"name", "x"}})["code"] == "device_error");
+
+    // open_audio_panel: not_available without a panel; ok (and forwarded to the host) with one.
+    REQUIRE(f.reply({{"type", "list_devices"}})["current"]["hasControlPanel"] == false);
+    REQUIRE(f.reply({{"type", "open_audio_panel"}, {"id", 12}})["code"] == "not_available");
+    f.audio.st.hasControlPanel = true;
+    REQUIRE(f.reply({{"type", "hello"}})["audio"]["hasControlPanel"] == true);
+    const json ok = f.reply({{"type", "open_audio_panel"}, {"id", 13}});
+    REQUIRE(ok["type"] == "open_audio_panel_ok");
+    REQUIRE(ok["id"] == 13);
+    REQUIRE(f.audio.panelOpens == 1);
 }
 
 TEST_CASE("protocol: rhythm (transport fields, patterns, kit node)", "[protocol][sequencer]") {
@@ -368,7 +425,8 @@ TEST_CASE("protocol: garbage input never crashes", "[protocol]") {
     REQUIRE(f.handler->handleText(R"({"id":3})")[0].message["id"] == 3);
     for (const char* t : {"set_param", "load_preset", "save_preset", "set_patch", "add_layer", "remove_layer", "set_zone",
                           "set_instrument", "add_fx", "remove_fx", "move_fx", "set_fx_bypass", "note", "cc", "transport",
-                          "set_audio_device", "list_patterns", "get_pattern", "set_pattern", "save_pattern"}) {
+                          "set_audio_device", "open_audio_panel", "list_patterns", "get_pattern", "set_pattern",
+                          "save_pattern"}) {
         for (const json& payload : {json::object(), json{{"node", -1}, {"layer", "x"}, {"zone", 5}, {"patch", 1},
                                                          {"value", nullptr}, {"note", 1e9}, {"to", "a"},
                                                          {"pattern", json::array()}, {"time_sig", {0, 0}}, {"name", 3}}}) {

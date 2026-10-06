@@ -172,6 +172,7 @@ void Session::rebuild(bool reuse) {
     BuildResult r = GraphBuilder::build(model_.patch(), registry_, reuse ? engine_.latestGraph() : nullptr,
                                         engine_.sampleRate(), engine_.maxBlock());
     logWarnings(r.warnings);
+    for (const auto& a : r.adopted) model_.adoptModuleState(a.node, a.params, a.state);
     engine_.transport().setTempo(model_.patch().tempo);
     engine_.publish(std::move(r.graph));
 }
@@ -319,6 +320,26 @@ nlohmann::json Session::devicesJson() {
     nlohmann::json midi = nlohmann::json::array();
     if (midi_) midi = midi_->inputs();
     return {{"type", "devices"}, {"types", types}, {"current", toJson(st)}, {"available", available}, {"midiInputs", midi}};
+}
+
+int Session::pollModuleErrors() {
+    std::map<const Module*, std::string> now;
+    int reported = 0;
+    if (RackGraph* g = engine_.latestGraph()) {
+        for (ModuleNode* n : g->allModuleNodes()) {
+            if (!n->module) continue;
+            std::string err = n->module->loadError();
+            if (err.empty()) continue;
+            const auto it = reportedErrors_.find(n->module.get());
+            if (it == reportedErrors_.end() || it->second != err) {
+                if (log) log("error", n->type + " (node " + std::to_string(n->node) + "): " + err);
+                ++reported;
+            }
+            now.emplace(n->module.get(), std::move(err));
+        }
+    }
+    reportedErrors_ = std::move(now); // modules that left the graph are forgotten
+    return reported;
 }
 
 nlohmann::json Session::pollTelemetry() {

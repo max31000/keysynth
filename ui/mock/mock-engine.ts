@@ -93,6 +93,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     inputLatencyMs: 1.6,
     outputLatencyMs: 2.2,
     running: true,
+    hasControlPanel: true,
   };
   let midiInputs = ['Arturia KeyStep 37', 'loopMIDI Port'];
   // Plugin host simulation: `reload_plugin` goes compiling -> ok (or -> error for `broken_fx`).
@@ -471,9 +472,22 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
           inputLatencyMs: +((bs / sr) * 1000 + (isAsio ? 0.3 : 5)).toFixed(2),
           outputLatencyMs: +((bs / sr) * 1000 + (isAsio ? 0.9 : 10)).toFixed(2),
           running: true,
+          hasControlPanel: isAsio,
         };
         for (const c of wss.clients) send(c, c === ws ? devicesMsg(id) : devicesMsg());
         broadcastState();
+        return;
+      }
+      case 'open_audio_panel': {
+        if (!audio.hasControlPanel) return err(ws, id, 'not_available', 'this audio device has no control panel');
+        send(ws, { type: 'open_audio_panel_ok', ...(id !== undefined ? { id } : {}) });
+        // Simulates the user picking 128 samples in the driver panel: the device restarts, everyone is told.
+        setTimeout(() => {
+          const bs = 128;
+          audio = { ...audio, bufferSize: bs, outputLatencyMs: +((bs / audio.sampleRate) * 1000 + 0.9).toFixed(2) };
+          for (const c of wss.clients) send(c, devicesMsg());
+          broadcastState();
+        }, 300);
         return;
       }
       case 'panic':

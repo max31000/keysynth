@@ -67,6 +67,14 @@ void GraphSwapper::begin(RackGraph* next) noexcept {
     }
     old_ = current_;
     current_ = next;
+    // Carry the sounding-note mapping over from the graph that was actually live (the builder only saw the latest
+    // published one, possibly a pending graph that never ran), so note-offs for held keys reach a shared instrument.
+    for (auto& ln : current_->layers) {
+        if (const LayerNode* prev = old_->findLayer(ln->node)) {
+            for (size_t i = 0; i < ln->noteMap.size(); ++i)
+                ln->noteMap[i].store(prev->noteMap[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        }
+    }
     cache_.clear();
     old_->clearCacheSlots();
     current_->clearCacheSlots();
