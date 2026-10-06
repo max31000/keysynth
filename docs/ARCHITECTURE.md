@@ -242,10 +242,16 @@ Patch (data)                              RackGraph (live, audio thread)
 | `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
 | `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
 
-Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
-(stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
-`rotary` (Leslie horn+drum, ramped slow/fast), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
-safety, fixed).
+Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string-machine 3-phase), `phaser`
+(4/6/8/12 stages), `flanger` (BBD, optional through-zero), `delay` (stereo/ping-pong/tape, tempo sync), `reverb`
+(16-line FDN hall/plate/room/chamber/gated/shimmer), `drive` (tube/fuzz/tape, IIR-oversampled 2x/4x), `rotary`
+(Leslie horn+drum, ramped slow/fast), `tremolo` (trem/autopan), `compressor` (VCA/opto, `gr_db` meter), `eq`
+(HP/LS/3 bells/HS/LP), `limiter` (master safety, fixed). Effects are in-place stereo, zero latency, smoothed.
+Shared effect param ids: `mix` (0..1 dry→wet crossfade; 0 = bypass), `rate` (Hz), `depth` (0..1), `feedback`,
+`time` (ms), `sync` (note division enum, `dsp/NoteDivision.h`; index 0 = Off/free, else tempo from
+ProcessContext), `tone` (0..1), `width` (0..1), `level_db`; other ids carry their unit as suffix (`_db`, `_ms`,
+`_hz`). BBD/delay/oversampling/filter primitives live in `dsp/` (Bbd, InterpDelay, ModLfo, TptFilters,
+HalfbandIir).
 
 ## 8. Transport
 
