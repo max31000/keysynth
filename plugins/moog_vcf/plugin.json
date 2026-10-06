@@ -1,0 +1,7 @@
+{
+  "id": "moog_vcf",
+  "name": "Moog VCF",
+  "kind": "effect",
+  "category": "Filter",
+  "tail_s": 0.1
+}

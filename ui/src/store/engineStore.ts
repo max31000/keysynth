@@ -16,6 +16,7 @@ import {
   type Pattern,
   type PatternEntry,
   type PatternSnapshot,
+  type PluginStatus,
   type PresetEntry,
   type TransportRequest,
   type TransportState,
@@ -50,6 +51,10 @@ export interface EngineState {
   /** current drum pattern (engine snapshot + optimistic step edits) */
   pattern: PatternSnapshot | null;
   patterns: PatternEntry[];
+  /** Hot-reloaded plugins by name (docs/PLUGINS.md). */
+  plugins: Record<string, PluginStatus>;
+  /** Latest plugin status change, shown as a toast until dismissed (ok/removed auto-hide). */
+  pluginNotice: PluginStatus | null;
 
   /** Reducer for one engine message (exposed for tests). */
   handle(msg: EngineMsg): void;
@@ -84,6 +89,9 @@ export interface EngineState {
   setAudioDevice(deviceType: string, name: string, sampleRate?: number, bufferSize?: number): Promise<void>;
   rescanMidi(): Promise<void>;
   clearError(): void;
+  refreshPlugins(): Promise<void>;
+  reloadPlugin(name: string): Promise<void>;
+  dismissPluginNotice(): void;
 }
 
 export interface StoreDeps {
@@ -206,6 +214,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       lastError: null,
       pattern: null,
       patterns: [],
+      plugins: {},
+      pluginNotice: null,
 
       handle(msg) {
         switch (msg.type) {
@@ -282,6 +292,24 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
           case 'error':
             if (msg.id === undefined) set({ lastError: `${msg.code}: ${msg.message}` });
             break;
+          case 'plugin_status': {
+            const p = msg.plugin;
+            const plugins = { ...get().plugins };
+            if (p.state === 'removed') delete plugins[p.name];
+            else plugins[p.name] = p;
+            set({ plugins, pluginNotice: p });
+            // A (re)loaded or removed plugin changes the catalog (new params, new/gone module type).
+            if (p.state === 'ok' || p.state === 'removed') {
+              void client.request({ type: 'get_catalog' }, { expect: 'catalog_ok' }).catch(() => undefined);
+            }
+            break;
+          }
+          case 'list_plugins_ok': {
+            const plugins: Record<string, PluginStatus> = {};
+            for (const p of msg.plugins) plugins[p.name] = p;
+            set({ plugins });
+            break;
+          }
           default:
             break;
         }
@@ -499,6 +527,10 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
         }),
       rescanMidi: () => structural(() => client.request({ type: 'rescan_midi' }, { expect: 'devices' })),
       clearError: () => set({ lastError: null }),
+      refreshPlugins: () => structural(() => client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' })),
+      reloadPlugin: (name) =>
+        structural(() => client.request({ type: 'reload_plugin', name }, { expect: 'reload_plugin_ok' })),
+      dismissPluginNotice: () => set({ pluginNotice: null }),
     };
   });
 
@@ -530,6 +562,8 @@ async function bootstrap(client: EngineClient): Promise<void> {
     client.request({ type: 'list_presets' }, { expect: 'list_presets_ok' }),
     client.request({ type: 'list_devices' }, { expect: 'devices' }),
     client.request({ type: 'list_patterns' }, { expect: 'list_patterns_ok' }).catch(() => undefined),
+    // Optional: engines started with --no-plugins (or older mocks) may not answer.
+    client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' }).catch(() => undefined),
   ]);
 }
 

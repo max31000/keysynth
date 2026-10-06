@@ -1,0 +1,8 @@
+{
+  "id": "faust_pluck",
+  "name": "Faust Pluck",
+  "kind": "instrument",
+  "category": "Plucked",
+  "polyphony": 12,
+  "max_release_s": 6
+}

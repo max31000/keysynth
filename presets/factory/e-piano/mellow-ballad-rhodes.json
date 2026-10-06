@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Mellow Ballad Rhodes",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "ballad",
+      "soft"
+    ],
+    "description": "Dark, sweet Rhodes Mk I with soft hammers, long sustain and a wide velocity range for quiet ballads on a weighted keyboard.",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 0,
+          "tone": 0.28,
+          "bark": 0.15,
+          "hammer_hardness": 0.3,
+          "velocity_curve": 0.25,
+          "dynamics": 36,
+          "decay": 1.4,
+          "release": 1.2,
+          "tine_mix": 0.35,
+          "strike_position": 0.4,
+          "pickup_position": 0.4,
+          "pickup_distance": 0.6,
+          "drive": 0.0,
+          "noise": 0.15,
+          "polyphony": 32,
+          "volume_db": -1
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "rate": 2.5,
+            "depth": 0.2,
+            "shape": 0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

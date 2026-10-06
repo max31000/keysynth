@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Breathe Rhodes",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "pink floyd",
+      "70s",
+      "autopan"
+    ],
+    "description": "Soft, round Rhodes with a slow autopan, for spacious chord pads. Reference: Pink Floyd - Breathe (Dark Side of the Moon era electric piano).",
+    "author": "factory"
+  },
+  "tempo": 63,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 0,
+          "tone": 0.35,
+          "bark": 0.2,
+          "hammer_hardness": 0.35,
+          "velocity_curve": 0.2,
+          "dynamics": 26,
+          "decay": 1.5,
+          "release": 1.3,
+          "tine_mix": 0.35,
+          "pickup_position": 0.4,
+          "pickup_distance": 0.6,
+          "drive": 0.05,
+          "noise": 0.15,
+          "polyphony": 32,
+          "volume_db": -1
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "rate": 1.2,
+            "depth": 0.4,
+            "shape": 0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

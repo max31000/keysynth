@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Brass & Horns (VPO)",
+    "category": "Brass",
+    "tags": [
+      "orchestral",
+      "brass",
+      "horns",
+      "section",
+      "sampled"
+    ],
+    "description": "Virtual Playing Orchestra 3 full brass section (horns, trumpets, trombones, tuba), sustain. Reference: Rammstein-style orchestral brass.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Brass & Horns",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0,
+          "polyphony": 128
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Brass/all-brass-SEC-sustain.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

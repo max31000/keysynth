@@ -24,6 +24,11 @@ Read before changing anything. Keep this file short; details live in `docs/`.
    `Module` API. No cross-engine includes except `core/` and `dsp/`.
 6. Real-time code: no allocation, locks, IO, logging or exceptions on the audio thread. Reviewers reject violations.
 7. Param ids and preset format are compatibility surfaces — renames need a migration.
+8. **One primitive per concept in `engine/src/dsp/`.** Before adding a file/function there, grep for an existing
+   one (delay lines, one-poles, SVFs, oversamplers…) and extend it. Never reuse a name with different semantics.
+9. **Parallel work in worktrees:** before your final commit, `git merge main` into your branch, resolve, rebuild and
+   rerun tests, so the lead's merge is a fast integration, not a conflict hunt. Never run a non-disconnected
+   CMake configure concurrently with other agents against the shared `.deps/` (use `scripts/configure.ps1`).
 
 ## Commands (Windows, PowerShell)
 ```

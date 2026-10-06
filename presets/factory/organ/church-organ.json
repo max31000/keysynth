@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Church Organ (full)",
+    "category": "Organ",
+    "tags": [
+      "pipe organ",
+      "church",
+      "sampled"
+    ],
+    "description": "Orgue Eglise, full registration (sfzinstruments). Reference: Bach - Toccata and Fugue, Procol Harum.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Church Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0
+        },
+        "state": {
+          "sfz": "assets/samples/orgue-eglise/OrgueEglise-master/Orgue Eglise Full.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

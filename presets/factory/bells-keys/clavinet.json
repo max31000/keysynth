@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Clavinet",
+    "category": "Bells & Keys",
+    "tags": [
+      "clavinet",
+      "funk",
+      "70s",
+      "sampled"
+    ],
+    "description": "Hohner Clavinet samples. Reference: Stevie Wonder - Superstition.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Clavinet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 12
+        },
+        "state": {
+          "sfz": "assets/samples/clavinet/Clavinet/Clavinet.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "PWM Strings",
+    "category": "Strings",
+    "tags": [
+      "va",
+      "pwm",
+      "strings",
+      "polysix",
+      "juno"
+    ],
+    "description": "Two LFO-modulated pulse oscillators (Korg Polysix / Juno-style PWM strings), high-passed, gentle delayed vibrato on LFO2 via the mod matrix.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "PWM Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 1,
+          "osc1_pw": 0.45,
+          "osc1_pwm": 0.55,
+          "osc2_wave": 1,
+          "osc2_pw": 0.55,
+          "osc2_pwm": 0.55,
+          "osc2_level": 0.9,
+          "osc2_fine": 7,
+          "filter_model": 1,
+          "cutoff": 4200,
+          "resonance": 0.05,
+          "key_track": 0.5,
+          "hpf_cutoff": 260,
+          "amp_attack": 0.28,
+          "amp_decay": 1.0,
+          "amp_sustain": 1.0,
+          "amp_release": 1.0,
+          "amp_vel": 0.2,
+          "lfo1_wave": 1,
+          "lfo1_rate": 0.55,
+          "lfo2_wave": 0,
+          "lfo2_rate": 5.4,
+          "lfo2_delay": 1.0,
+          "mod1_src": 2,
+          "mod1_dst": 1,
+          "mod1_amt": 0.004,
+          "pan_spread": 0.4,
+          "drift": 0.25,
+          "volume_db": -10.5
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "CS-80 Brass",
+    "category": "Brass",
+    "tags": [
+      "va",
+      "yamaha",
+      "cs80",
+      "brass",
+      "vangelis"
+    ],
+    "description": "Yamaha CS-80-ish brass: two saws, HPF + 12 dB low-pass, slow-swelling filter envelope, velocity brightness; aftertouch opens the filter and adds vibrato. Reference: Vangelis - Blade Runner.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "CS-80 Brass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.85,
+          "osc2_fine": 6,
+          "osc1_fine": -2,
+          "filter_model": 2,
+          "cutoff": 750,
+          "resonance": 0.3,
+          "key_track": 0.5,
+          "filter_env_amt": 2.5,
+          "filter_vel": 1.2,
+          "hpf_cutoff": 160,
+          "fenv_attack": 0.12,
+          "fenv_decay": 0.9,
+          "fenv_sustain": 0.6,
+          "fenv_release": 0.5,
+          "fenv_vel": 0.5,
+          "amp_attack": 0.06,
+          "amp_decay": 0.8,
+          "amp_sustain": 0.9,
+          "amp_release": 0.6,
+          "amp_vel": 0.5,
+          "at_cutoff": 1.5,
+          "at_vibrato": 0.35,
+          "lfo2_rate": 5.8,
+          "drift": 0.35,
+          "pan_spread": 0.4,
+          "volume_db": -11
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}

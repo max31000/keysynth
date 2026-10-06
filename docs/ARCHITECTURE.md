@@ -23,7 +23,7 @@ Platform: Windows 11 + ASIO first. Code stays portable: no Win32 calls outside `
  │  Control thread ◄── telemetry (atomics + event SPSC) ◄─┘  RackGraph       │
  │      ├── ControlServer: WebSocket ws://127.0.0.1:7341 (JSON) + HTTP ui/dist│
  │      ├── PatchModel (single source of truth for the patch)                 │
- │      └── PresetStore, SettingsStore, SampleLibrary, PluginHost (DLLs)      │
+ │      └── PresetStore, SettingsStore, SampleLibrary, PluginHost (Faust/DLL) │
  └────────────────────────────────────────────────────────────────────────────┘
                     ▲ WebSocket JSON
  ┌──────────────── ui (TypeScript, React, Vite) ──────────────────────────────┐
@@ -40,13 +40,14 @@ Threads:
 - **Message/control thread** (JUCE message loop). Owns all non-RT state: PatchModel, graph building, presets,
   server, file IO, plugin loading. WebSocket library threads hand every message to this thread
   (`juce::MessageManager::callAsync`) — never touch engine state from network threads.
-- **Loader threads** (`juce::ThreadPool`, below-normal priority) for samples / plugin compilation; results return
-  to the message thread.
+- **Loader threads** (`juce::ThreadPool`, below-normal priority) for samples; PluginHost has its own loader thread
+  for plugin compilation (§10). Results return to the message thread.
 
 ## 3. Repository layout
 
 ```
-CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ, KS_RT_CHECKS (default ON in all configs, see §4.8)
+CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ (ON), KS_RT_CHECKS (default ON in all configs, see §4.8)
+                          KS_WITH_FAUST (ON; headers from KS_FAUST_DIR = <main checkout>/.tools/faust, §10)
 cmake/Dependencies.cmake  FetchContent, every dep pinned to a tag/commit: JUCE (>=8.0.11, bundles ASIO),
                           nlohmann_json, ixwebsocket (USE_TLS=OFF, no zlib), Catch2 v3, sfizz (isolated target,
                           warnings off). CMAKE_MSVC_RUNTIME_LIBRARY set globally.
@@ -62,14 +63,13 @@ engine/
   src/preset/     Patch data model <-> JSON, Migrations, PresetStore.
   src/control/    ControlServer (WS + static HTTP via ix::HttpServer), protocol handlers, snapshots.
   src/audio/      AudioHost (devices, ASIO, settings), MidiHub (all MIDI inputs).
-  src/plugins/    PluginHost: DLLs implementing sdk/include/keysynth/plugin_abi.h, hot reload.
+  src/plugins/    PluginHost: Faust JIT (libfaust C API) + C ABI DLLs (sdk/include/keysynth/plugin_abi.h), hot reload.
   src/render/     OfflineRenderer (patch + notes/MIDI → buffer/WAV without a device).
   src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, SEH wrapper).
   src/app/        main.cpp — wiring only.
   tools/          ks-render (offline render), ks-bench (CPU per preset).
   tests/          Catch2 tests.
 sdk/include/keysynth/plugin_abi.h   Stable C ABI for DSP plugins.
-sdk/faust/        Faust architecture file → plugin ABI.
 plugins/<name>/   Plugin sources (plugin.json + .dsp or .cpp). Built to plugins/.build/ (gitignored).
 presets/factory/<category>/   Factory patches.   presets/patterns/  Drum patterns.
 userdata/         (gitignored) user presets, settings.json, recordings.
@@ -96,6 +96,9 @@ All code is testable without an audio device.
 6. Bounded cost per block.
 7. **Zero added latency**: built-in modules have `latencySamples()==0`. Master limiter is zero-lookahead (soft clip +
    fast release). Oversampling only via min-phase IIR polyphase, never linear-phase FIR.
+   Allowed exception: the 2-sample PolyBLEP/BLAMP oscillators (`dsp/BlepOsc.h`, used by `va`) output the
+   waveform one sample late (21 us at 48 kHz) so residuals can be applied on both sides of a discontinuity.
+   This is below any audible/MIDI-jitter threshold and is not reported as `latencySamples()`.
 8. **Enforcement** (`KS_RT_CHECKS`, on in Debug/tests): `RtScope` sets a thread_local flag inside
    `Engine::process`; replaced global `operator new/delete` and the `ks::Mutex` wrapper assert when it is set.
    A swap stress test does 10k random publishes during offline render.
@@ -145,8 +148,17 @@ class Module {
   virtual int latencySamples() const { return 0; }
   virtual nlohmann::json saveState() const { return {}; } // non-param state (sample path, syx bank…)
   virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
+  virtual bool isReady() const { return true; }           // false while heavy resources load asynchronously
+  virtual void setOfflineMode(bool) {}                    // control thread, after prepare: faster-than-RT render
 };
 ```
+
+- **Asynchronous loading** (`isReady`): a module whose `prepare()` starts a background load (samples) renders
+  silence and returns `false` until it is done; it never blocks the audio or message thread on it. `OfflineRenderer`
+  (ks-render, tests) calls `setOfflineMode(true)` on every module and waits until all are ready before rendering
+  (`RenderOptions::readyTimeoutSeconds`). In offline mode a streaming module may wait for disk IO inside `process()`
+  (sfizz freewheeling) — that is the only place such waits are allowed, inside an explicit `rt::RtAllowScope`.
+  Both hooks default to no-ops, so existing modules are unaffected.
 
 - `ProcessContext`: sampleRate, numSamples, sampleTime, transport (tempo, ppq position, playing), and per-layer
   `ChannelState` {pitchBend (-1..1), modWheel, aftertouch, cc64 sustain, cc66 sostenuto, cc67 soft, expression}
@@ -239,18 +251,28 @@ Patch (data)                              RackGraph (live, audio thread)
 
 | typeId | What | Covers |
 |---|---|---|
-| `va` | Virtual analog poly: 3 osc (saw/pulse+PWM/tri/sine/supersaw/noise), sub, sync/ring, ladder 24 dB + SVF 12 dB (LP/BP/HP), amp+filter ADSR, 2 LFO, fixed mod slots, unison/detune/spread, glide, mono/legato | Juno/Jupiter/OB-Xa/Prophet/Minimoog: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
-| `fm` | DX7-compatible 6-op FM via vendored MSFA; loads .syx banks | DX7 E.Piano, bells, basses |
-| `organ` | Tonewheel: 9 drawbars, percussion, key click, scanner vibrato/chorus, crosstalk; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
-| `combo` | Transistor combo organ: Vox Continental / Farfisa voicings, footages, vibrato, bass section | Doors: Light My Fire; early Floyd |
-| `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |
-| `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
+| `va` | Virtual analog poly (16 notes): 3 PolyBLEP/BLAMP osc (saw/pulse+PWM/tri/sine/JP-8000 supersaw/noise), sub −1/−2 oct, hard sync 2→1, ring 1×2, FM 3→1, filter-env→osc1 poly-mod; filters Moog ladder 24 / IR3109 24 (ZDF, nonlinear, self-osc) / SEM 12 SVF, LP/BP/HP/notch, HPF; analog ADSRs, 2 LFO (delay, key/tempo sync), 6-slot mod matrix; unison ≤8 within a 64 sub-voice budget, glide (constant time, legato-only), poly/mono/legato, drift, pan spread; output saturation | Juno/Jupiter/OB-Xa/Prophet/Minimoog/CS-80: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
+| `fm` | DX7-compatible 6-op FM via vendored MSFA (Apache-2.0, Dexed fork; engine models Modern / Mark I / OPL, the latter two GPL-3.0+): every DX7 voice param as a ParamSpec (`alg`, `feedback`, `op1_level`, `op1_eg_rate1`…), macros (brightness, attack/release, tune, voices), DX7-style wheel/aftertouch routing; state `{syx, voice}` loads a voice from a 32-voice bulk or single dump into the ParamSet. Renders 64-sample MSFA chunks ahead (latencySamples 0, events ≤63 samples late); one sample rate per process (msfa globals) | DX7 E.Piano, bells, basses, brass |
+| `organ` | Tonewheel wheel-bus: 91 wheels (B-3 gear ratios), 9 drawbars with manual foldback, single-trigger percussion, key click, scanner vibrato/chorus V1–C3, leakage, preamp drive; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
+| `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
+| `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
+| `sampler` | SFZ via sfizz 1.2.3 (isolated static target, `KS_WITH_SFIZZ`). State `{"sfz": path}`; per-instance loader thread (loads serialized across instances; also does non-RT voice reallocation via a lock-free pause handshake), silence + `loading`=1 until ready; sample pool per instance (no cross-instance cache yet); params volume/pan/transpose/tune/polyphony (non-automatable: cuts notes)/velocity curve; the `.sfz` path must resolve inside the §11 roots, or below `$KS_ASSETS_DIR` / the main checkout's `assets/` (`instruments/sampler/SamplePaths.h`); paths *inside* the SFZ (`sample=`, `#include`, `default_path`) are followed by sfizz unchecked | Salamander grand, Rhodes/Wurli/CP80, Mellotron, SSO/VPO choir, strings, brass, harpsichord, organ, clavinet, drum kits |
 | `drums` | Synth kit, 13 voices (kick, snare, clap, closed/open hat w/ choke, crash, ride, 3 toms, rim, cowbell, tambourine), each with model 808/909/Linn/Industrial (`kit` default or per-voice `<v>_model`) + level/tune/decay/tone/pan; GM key map, other octaves fold onto 36–47; keys-playable; used by the RhythmNode | 80s beats, Rammstein stomp |
 
-Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
-(stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
-`rotary` (Leslie horn+drum, ramped slow/fast), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
-safety, fixed).
+Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string-machine 3-phase), `phaser`
+(4/6/8/12 stages), `flanger` (BBD, optional through-zero), `delay` (stereo/ping-pong/tape, tempo sync), `reverb`
+(16-line FDN hall/plate/room/chamber/gated/shimmer), `drive` (tube/fuzz/tape, IIR-oversampled 2x/4x), `rotary`
+(Leslie 122/147 horn+drum, Doppler/AM, ramped slow/fast/brake, mod-wheel speed, ReadOnly `horn_rpm`/`drum_rpm`),
+`tremolo` (amp trem with L/R phase / equal-power autopan; sine/tri/smoothed square; free or tempo-synced),
+`compressor` (VCA/opto, `gr_db` meter), `eq` (HP/LS/3 bells/HS/LP), `limiter` (master safety, fixed).
+Effects are in-place stereo, zero latency, smoothed.
+Shared effect param ids: `mix` (0..1 dry→wet crossfade; 0 = dry, bit-exact except `drive`, whose dry runs
+through the matching all-pass oversampling filters), `rate` (Hz), `depth` (0..1), `feedback`, `time` (ms),
+`sync` (note division enum, `dsp/NoteDivision.h`; index 0 = Off/free, else tempo from ProcessContext), `tone`
+(0..1), `width` (0..1), `level_db`; other dB/ms/Hz ids carry the unit as suffix (`_db`, `_ms`, `_hz`); `decay`
+is RT60 in s. Accepted exception to §4.7: `flanger` `through_zero` (off by default) replaces the dry path with a
+reference line of `time` (≤ 10 ms) — the effect itself, `latencySamples()` stays 0. BBD/delay/oversampling/filter
+primitives live in `dsp/` (Bbd, InterpDelay, HalfbandIir, ...).
 
 ## 8. Transport
 
@@ -278,20 +300,64 @@ Drums, FX, Splits & Layers. Signature presets name their reference in `descripti
 
 ## 10. Plugins (hot-reloaded DSP)
 
-- C ABI `sdk/include/keysynth/plugin_abi.h`: `ks_get_plugin()` → descriptor {struct_size, abi_version, id, name,
-  kind, param specs, create, destroy, prepare, reset, process(float** stereo, nframes, events, nevents),
-  set_param, tail_samples, latency_samples, save_state/load_state (blob)}. No C++ types cross the boundary.
-  `set_param` is called on the audio thread at block start only when the value changed.
-- Sources: Faust `.dsp` → `faust -a sdk/faust/keysynth_arch.cpp` → C++ → MSVC → DLL, or hand-written C++ → DLL,
-  via `scripts/build_plugin.ps1 <name>`. PluginHost watches `plugins/.build/`, copies each new DLL to a unique temp
-  name before `LoadLibrary`.
-- Lifetime: each plugin module holds `shared_ptr<PluginLibrary>`; `FreeLibrary` only when the last graph using it
-  is deleted (control thread). Destructor order: `destroy(instance)`, then release library.
-- Hot reload: new version → registry entry updated → GraphBuilder rebuilds affected modules with same params
-  (state blob carried over) → normal swap.
-- Faust param id = `[id:x]` metadata if present, else snake_case of the full path; duplicates rejected.
-  Faust instruments use the `freq`/`gain`/`gate` convention, wrapped by the arch file's polyphony.
-- Isolation-lite: calls into plugins wrapped in SEH `__try`; on fault the module is muted and an `error` event sent.
+User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS bits in `platform/DynamicLibrary`.
+
+- **Sources.** `plugins/<name>/` (name `[a-z][a-z0-9_]{0,63}`, = id; typeId `plugin:<name>`) contains either
+  `<name>.dsp` (Faust, optional `plugin.json`) or `<name>.cpp` (C ABI DLL). Build output, Faust machine-code cache
+  and objects live in `plugins/.build/` (gitignored).
+- **Faust path (primary).** libfaust (LLVM backend) compiles the `.dsp` in-process on the loader thread
+  (`createCDSPFactoryFromFile`, `-I share/faust -I <plugin dir>` + white-listed `faust_options`, LLVM opt level
+  max). Factories are cached as machine code in `plugins/.build/cache/<name>-<key>.fmc`, key = hash of libfaust
+  version, LLVM target, options and every `.dsp/.lib` in the plugin dir. Only libfaust's **C API** is used, loaded
+  at runtime from `<KS_FAUST_DIR>/lib/faust.dll` (function table, no import lib): faust.dll uses the dynamic CRT,
+  keysynth the static one, so no C++ objects may cross. Factory create/read/write/delete hold one mutex (a factory released
+  while a compile runs is queued and deleted later, so the control thread never waits for a compile); instance
+  create/delete run on the control thread, compute/clear on the audio thread.
+  - Instruments (0 inputs, 1–2 outputs): keysynth's own polyphony (not Faust's `mydsp_poly`, which is C++ API and
+    path-string based): N instances (`polyphony` from plugin.json or `[nvoices:N]`, ≤ 32), core `VoiceAllocator`
+    (stealing, sustain/sostenuto). Voice controls by label: `freq`/`key`, `gain`/`vel`/`velocity`, `gate`; bend
+    ±2 st applied to `freq` per block. Re-strike/steal drops `gate` to 0 for one sample (envelope retrigger). A
+    voice ends when gate is off and its output stays < −90 dBFS for 2048 samples, or after `max_release_s`.
+  - Effects (1–2 in, 1–2 out): one instance; 1→1 runs dual mono (two instances); inputs are copied to scratch
+    (no aliasing, `-vec` safe).
+  - Params: `[id:x]` metadata, else snake_case of the path below the root group; invalid/duplicate ids reject
+    the plugin. Full Faust UI → ParamSpec mapping: `docs/PLUGINS.md` "Parameters". Values are written to every
+    instance's zones once per block.
+  - RT: Faust's generated compute never allocates (state lives in the instance); `ks-tests` asserts the LLVM IR
+    of the example plugins contains no allocator calls.
+- **C ABI path (heavy C++ DSP).** `sdk/include/keysynth/plugin_abi.h`: `ks_get_plugin()` → descriptor
+  {struct_size, abi_version, id, name, category, kind, param specs, create, destroy, prepare, reset,
+  process(float** stereo, nframes, events, nevents), set_param, get_param (ReadOnly), tail_samples,
+  latency_samples, save_state/load_state (blob)}. `ks_event` is layout-identical to `MidiEvent` (static_assert, no
+  copy). `set_param` is called on the audio thread at block start only when the value changed (all values once
+  after `prepare`). `scripts/build_plugin.ps1 <name>` compiles with MSVC (/MT, /O2) into
+  `plugins/.build/<name>-<hash>.dll` (temp name + rename). The host loads the newest `<name>-*.dll` through a copy
+  `%TEMP%/keysynth-plugins/<pid>/<name>-<hash>-<n>.dll` (so builds can overwrite/delete; only directories of dead
+  pids are swept at startup), validates the
+  descriptor (sizes, ids, ranges, required functions) and copies all strings.
+- **PluginHost** (control thread API; one loader `std::thread`): scans `plugins/` every 500 ms from the 30 Hz
+  pump (signature = names/sizes/mtimes of `.dsp/.lib/plugin.json`, or the newest DLL); a change queues a job
+  (queued jobs for the same plugin are coalesced; results of superseded jobs are dropped). Finished jobs are
+  applied in `poll()`: registry entry `plugin:<name>` replaced, status event, `onModulesChanged`. Offline mode
+  (`ks-render`, tests) compiles synchronously. A failed (re)compile keeps the previous good version registered.
+  Deleting the plugin directory unregisters it.
+- **Versions and lifetime.** Each successful load is a `PluginVersion` owning the `ModuleInfo` (registry points
+  at it), the Faust factory or `PluginLibrary`. The registry factory lambda and every module hold
+  `shared_ptr<const PluginVersion>`; graphs are deleted on the control thread, so the last release (instance
+  `destroy`, then `deleteCDSPFactory`/`FreeLibrary` + temp copy deletion) happens there. Versions that never got
+  registered (failed/superseded loads) may be released on the loader thread — no instance exists.
+- **Hot reload.** registry entry replaced → `Session::refreshModules`: patch params re-normalized against the new
+  specs (surviving ids keep their values, new ones default, removed dropped), DLL state blobs carried over via
+  `saveState()` → `GraphBuilder` reuses a module only if its `ModuleInfo` *object* is still the registry's
+  (`&module->info() == registry.find(type)`), so plugin modules are rebuilt and everything else is shared → normal
+  swap (crossfade). Protocol: `list_plugins`, `reload_plugin`, `plugin_status` events (`docs/PROTOCOL.md`).
+- **Isolation-lite.** Every call into plugin code (DLL functions, Faust compute) runs inside
+  `platform::guardedCall` (SEH `__try`, `_resetstkoflw` on stack overflow) with MXCSR saved/restored (FTZ/DAZ
+  re-asserted, §4.5). A fault mutes that instance for good (until a reload creates new ones) and is reported via
+  an atomic counter on the version → `plugin_status` `faulted` + `log` error (polled on the control thread).
+  NaN/Inf output zeroes the block and resets/clears the instance (a DLL instance is muted after 8 consecutive bad
+  blocks); reports are edge-triggered, repeated at most every 5 s. This is not a sandbox: plugins
+  are trusted local code (Faust `ffunction` can call C functions); only `plugins/` under the repo root is scanned.
 
 ## 11. Control protocol & security
 

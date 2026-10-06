@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "LinnDrum (Linnoleum)",
+    "category": "Drums",
+    "tags": [
+      "linndrum",
+      "80s",
+      "drum machine",
+      "sampled"
+    ],
+    "description": "Linnoleum SFZ-1: LinnDrum samples, GM-style key map. Reference: 80s pop beats (Prince, a-ha, Phil Collins).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "LinnDrum",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 8,
+          "polyphony": 64
+        },
+        "state": {
+          "sfz": "assets/samples/linnoleum/Linnoleum_SFZ-1_Rev.3.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

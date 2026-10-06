@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "meta": { "name": "Bitcrusher demo", "category": "FX", "author": "plugins",
+            "description": "scripts/build_plugin.ps1 cpp_bitcrusher; ks-render --patch-json @plugins/cpp_bitcrusher/demo.json --test-pattern" },
+  "layers": [ { "name": "Saw", "instrument": { "type": "basic", "params": { "release": 0.4 } },
+                "fx": [ { "type": "plugin:cpp_bitcrusher", "params": { "bits": 6, "downsample": 4, "mix": 1 } } ] } ],
+  "master": { "volume_db": 0, "fx": [] }
+}

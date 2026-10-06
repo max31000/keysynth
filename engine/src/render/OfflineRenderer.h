@@ -33,6 +33,7 @@ struct RenderOptions {
     const Pattern* pattern = nullptr;
     int patternBars = 1;
     double tempo = 0.0;
+    int readyTimeoutSeconds = 300; // max wait for modules to finish loading (Module::isReady)
 };
 
 struct RenderResult {

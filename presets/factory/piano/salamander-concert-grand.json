@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Concert Grand (Salamander)",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "grand",
+      "yamaha c5",
+      "sampled"
+    ],
+    "description": "Salamander Grand Piano V3 (Yamaha C5, 16 velocity layers, release samples). Concert / classical grand.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Concert Grand",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 3,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

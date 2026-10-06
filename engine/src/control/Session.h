@@ -16,6 +16,10 @@
 #include <string>
 #include <vector>
 
+namespace ks::plugins {
+class PluginHost;
+}
+
 namespace ks {
 
 class Session {
@@ -32,12 +36,20 @@ public:
     void setMidi(MidiControl* m) noexcept { midi_ = m; }
     AudioControl* audio() const noexcept { return audio_; }
     MidiControl* midi() const noexcept { return midi_; }
+    // Optional plugin host (protocol `list_plugins` / `reload_plugin`).
+    void setPlugins(plugins::PluginHost* p) noexcept { plugins_ = p; }
+    plugins::PluginHost* plugins() const noexcept { return plugins_; }
 
     // Optional log sink (ControlServer forwards to clients as `log` events, app prints).
     std::function<void(const std::string& level, const std::string& msg)> log;
 
     // Build a graph from the PatchModel and publish it. reuse=false after Engine::prepare (new sr/maxBlock).
     void rebuild(bool reuse = true);
+
+    // Registry entries for these typeIds were added/replaced/removed (plugin hot reload): re-normalize the
+    // patch params against the new specs (values of surviving ids are kept), carry non-param module state
+    // (plugin state blobs) over from the live modules, rebuild. Modules of other types are reused.
+    bool refreshModules(const std::vector<std::string>& typeIds); // true if the patch used one of them
 
     // Whole-patch changes (rebuild included). Return warnings.
     // reuse=false for preset loads (node ids of unrelated patches must not share modules).
@@ -98,6 +110,7 @@ private:
     PresetStore presets_;
     AudioControl* audio_ = nullptr;
     MidiControl* midi_ = nullptr;
+    plugins::PluginHost* plugins_ = nullptr;
     std::string presetPath_;
     Pattern pattern_;
     std::string patternPath_;

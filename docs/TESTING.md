@@ -13,7 +13,9 @@ cmake --build build --config Release --target keysynth-engine ks-render ks-bench
 ```
 
 Binaries land in `build/bin/<Config>/`. Options (pass via `-ExtraArgs '-DKS_RT_CHECKS=OFF'`):
-`KS_BUILD_TESTS` (ON), `KS_RT_CHECKS` (ON in every config), `KS_WITH_SFIZZ` (OFF, Phase 2 placeholder).
+`KS_BUILD_TESTS` (ON), `KS_RT_CHECKS` (ON in every config), `KS_WITH_SFIZZ` (ON: sfizz 1.2.3 for the `sampler`
+module; `OFF` builds without it and the module is not registered).
+`KS_WITH_FAUST` (ON; Faust from `KS_FAUST_DIR`, default `<main checkout>/.tools/faust`, see `docs/PLUGINS.md`).
 Engine code builds with `/W4 /WX`; dependencies don't.
 
 ## Unit + render tests (Catch2)
@@ -27,7 +29,29 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport] [sequencer] [drums]`. Run the full tier before merging anything that touches DSP or presets.
+[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll]`. `[faust]` tests SKIP when libfaust is missing; `[dll]` tests build plugins with
+`scripts/build_plugin.ps1` (≈ 4 s, SKIP when MSVC is missing). Run the full tier before merging anything that touches DSP or presets.
+
+### Sample-based presets (`sampler`)
+
+`[sampler]` unit tests generate their own tiny WAV + SFZ fixtures (in `userdata/.test-sampler-<pid>/`) and never need
+downloaded libraries. Factory presets using `sampler` are **skipped by the render suite** (they need GBs of samples)
+and covered by the hidden `[samples]` test instead, which renders every one whose library is installed (skips the
+rest) with the same criteria (drum kits: RMS > -50 dB, tail < -50 dB, since one-shot cymbals ring) and prints
+load+render time per preset:
+
+```powershell
+build/bin/Release/ks-tests.exe "[samples]"            # needs python scripts/fetch_samples.py first
+$env:KS_SAMPLES_FILTER = "piano,vpo"                  # optional: only presets whose path contains one of these
+$env:KS_SAMPLES_DUMP = "renders"                      # optional: write each render to renders/<preset>.wav
+```
+
+Sample paths in presets are `assets/samples/<lib>/<entry>.sfz`, resolved against the repo root. A checkout without
+its own `assets/samples` (e.g. an agent worktree) falls back to `$KS_ASSETS_DIR/samples/...` and then to the main
+checkout's `assets/` (for roots laid out as `<main>/.claude/worktrees/<name>`), see
+`engine/src/instruments/sampler/SamplePaths.h`. `KS_ASSETS_DIR` points at a directory laid out like `assets/`
+(e.g. `$env:KS_ASSETS_DIR = "M:/Projects/Piano/assets"`). ks-render waits until every module reports ready
+(samples loaded) before rendering.
 
 Render suite (`engine/tests/test_render.cpp`): every `presets/factory/**` preset renders the standard pattern
 (`OfflineRenderer::standardTestEvents()`: C-major chord, scale with rising velocity, low/high extremes, sustain-pedal
@@ -41,9 +65,13 @@ build/bin/Release/ks-render.exe --preset presets/factory/synth-lead/basic-saw-le
     --notes "A3:0:1.5:100" --tail 1 --out renders/a3.wav
 build/bin/Release/ks-render.exe --preset presets/factory/splits-layers/basic-bass-lead-split.json --test-pattern --out renders/split.wav
 build/bin/Release/ks-render.exe --patch-json '@my_patch.json' --midi song.mid --sr 96000 --block 32 --out renders/song.wav
-build/bin/Release/ks-render.exe --list-modules          # catalog JSON (ModuleInfo[])
+build/bin/Release/ks-render.exe --list-modules          # catalog JSON (ModuleInfo[], incl. plugins)
+build/bin/Release/ks-render.exe --patch-json '@plugins/faust_pluck/demo.json' --test-pattern --out renders/pluck.wav
 build/bin/Release/ks-render.exe --play-pattern presets/patterns/money-7-4.json --bars 2 --tail 1.5 --out renders/money.wav
 ```
+
+Patches using `plugin:<name>` modules make ks-render compile/load those plugins from `plugins/` first (synchronously,
+Faust machine-code cache in `plugins/.build/cache`); `--no-plugins` skips that, `--root DIR` picks another repo root.
 
 `--play-pattern FILE --bars N [--tempo BPM]` plays a drum pattern through the patch's rhythm kit (pattern tempo, kit,
 swing and meter applied; transport stops exactly after N bars, then `--tail`). Combine with `--notes`/`--midi` to
@@ -82,7 +110,7 @@ build/bin/Release/keysynth-engine.exe --asio-buffer 64 --preset presets/factory/
 build/bin/Release/keysynth-engine.exe --port 7351 --http-port 0 --no-midi   # side-by-side instance, no static UI
 ```
 
-Flags: `--no-audio`, `--no-midi`, `--port N` (WebSocket, default 7341), `--http-port N` (static `ui/dist`, default
+Flags: `--no-audio`, `--no-midi`, `--no-plugins` (don't load/watch `plugins/`), `--port N` (WebSocket, default 7341), `--http-port N` (static `ui/dist`, default
 7340, 0 = off), `--asio-buffer N`, `--sample-rate HZ`, `--preset PATH`, `--root DIR`. On start it prints device,
 sample rate, buffer, device-reported latency and (after the first callback) the MMCSS / power-throttling state.
 The chosen device is saved to `userdata/settings.json`; delete it to return to auto-selection. Note: ASIO drivers

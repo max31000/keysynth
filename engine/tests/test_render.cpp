@@ -58,9 +58,13 @@ void checkAllPresets(double sr, int block) {
     int n = 0;
     for (const auto& p : store.list()) {
         if (!p.factory) continue;
+        const Patch patch = store.load(p.path);
+        // Sample-based presets need downloaded libraries (GBs): covered by the hidden [samples] test instead.
+        if (std::any_of(patch.layers.begin(), patch.layers.end(),
+                        [](const Layer& l) { return l.instrument.type == "sampler"; }))
+            continue;
         ++n;
         INFO("preset " << p.path << " @ " << sr << " Hz / " << block);
-        const Patch patch = store.load(p.path);
         RenderOptions opt;
         opt.sampleRate = sr;
         opt.blockSize = block;

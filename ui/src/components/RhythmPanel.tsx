@@ -238,10 +238,10 @@ export function RhythmPanel() {
           {pattern?.name ?? '—'}
           {snap?.edited && <span className="rh-edited" title="Edited (not saved)">●</span>}
         </span>
-        <span className="chip mono">
+        <span className="chip mono rh-chip">
           {pattern ? `${pattern.time_sig[0]}/${pattern.time_sig[1]}` : '-/-'}
         </span>
-        <span className="chip mono">{Math.round(t.tempo * 10) / 10} BPM</span>
+        <span className="chip mono rh-chip">{Math.round(t.tempo * 10) / 10} BPM</span>
         <div className="rh-steps" aria-hidden>
           {pattern &&
             Array.from({ length: Math.min(steps, 64) }, (_, s) => (

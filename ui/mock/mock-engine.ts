@@ -18,6 +18,7 @@ import type {
   Patch,
   Pattern,
   PatternSnapshot,
+  PluginStatus,
   PresetEntry,
   TransportState,
   Zone,
@@ -94,6 +95,24 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     running: true,
   };
   let midiInputs = ['Arturia KeyStep 37', 'loopMIDI Port'];
+  // Plugin host simulation: `reload_plugin` goes compiling -> ok (or -> error for `broken_fx`).
+  const plugins = new Map<string, PluginStatus>();
+  const mockPlugin = (name: string, kind: PluginStatus['kind'], state: PluginStatus['state'], message = ''): PluginStatus => ({
+    name,
+    typeId: `plugin:${name}`,
+    source: 'faust',
+    state,
+    message,
+    kind,
+    version: state === 'ok' ? 1 : 0,
+    compileMs: 48,
+    cached: false,
+  });
+  plugins.set('faust_pluck', mockPlugin('faust_pluck', 'instrument', 'ok'));
+  plugins.set(
+    'broken_fx',
+    mockPlugin('broken_fx', '', 'error', 'broken_fx.dsp:3 : ERROR : syntax error, unexpected ENDDEF'),
+  );
 
   // live sim state
   const held = new Map<number, number>(); // note → velocity
@@ -461,6 +480,32 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         for (const n of [...held.keys()]) noteEvent(false, n, 0);
         energy.clear();
         return;
+      case 'list_plugins':
+        send(ws, {
+          type: 'list_plugins_ok',
+          id,
+          plugins: [...plugins.values()],
+          faust: { available: true, version: '2.88.0 (mock)', reason: '' },
+        });
+        return;
+      case 'reload_plugin': {
+        const name = typeof m.name === 'string' ? m.name : '';
+        const cur = plugins.get(name);
+        if (!/^[a-z][a-z0-9_]{0,63}$/.test(name) || !cur) return err(ws, id, 'not_found', `unknown plugin '${name}'`);
+        send(ws, { type: 'reload_plugin_ok', id, name });
+        const compiling = { ...cur, state: 'compiling' as const, message: '' };
+        plugins.set(name, compiling);
+        broadcast({ type: 'plugin_status', plugin: compiling });
+        setTimeout(() => {
+          const done =
+            name === 'broken_fx'
+              ? { ...cur, state: 'error' as const }
+              : { ...cur, state: 'ok' as const, message: '', version: cur.version + 1, compileMs: 52 };
+          plugins.set(name, done);
+          broadcast({ type: 'plugin_status', plugin: done });
+        }, 300);
+        return;
+      }
       default:
         return err(ws, id, 'unknown_type', `unknown message type: ${String(m.type)}`);
     }

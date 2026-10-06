@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "B3 Echoes (Floyd)",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "pink floyd",
+      "70s",
+      "mellow"
+    ],
+    "description": "Mellow 868400000 with C2 chorus, soft click, slow Leslie. Reference: Pink Floyd \u2014 Echoes / Time (Rick Wright).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 6,
+          "db_8": 8,
+          "db_4": 4,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "vibrato": 5,
+          "click": 0.3,
+          "leakage": 0.25,
+          "drive": 0.1
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": true,
+            "sustain_toggle": false,
+            "drive": 0.15,
+            "spread": 0.8,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}
