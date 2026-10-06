@@ -23,7 +23,7 @@ Platform: Windows 11 + ASIO first. Code stays portable: no Win32 calls outside `
  │  Control thread ◄── telemetry (atomics + event SPSC) ◄─┘  RackGraph       │
  │      ├── ControlServer: WebSocket ws://127.0.0.1:7341 (JSON) + HTTP ui/dist│
  │      ├── PatchModel (single source of truth for the patch)                 │
- │      └── PresetStore, SettingsStore, SampleLibrary, PluginHost (DLLs)      │
+ │      └── PresetStore, SettingsStore, SampleLibrary, PluginHost (Faust/DLL) │
  └────────────────────────────────────────────────────────────────────────────┘
                     ▲ WebSocket JSON
  ┌──────────────── ui (TypeScript, React, Vite) ──────────────────────────────┐
@@ -40,13 +40,14 @@ Threads:
 - **Message/control thread** (JUCE message loop). Owns all non-RT state: PatchModel, graph building, presets,
   server, file IO, plugin loading. WebSocket library threads hand every message to this thread
   (`juce::MessageManager::callAsync`) — never touch engine state from network threads.
-- **Loader threads** (`juce::ThreadPool`, below-normal priority) for samples / plugin compilation; results return
-  to the message thread.
+- **Loader threads** (`juce::ThreadPool`, below-normal priority) for samples; PluginHost has its own loader thread
+  for plugin compilation (§10). Results return to the message thread.
 
 ## 3. Repository layout
 
 ```
 CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ (ON), KS_RT_CHECKS (default ON in all configs, see §4.8)
+                          KS_WITH_FAUST (ON; headers from KS_FAUST_DIR = <main checkout>/.tools/faust, §10)
 cmake/Dependencies.cmake  FetchContent, every dep pinned to a tag/commit: JUCE (>=8.0.11, bundles ASIO),
                           nlohmann_json, ixwebsocket (USE_TLS=OFF, no zlib), Catch2 v3, sfizz (isolated target,
                           warnings off). CMAKE_MSVC_RUNTIME_LIBRARY set globally.
@@ -62,14 +63,13 @@ engine/
   src/preset/     Patch data model <-> JSON, Migrations, PresetStore.
   src/control/    ControlServer (WS + static HTTP via ix::HttpServer), protocol handlers, snapshots.
   src/audio/      AudioHost (devices, ASIO, settings), MidiHub (all MIDI inputs).
-  src/plugins/    PluginHost: DLLs implementing sdk/include/keysynth/plugin_abi.h, hot reload.
+  src/plugins/    PluginHost: Faust JIT (libfaust C API) + C ABI DLLs (sdk/include/keysynth/plugin_abi.h), hot reload.
   src/render/     OfflineRenderer (patch + notes/MIDI → buffer/WAV without a device).
   src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, SEH wrapper).
   src/app/        main.cpp — wiring only.
   tools/          ks-render (offline render), ks-bench (CPU per preset).
   tests/          Catch2 tests.
 sdk/include/keysynth/plugin_abi.h   Stable C ABI for DSP plugins.
-sdk/faust/        Faust architecture file → plugin ABI.
 plugins/<name>/   Plugin sources (plugin.json + .dsp or .cpp). Built to plugins/.build/ (gitignored).
 presets/factory/<category>/   Factory patches.   presets/patterns/  Drum patterns.
 userdata/         (gitignored) user presets, settings.json, recordings.
@@ -285,20 +285,64 @@ Drums, FX, Splits & Layers. Signature presets name their reference in `descripti
 
 ## 10. Plugins (hot-reloaded DSP)
 
-- C ABI `sdk/include/keysynth/plugin_abi.h`: `ks_get_plugin()` → descriptor {struct_size, abi_version, id, name,
-  kind, param specs, create, destroy, prepare, reset, process(float** stereo, nframes, events, nevents),
-  set_param, tail_samples, latency_samples, save_state/load_state (blob)}. No C++ types cross the boundary.
-  `set_param` is called on the audio thread at block start only when the value changed.
-- Sources: Faust `.dsp` → `faust -a sdk/faust/keysynth_arch.cpp` → C++ → MSVC → DLL, or hand-written C++ → DLL,
-  via `scripts/build_plugin.ps1 <name>`. PluginHost watches `plugins/.build/`, copies each new DLL to a unique temp
-  name before `LoadLibrary`.
-- Lifetime: each plugin module holds `shared_ptr<PluginLibrary>`; `FreeLibrary` only when the last graph using it
-  is deleted (control thread). Destructor order: `destroy(instance)`, then release library.
-- Hot reload: new version → registry entry updated → GraphBuilder rebuilds affected modules with same params
-  (state blob carried over) → normal swap.
-- Faust param id = `[id:x]` metadata if present, else snake_case of the full path; duplicates rejected.
-  Faust instruments use the `freq`/`gain`/`gate` convention, wrapped by the arch file's polyphony.
-- Isolation-lite: calls into plugins wrapped in SEH `__try`; on fault the module is muted and an `error` event sent.
+User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS bits in `platform/DynamicLibrary`.
+
+- **Sources.** `plugins/<name>/` (name `[a-z][a-z0-9_]{0,63}`, = id; typeId `plugin:<name>`) contains either
+  `<name>.dsp` (Faust, optional `plugin.json`) or `<name>.cpp` (C ABI DLL). Build output, Faust machine-code cache
+  and objects live in `plugins/.build/` (gitignored).
+- **Faust path (primary).** libfaust (LLVM backend) compiles the `.dsp` in-process on the loader thread
+  (`createCDSPFactoryFromFile`, `-I share/faust -I <plugin dir>` + white-listed `faust_options`, LLVM opt level
+  max). Factories are cached as machine code in `plugins/.build/cache/<name>-<key>.fmc`, key = hash of libfaust
+  version, LLVM target, options and every `.dsp/.lib` in the plugin dir. Only libfaust's **C API** is used, loaded
+  at runtime from `<KS_FAUST_DIR>/lib/faust.dll` (function table, no import lib): faust.dll uses the dynamic CRT,
+  keysynth the static one, so no C++ objects may cross. Factory create/read/write/delete hold one mutex (a factory released
+  while a compile runs is queued and deleted later, so the control thread never waits for a compile); instance
+  create/delete run on the control thread, compute/clear on the audio thread.
+  - Instruments (0 inputs, 1–2 outputs): keysynth's own polyphony (not Faust's `mydsp_poly`, which is C++ API and
+    path-string based): N instances (`polyphony` from plugin.json or `[nvoices:N]`, ≤ 32), core `VoiceAllocator`
+    (stealing, sustain/sostenuto). Voice controls by label: `freq`/`key`, `gain`/`vel`/`velocity`, `gate`; bend
+    ±2 st applied to `freq` per block. Re-strike/steal drops `gate` to 0 for one sample (envelope retrigger). A
+    voice ends when gate is off and its output stays < −90 dBFS for 2048 samples, or after `max_release_s`.
+  - Effects (1–2 in, 1–2 out): one instance; 1→1 runs dual mono (two instances); inputs are copied to scratch
+    (no aliasing, `-vec` safe).
+  - Params: `[id:x]` metadata, else snake_case of the path below the root group; invalid/duplicate ids reject
+    the plugin. Full Faust UI → ParamSpec mapping: `docs/PLUGINS.md` "Parameters". Values are written to every
+    instance's zones once per block.
+  - RT: Faust's generated compute never allocates (state lives in the instance); `ks-tests` asserts the LLVM IR
+    of the example plugins contains no allocator calls.
+- **C ABI path (heavy C++ DSP).** `sdk/include/keysynth/plugin_abi.h`: `ks_get_plugin()` → descriptor
+  {struct_size, abi_version, id, name, category, kind, param specs, create, destroy, prepare, reset,
+  process(float** stereo, nframes, events, nevents), set_param, get_param (ReadOnly), tail_samples,
+  latency_samples, save_state/load_state (blob)}. `ks_event` is layout-identical to `MidiEvent` (static_assert, no
+  copy). `set_param` is called on the audio thread at block start only when the value changed (all values once
+  after `prepare`). `scripts/build_plugin.ps1 <name>` compiles with MSVC (/MT, /O2) into
+  `plugins/.build/<name>-<hash>.dll` (temp name + rename). The host loads the newest `<name>-*.dll` through a copy
+  `%TEMP%/keysynth-plugins/<pid>/<name>-<hash>-<n>.dll` (so builds can overwrite/delete; only directories of dead
+  pids are swept at startup), validates the
+  descriptor (sizes, ids, ranges, required functions) and copies all strings.
+- **PluginHost** (control thread API; one loader `std::thread`): scans `plugins/` every 500 ms from the 30 Hz
+  pump (signature = names/sizes/mtimes of `.dsp/.lib/plugin.json`, or the newest DLL); a change queues a job
+  (queued jobs for the same plugin are coalesced; results of superseded jobs are dropped). Finished jobs are
+  applied in `poll()`: registry entry `plugin:<name>` replaced, status event, `onModulesChanged`. Offline mode
+  (`ks-render`, tests) compiles synchronously. A failed (re)compile keeps the previous good version registered.
+  Deleting the plugin directory unregisters it.
+- **Versions and lifetime.** Each successful load is a `PluginVersion` owning the `ModuleInfo` (registry points
+  at it), the Faust factory or `PluginLibrary`. The registry factory lambda and every module hold
+  `shared_ptr<const PluginVersion>`; graphs are deleted on the control thread, so the last release (instance
+  `destroy`, then `deleteCDSPFactory`/`FreeLibrary` + temp copy deletion) happens there. Versions that never got
+  registered (failed/superseded loads) may be released on the loader thread — no instance exists.
+- **Hot reload.** registry entry replaced → `Session::refreshModules`: patch params re-normalized against the new
+  specs (surviving ids keep their values, new ones default, removed dropped), DLL state blobs carried over via
+  `saveState()` → `GraphBuilder` reuses a module only if its `ModuleInfo` *object* is still the registry's
+  (`&module->info() == registry.find(type)`), so plugin modules are rebuilt and everything else is shared → normal
+  swap (crossfade). Protocol: `list_plugins`, `reload_plugin`, `plugin_status` events (`docs/PROTOCOL.md`).
+- **Isolation-lite.** Every call into plugin code (DLL functions, Faust compute) runs inside
+  `platform::guardedCall` (SEH `__try`, `_resetstkoflw` on stack overflow) with MXCSR saved/restored (FTZ/DAZ
+  re-asserted, §4.5). A fault mutes that instance for good (until a reload creates new ones) and is reported via
+  an atomic counter on the version → `plugin_status` `faulted` + `log` error (polled on the control thread).
+  NaN/Inf output zeroes the block and resets/clears the instance (a DLL instance is muted after 8 consecutive bad
+  blocks); reports are edge-triggered, repeated at most every 5 s. This is not a sandbox: plugins
+  are trusted local code (Faust `ffunction` can call C functions); only `plugins/` under the repo root is scanned.
 
 ## 11. Control protocol & security
 

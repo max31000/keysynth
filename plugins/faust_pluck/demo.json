@@ -1,0 +1,7 @@
+{
+  "format": 1,
+  "meta": { "name": "Faust Pluck demo", "category": "Plucked", "author": "plugins",
+            "description": "ks-render --patch-json @plugins/faust_pluck/demo.json --test-pattern" },
+  "layers": [ { "name": "Pluck", "instrument": { "type": "plugin:faust_pluck", "params": {} }, "fx": [] } ],
+  "master": { "volume_db": 0, "fx": [] }
+}

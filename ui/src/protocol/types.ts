@@ -166,6 +166,9 @@ export interface CcMsg { type: 'cc'; id?: number; cc: number; value: number; cha
 export interface TransportMsg { type: 'transport'; id?: number; playing?: boolean; tempo?: number; metronome?: boolean; metronome_volume?: number; pattern?: string; drums?: boolean }
 export interface ListDevicesMsg { type: 'list_devices'; id?: number }
 export interface PanicMsg { type: 'panic'; id?: number }
+export interface ListPluginsMsg { type: 'list_plugins'; id?: number }
+/** `name` is the plugin directory name (`plugins/<name>/`), not a path. */
+export interface ReloadPluginMsg { type: 'reload_plugin'; id?: number; name: string }
 
 /**
  * `set_instrument`, `add_fx` and `set_audio_device` would carry a payload field named `type`, which collides with
@@ -181,7 +184,7 @@ export type ClientMsg =
   | HelloMsg | GetCatalogMsg | SetParamMsg | LoadPresetMsg | SavePresetMsg | ListPresetsMsg | GetPatchMsg
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
-  | SetAudioDeviceMsg | PanicMsg;
+  | SetAudioDeviceMsg | PanicMsg | ListPluginsMsg | ReloadPluginMsg;
 
 export type ClientMsgType = ClientMsg['type'];
 
@@ -219,6 +222,31 @@ export interface DevicesEvent {
 export interface LogEvent { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error' | string; message: string }
 export interface ErrorReply { type: 'error'; id?: number; code: string; message: string }
 
+/** Hot-reloaded DSP plugin (docs/PROTOCOL.md `PluginStatus`, docs/PLUGINS.md). */
+export type PluginState = 'compiling' | 'ok' | 'error' | 'faulted' | 'removed';
+export interface PluginStatus {
+  name: string;
+  /** `plugin:<name>` — module type in the catalog / patch */
+  typeId: string;
+  source: 'faust' | 'dll';
+  state: PluginState;
+  /** compiler / loader error (`error`) or fault description (`faulted`) */
+  message: string;
+  kind: 'instrument' | 'effect' | '';
+  /** successful loads so far (0 = never loaded) */
+  version: number;
+  compileMs: number;
+  cached: boolean;
+}
+export interface PluginStatusEvent { type: 'plugin_status'; plugin: PluginStatus }
+export interface ListPluginsOk {
+  type: 'list_plugins_ok';
+  id?: number;
+  plugins: PluginStatus[];
+  faust: { available: boolean; version: string; reason: string };
+}
+export interface ReloadPluginOk { type: 'reload_plugin_ok'; id?: number; name: string }
+
 export interface CatalogOk { type: 'catalog_ok'; id?: number; modules: ModuleInfo[] }
 export interface LoadPresetOk { type: 'load_preset_ok'; id?: number }
 export interface SavePresetOk { type: 'save_preset_ok'; id?: number; path: string }
@@ -226,7 +254,7 @@ export interface ListPresetsOk { type: 'list_presets_ok'; id?: number; presets: 
 
 export type EngineMsg =
   | StateEvent | ParamEvent | TelemetryEvent | MidiEvent | DevicesEvent | LogEvent | ErrorReply
-  | CatalogOk | LoadPresetOk | SavePresetOk | ListPresetsOk;
+  | CatalogOk | LoadPresetOk | SavePresetOk | ListPresetsOk | PluginStatusEvent | ListPluginsOk | ReloadPluginOk;
 
 export type EngineMsgType = EngineMsg['type'];
 export type EngineMsgOf<T extends EngineMsgType> = Extract<EngineMsg, { type: T }>;

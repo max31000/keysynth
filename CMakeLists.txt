@@ -6,6 +6,11 @@ option(KS_WITH_SFIZZ "Build the sfizz-based SFZ sampler module (`sampler`)" ON)
 # Real-time checks (RtScope + operator new/delete hook + ks::Mutex assert). Cost: one thread_local read per
 # allocation. ON by default in every config so the Release test run also exercises them (ARCHITECTURE §4.8).
 option(KS_RT_CHECKS "Enable audio-thread real-time violation checks" ON)
+# Faust JIT plugins (ARCHITECTURE §10). libfaust's C API is loaded at runtime from <KS_FAUST_DIR>/lib/faust.dll;
+# only its headers are needed at build time. Worktrees default to the main checkout's .tools/faust.
+option(KS_WITH_FAUST "Faust JIT plugin support (libfaust, LLVM backend)" ON)
+string(REGEX REPLACE "/[.]claude/worktrees/.*$" "" KS_MAIN_CHECKOUT "${CMAKE_SOURCE_DIR}") # CMake paths use /
+set(KS_FAUST_DIR "${KS_MAIN_CHECKOUT}/.tools/faust" CACHE PATH "Faust install (bin/, lib/faust.dll, include/, share/faust/)")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -1808,6 +1808,91 @@ code {
     opacity: 0;
   }
 }
+/* Plugin hot-reload status (PluginToast) — bottom-left so it never covers the error toast. */
+.plugin-toast {
+  position: fixed;
+  left: 16px;
+  bottom: calc(var(--kbd-h) + 18px);
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 10px;
+  border-radius: var(--r);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  animation: rise 160ms ease-out;
+}
+.plugin-toast-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugin-toast-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.plugin-toast-state {
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+}
+.plugin-toast-detail {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.plugin-toast-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+}
+.plugin-toast-btn.close {
+  margin-left: 0;
+  padding: 0 6px;
+}
+.plugin-toast-btn:only-of-type {
+  margin-left: auto;
+}
+.plugin-toast-msg {
+  margin: 8px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 6px 8px;
+  background: var(--inset);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: #ffc1b8;
+  white-space: pre-wrap;
+}
+.plugin-toast.state-compiling .led {
+  background: var(--warn);
+  animation: blink 0.6s steps(2) infinite;
+}
+.plugin-toast.state-ok .led {
+  background: var(--ok);
+}
+.plugin-toast.state-error,
+.plugin-toast.state-faulted {
+  border-color: #6a2a22;
+}
+.plugin-toast.state-error .led,
+.plugin-toast.state-faulted .led {
+  background: var(--hot);
+}
+.plugin-toast.state-error .plugin-toast-state,
+.plugin-toast.state-faulted .plugin-toast-state {
+  color: var(--hot);
+}
 .offline {
   position: fixed;
   left: 50%;

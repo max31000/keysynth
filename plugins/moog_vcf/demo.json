@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "meta": { "name": "Moog VCF demo", "category": "FX", "author": "plugins",
+            "description": "ks-render --patch-json @plugins/moog_vcf/demo.json --test-pattern" },
+  "layers": [ { "name": "Saw", "instrument": { "type": "basic", "params": { "cutoff": 20000, "release": 0.4 } },
+                "fx": [ { "type": "plugin:moog_vcf",
+                          "params": { "filter_cutoff": 600, "filter_resonance": 0.8, "lfo_depth": 2, "lfo_rate": 0.7 } } ] } ],
+  "master": { "volume_db": 0, "fx": [] }
+}

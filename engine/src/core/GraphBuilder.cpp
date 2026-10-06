@@ -27,7 +27,8 @@ void fillNode(Ctx& c, ModuleNode& dst, const ModuleSlot& slot, ModuleKind expect
 
     if (c.previous && c.previous->sampleRate() == c.sampleRate && c.previous->maxBlock() == c.maxBlock) {
         if (const ModuleNode* old = c.previous->findModuleNode(slot.node)) {
-            if (old->module && old->type == slot.type && old->state == slot.state) {
+            // Same ModuleInfo object: a hot-reloaded plugin registers a new one, so its modules are rebuilt.
+            if (old->module && old->type == slot.type && old->state == slot.state && &old->module->info() == info) {
                 dst.module = old->module;
                 for (const auto& [id, v] : slot.params) dst.module->params().set(id, v);
                 ++c.result.reused;

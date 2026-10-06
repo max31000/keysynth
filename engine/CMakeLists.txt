@@ -82,14 +82,40 @@ target_compile_definitions(ks_core PUBLIC
 if(WIN32)
     target_link_libraries(ks_core PUBLIC avrt ws2_32)
 endif()
+# Plugin SDK (C ABI header).
+target_include_directories(ks_core PUBLIC ${CMAKE_SOURCE_DIR}/sdk/include)
+
+# Faust JIT (ARCHITECTURE §10): headers at build time, faust.dll loaded at runtime (no link dependency).
+set(KS_HAS_FAUST OFF)
+if(KS_WITH_FAUST)
+    if(EXISTS "${KS_FAUST_DIR}/include/faust/gui/CInterface.h" AND EXISTS "${KS_FAUST_DIR}/lib/faust.dll")
+        set(KS_HAS_FAUST ON)
+        target_include_directories(ks_core SYSTEM PRIVATE "${KS_FAUST_DIR}/include")
+        target_compile_definitions(ks_core PRIVATE KS_HAS_FAUST=1 KS_FAUST_DIR="${KS_FAUST_DIR}")
+        message(STATUS "keysynth: Faust JIT plugins ON (${KS_FAUST_DIR})")
+    else()
+        message(WARNING "keysynth: Faust not found at KS_FAUST_DIR=${KS_FAUST_DIR} (run scripts/fetch_faust.ps1); "
+                        "Faust plugins disabled")
+    endif()
+endif()
+# Copy faust.dll next to an executable (fallback search location when KS_FAUST_DIR moved).
+function(ks_copy_faust_runtime target)
+    if(KS_HAS_FAUST)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${KS_FAUST_DIR}/lib/faust.dll" "$<TARGET_FILE_DIR:${target}>"
+            VERBATIM)
+    endif()
+endfunction()
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${KS_CORE_SOURCES})
 
 # ---------------------------------------------------------------------------------------------------------
 add_executable(keysynth-engine src/app/main.cpp)
 target_link_libraries(keysynth-engine PRIVATE ks_core ks_warnings)
+ks_copy_faust_runtime(keysynth-engine)
 
 add_executable(ks-render tools/ks_render.cpp)
 target_link_libraries(ks-render PRIVATE ks_core ks_warnings)
+ks_copy_faust_runtime(ks-render)
 
 add_executable(ks-bench tools/ks_bench.cpp)
 target_link_libraries(ks-bench PRIVATE ks_core ks_warnings)
@@ -100,6 +126,7 @@ if(KS_BUILD_TESTS)
     target_link_libraries(ks-tests PRIVATE ks_core ks_warnings Catch2::Catch2WithMain)
     get_target_property(_catch_inc Catch2 INTERFACE_INCLUDE_DIRECTORIES)
     target_include_directories(ks-tests SYSTEM PRIVATE ${_catch_inc})
+    ks_copy_faust_runtime(ks-tests)
     enable_testing()
     add_test(NAME ks-tests COMMAND ks-tests)
 endif()

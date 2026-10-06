@@ -6,6 +6,7 @@ import { Rack } from './components/Rack';
 import { MasterSection } from './components/MasterSection';
 import { Keyboard } from './components/Keyboard';
 import { AudioSettings } from './components/AudioSettings';
+import { PluginToast } from './components/PluginToast';
 
 function Toast() {
   const err = useEngine((s) => s.lastError);
@@ -46,6 +47,7 @@ export function App() {
       <Keyboard />
       <OfflineBanner />
       <Toast />
+      <PluginToast />
       <AudioSettings open={audioOpen} onClose={() => setAudioOpen(false)} />
     </div>
   );
