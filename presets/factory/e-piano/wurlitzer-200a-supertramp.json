@@ -1,0 +1,78 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Wurlitzer 200A Supertramp",
+    "category": "E.Piano",
+    "tags": [
+      "wurlitzer",
+      "supertramp",
+      "70s"
+    ],
+    "description": "Bright, nasal, punchy Wurlitzer 200A with a touch of amp tremolo. Reference: Supertramp - Dreamer / The Logical Song.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Wurlitzer",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 3,
+          "tone": 0.7,
+          "bark": 0.6,
+          "hammer_hardness": 0.65,
+          "velocity_curve": 0.15,
+          "dynamics": 26,
+          "decay": 1.0,
+          "tine_mix": 0.45,
+          "pickup_position": 0.6,
+          "pickup_distance": 0.35,
+          "drive": 0.3,
+          "noise": 0.3,
+          "polyphony": 32,
+          "volume_db": 0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "rate": 5.6,
+            "depth": 0.12,
+            "shape": 0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

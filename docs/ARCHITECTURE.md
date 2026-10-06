@@ -238,13 +238,14 @@ Patch (data)                              RackGraph (live, audio thread)
 | `fm` | DX7-compatible 6-op FM via vendored MSFA (Apache-2.0, Dexed fork; engine models Modern / Mark I / OPL, the latter two GPL-3.0+): every DX7 voice param as a ParamSpec (`alg`, `feedback`, `op1_level`, `op1_eg_rate1`…), macros (brightness, attack/release, tune, voices), DX7-style wheel/aftertouch routing; state `{syx, voice}` loads a voice from a 32-voice bulk or single dump into the ParamSet. Renders 64-sample MSFA chunks ahead (latencySamples 0, events ≤63 samples late); one sample rate per process (msfa globals) | DX7 E.Piano, bells, basses, brass |
 | `organ` | Tonewheel wheel-bus: 91 wheels (B-3 gear ratios), 9 drawbars with manual foldback, single-trigger percussion, key click, scanner vibrato/chorus V1–C3, leakage, preamp drive; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
-| `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |
+| `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
 | `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
 | `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
 
 Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
 (stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
 `rotary` (Leslie 122/147 horn+drum, Doppler/AM, ramped slow/fast/brake, mod-wheel speed), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
+`rotary` (Leslie horn+drum, ramped slow/fast), `tremolo` (amp trem with L/R phase / equal-power autopan; sine/tri/smoothed square; free or tempo-synced, ppq-locked), `compressor`, `eq`, `limiter` (master
 safety, fixed).
 
 ## 8. Transport

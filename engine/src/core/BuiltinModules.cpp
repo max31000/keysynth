@@ -9,6 +9,8 @@
 #include "instruments/organ/ToneWheelOrgan.h"
 #include "instruments/va/VaSynth.h"
 #include "instruments/fm/FmSynth.h"
+#include "effects/tremolo/TremoloFx.h"
+#include "instruments/epiano/EPiano.h"
 
 namespace ks {
 
@@ -23,6 +25,8 @@ void registerBuiltinModules(ModuleRegistry& r) {
     r.add<GainFx>();
     r.add<LimiterFx>();
     r.add<RotaryFx>();
+    r.add<EPiano>();
+    r.add<TremoloFx>();
 }
 
 } // namespace ks
