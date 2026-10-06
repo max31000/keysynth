@@ -28,6 +28,7 @@ void Engine::prepare(double sampleRate, int maxBlock) {
     limiter_.prepare(sampleRate_);
     metronome_.prepare(sampleRate_);
     sequencer_.stop();
+    transport_.resetPlayState(); // still playing -> restarts (position 0, sequencer) on the next block
     countInEndPpq_ = -1.0;
     channels_ = {};
 }

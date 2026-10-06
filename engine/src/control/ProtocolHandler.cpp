@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <optional>
 
 namespace ks {
 
@@ -231,43 +232,40 @@ const std::map<std::string, Handler>& handlers() {
                  const json& ts = m["time_sig"];
                  if (!ts.is_array() || ts.size() != 2 || !ts[0].is_number() || !ts[1].is_number())
                      throw PatchError("bad_request", "time_sig must be [num, den]");
-                 num = static_cast<int>(ts[0].get<double>());
-                 den = static_cast<int>(ts[1].get<double>());
-                 if (num < 1 || num > 16 || (den != 2 && den != 4 && den != 8 && den != 16))
+                 const double dn = ts[0].get<double>(), dd = ts[1].get<double>();
+                 if (!(dn >= 1 && dn <= 16) || !(dd == 2 || dd == 4 || dd == 8 || dd == 16) || dn != std::floor(dn))
                      throw PatchError("bad_request", "time_sig: num 1..16, den 2/4/8/16");
+                 num = static_cast<int>(dn);
+                 den = static_cast<int>(dd);
              }
+             std::optional<bool> drums, countIn, playing, metronome;
+             std::optional<double> drumsVolume, swing, tempo, metronomeVolume;
+             if (has("drums")) drums = boolField(m, "drums");
+             if (has("count_in")) countIn = boolField(m, "count_in");
+             if (has("playing")) playing = boolField(m, "playing");
+             if (has("metronome")) metronome = boolField(m, "metronome");
+             if (has("drums_volume")) drumsVolume = numField(m, "drums_volume");
+             if (has("swing")) swing = numField(m, "swing");
+             if (has("tempo")) tempo = numField(m, "tempo");
+             if (has("metronome_volume")) metronomeVolume = numField(m, "metronome_volume");
              bool any = false, all = false;
              if (has("pattern")) {
-                 c.s.loadPattern(pattern, true); // throws bad_path / not_found / parse_error
+                 c.s.loadPattern(pattern, true); // throws bad_path / not_found / parse_error (nothing applied yet)
                  any = all = true;
              }
              if (has("time_sig")) {
                  c.s.setTimeSignature(num, den);
                  any = all = true;
              }
-             if (has("drums")) {
-                 c.s.engine().rhythm().drumsEnabled.store(boolField(m, "drums"));
-                 any = true;
-             }
-             if (has("drums_volume")) {
-                 c.s.engine().rhythm().drumsVolume.store(static_cast<float>(std::clamp(numField(m, "drums_volume"), 0.0, 1.0)));
-                 any = true;
-             }
-             if (has("swing")) {
-                 c.s.setSwing(static_cast<float>(numField(m, "swing")));
-                 any = true;
-             }
-             if (has("count_in")) {
-                 c.s.engine().rhythm().countIn.store(boolField(m, "count_in"));
-                 any = true;
-             }
-             if (m.contains("tempo")) { c.s.setTempo(numField(m, "tempo")); any = true; }
-             if (m.contains("playing")) { c.s.engine().transport().setPlaying(boolField(m, "playing")); any = true; }
-             if (m.contains("metronome")) { c.s.engine().metronome().setEnabled(boolField(m, "metronome")); any = true; }
-             if (m.contains("metronome_volume")) {
-                 c.s.engine().metronome().setVolume(static_cast<float>(numField(m, "metronome_volume")));
-                 any = true;
-             }
+             if (drums) c.s.engine().rhythm().drumsEnabled.store(*drums);
+             if (drumsVolume) c.s.engine().rhythm().drumsVolume.store(static_cast<float>(std::clamp(*drumsVolume, 0.0, 1.0)));
+             if (swing) c.s.setSwing(static_cast<float>(*swing));
+             if (countIn) c.s.engine().rhythm().countIn.store(*countIn);
+             if (tempo) c.s.setTempo(*tempo);
+             if (playing) c.s.engine().transport().setPlaying(*playing);
+             if (metronome) c.s.engine().metronome().setEnabled(*metronome);
+             if (metronomeVolume) c.s.engine().metronome().setVolume(static_cast<float>(*metronomeVolume));
+             any = any || drums || drumsVolume || swing || countIn || tempo || playing || metronome || metronomeVolume;
              if (all) c.broadcast(c.s.stateJson()); // pattern/meter may change tempo, kit, swing
              else if (any) c.others(c.s.stateJson()); // keep other clients' transport view in sync
          }},

@@ -220,7 +220,7 @@ Patch patchFromJson(const json& in, std::vector<std::string>* w) {
             json slot = {{"type", "drums"}, {"params", *k}};
             p.rhythm.drums.params = slotFromJson(slot, w, "rhythm.kit").params;
         }
-        readStr(r, "pattern", p.rhythm.pattern, w, "rhythm");
+        p.hasRhythmPattern = readStr(r, "pattern", p.rhythm.pattern, w, "rhythm");
         unknownKeys(r, {"node", "kit", "pattern"}, w, "rhythm");
     }
     unknownKeys(j, {"format", "meta", "tempo", "layers", "master", "rhythm"}, w, "patch");

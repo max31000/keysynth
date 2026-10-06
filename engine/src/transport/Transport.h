@@ -33,6 +33,8 @@ public:
     }
     void endBlock(int numSamples, double sampleRate) noexcept;
     void resetPosition() noexcept;
+    // After Engine::prepare (device restart): the next playing block counts as a start again.
+    void resetPlayState() noexcept { wasPlaying_ = false; }
 
 private:
     std::atomic<double> tempo_{120.0};

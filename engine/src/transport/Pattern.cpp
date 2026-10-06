@@ -61,13 +61,18 @@ std::vector<uint8_t> parseRow(const json& j, std::vector<std::string>* w, const 
     return out;
 }
 
+// Finite, clamped to +-1e6 before the cast (no UB for huge JSON numbers).
+double safeNum(const json& v) {
+    const double d = v.get<double>();
+    return std::isfinite(d) ? std::clamp(d, -1e6, 1e6) : 0.0;
+}
+
 template <typename T>
 bool num(const json& j, const char* key, T& out) {
     auto it = j.find(key);
     if (it == j.end() || !it->is_number()) return false;
-    const double d = it->get<double>();
-    if (!std::isfinite(d)) return false;
-    out = static_cast<T>(d);
+    if (!std::isfinite(it->get<double>())) return false;
+    out = static_cast<T>(safeNum(*it));
     return true;
 }
 
@@ -133,8 +138,8 @@ Pattern patternFromJson(const json& j, std::vector<std::string>* w) {
     num(j, "tempo", p.tempo);
     if (auto it = j.find("time_sig"); it != j.end()) {
         if (it->is_array() && it->size() == 2 && (*it)[0].is_number() && (*it)[1].is_number()) {
-            p.numerator = static_cast<int>((*it)[0].get<double>());
-            p.denominator = static_cast<int>((*it)[1].get<double>());
+            p.numerator = static_cast<int>(safeNum((*it)[0]));
+            p.denominator = static_cast<int>(safeNum((*it)[1]));
         } else {
             warn(w, "time_sig: expected [num, den]");
         }
@@ -148,7 +153,7 @@ Pattern patternFromJson(const json& j, std::vector<std::string>* w) {
             p.kit = kitIndexFromName(it->get<std::string>());
             if (p.kit < 0) warn(w, "kit: unknown kit name");
         } else if (it->is_number()) {
-            p.kit = static_cast<int>(it->get<double>());
+            p.kit = static_cast<int>(safeNum(*it));
         }
     }
     if (auto it = j.find("tracks"); it != j.end() && it->is_array()) {

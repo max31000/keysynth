@@ -349,6 +349,11 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         return;
       case 'transport': {
         let all = false;
+        if (m.time_sig !== undefined) {
+          const ts = m.time_sig as unknown;
+          if (!Array.isArray(ts) || ts.length !== 2 || !(ts[0] >= 1 && ts[0] <= 16) || ![2, 4, 8, 16].includes(ts[1] as number))
+            return err(ws, id, 'bad_request', 'time_sig: num 1..16, den 2/4/8/16');
+        }
         if (typeof m.pattern === 'string') {
           const path = m.pattern;
           const found = path ? patterns.find((x) => x.entry.path === path) : undefined;

@@ -101,7 +101,7 @@ function SaveRow({ name }: { name: string }) {
     const n = value.trim();
     if (!n) return;
     const r = await actions().savePattern(n, overwrite);
-    if (r === null && !overwrite && actions().lastError?.startsWith('exists') && confirm(`Overwrite pattern "${n}"?`)) {
+    if (r === null && !overwrite && actions().lastError?.includes('already exists') && confirm(`Overwrite pattern "${n}"?`)) {
       actions().clearError();
       await actions().savePattern(n, true);
     }

@@ -180,6 +180,7 @@ std::vector<std::string> Session::setPatch(Patch p, const std::string& presetPat
     // A patch without a rhythm section / tempo keeps the current ones (PRESETS.md).
     if (!p.hasRhythm) p.rhythm = model_.patch().rhythm;
     if (!p.hasTempo) p.tempo = model_.patch().tempo;
+    if (p.hasRhythm && !p.hasRhythmPattern) p.rhythm.pattern = patternPath_; // kit only: keep the groove
     const std::string pattern = p.rhythm.pattern;
     const bool loadIt = p.hasRhythm && pattern != patternPath_;
     auto w = model_.setPatch(std::move(p));
@@ -193,6 +194,7 @@ std::vector<std::string> Session::setPatch(Patch p, const std::string& presetPat
         } catch (const PatchError& e) {
             w.push_back(std::string("rhythm.pattern: ") + e.what());
             logWarnings({w.back()});
+            model_.setRhythmPattern(patternPath_); // the patch names what actually plays
         }
     }
     return w;

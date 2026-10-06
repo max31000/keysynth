@@ -122,6 +122,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
   const pendingBypass = new Map<NodeId, { bypass: boolean; type?: string }>();
   let pendingTransport: TransportRequest | null = null;
   let pendingPattern: Pattern | null = null;
+  /** set_pattern requests not yet acknowledged (snapshots older than them are ignored) */
+  let patternInFlight = 0;
   let patternFetch: Promise<void> | null = null;
   let flushScheduled = false;
   /** true once a `state` arrived on the current connection */
@@ -236,7 +238,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
           }
           case 'pattern':
           case 'get_pattern_ok':
-            if (!pendingPattern) set({ pattern: { path: msg.path, edited: msg.edited, pattern: normalizePattern(msg.pattern) } });
+            if (!pendingPattern && patternInFlight === 0)
+              set({ pattern: { path: msg.path, edited: msg.edited, pattern: normalizePattern(msg.pattern) } });
             break;
           case 'list_patterns_ok':
             set({ patterns: msg.patterns });
@@ -320,7 +323,12 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
           pendingTransport = null;
         }
         if (pendingPattern) {
-          if (!client.send({ type: 'set_pattern', pattern: pendingPattern })) return;
+          if (client.status !== 'open') return;
+          patternInFlight++;
+          void client
+            .request({ type: 'set_pattern', pattern: pendingPattern }, { expect: 'set_pattern_ok' })
+            .catch(reportError)
+            .finally(() => patternInFlight--);
           pendingPattern = null;
         }
       },
@@ -349,9 +357,17 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       setTransport(t) {
         const upd: Partial<EngineState> = { transport: { ...get().transport, ...t } };
         // Meter changes resize the current pattern on the engine side; mirror that optimistically.
+        // Swing lives in the pattern too; keep both in sync so a later set_pattern does not revert them.
         const cur = get().pattern;
-        if (t.time_sig && cur) {
-          upd.pattern = { ...cur, edited: true, pattern: setTimeSig(cur.pattern, t.time_sig[0], t.time_sig[1]) };
+        const apply = (p: Pattern): Pattern => {
+          let q = p;
+          if (t.time_sig) q = setTimeSig(q, t.time_sig[0], t.time_sig[1]);
+          if (t.swing !== undefined) q = { ...q, swing: t.swing };
+          return q;
+        };
+        if (cur && (t.time_sig || t.swing !== undefined)) {
+          upd.pattern = { ...cur, edited: cur.edited || !!t.time_sig, pattern: apply(cur.pattern) };
+          if (pendingPattern) pendingPattern = apply(pendingPattern);
         }
         set(upd);
         pendingTransport = { ...pendingTransport, ...t };
@@ -361,6 +377,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       loadPattern(path) {
         pendingPattern = null; // unsent edits belonged to the previous pattern
         get().setTransport({ pattern: path });
+        set({ pattern: null }); // no edits on the old pattern until the new one arrives
       },
 
       async refreshPatterns() {

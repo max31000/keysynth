@@ -70,6 +70,7 @@ struct Patch {
     // Parse info (patchFromJson): whether the JSON had these keys. A preset without them keeps the current
     // rhythm section / tempo when loaded (PRESETS.md).
     bool hasRhythm = false;
+    bool hasRhythmPattern = false;
     bool hasTempo = false;
 };
 

@@ -54,14 +54,15 @@ int DrumSequencer::generate(const TransportInfo& t, int numSamples, double sampl
     int count = 0;
     for (int guard = 0; guard < kMaxStepsPerBlock; ++guard) {
         const int64_t rel = nextStep_ - anchorStep_;
-        const double ppq = anchorPpq_ + static_cast<double>(rel) * stepPpq + ((rel & 1) ? sw : 0.0);
+        const int idx = p.numSteps > 0 ? static_cast<int>(rel % p.numSteps) : static_cast<int>(rel & 1);
+        // Swing by position inside the pattern (stable for odd step counts).
+        const double ppq = anchorPpq_ + static_cast<double>(rel) * stepPpq + ((idx & 1) ? sw : 0.0);
         const double off = (ppq - t.ppqPosition) * samplesPerPpq;
         // First sample at or after the exact step time (late steps, e.g. after a tempo jump, fire at 0).
         if (off - kEps > static_cast<double>(numSamples - 1)) break;
         const int at = off <= kEps ? 0 : static_cast<int>(std::ceil(off - kEps));
         const uint32_t offset = static_cast<uint32_t>(std::min(at, numSamples - 1));
         if (p.numSteps > 0) {
-            const int idx = static_cast<int>(rel % p.numSteps);
             currentStep_.store(idx, std::memory_order_relaxed);
             if (emit) {
                 for (int k = 0; k < p.numTracks && count < cap; ++k) {
