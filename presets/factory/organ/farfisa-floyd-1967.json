@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Farfisa Floyd 1967",
+    "category": "Organ",
+    "tags": [
+      "farfisa",
+      "compact",
+      "pink floyd",
+      "60s",
+      "psychedelic"
+    ],
+    "description": "Farfisa Compact trumpet 8' + strings 4' + flute 8', deep vibrato, bright. Reference: Pink Floyd \u2014 See Emily Play / Arnold Layne (Rick Wright).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 1,
+          "far_flute_16": 0,
+          "far_flute_8": 1,
+          "far_flute_4": 0,
+          "far_oboe_8": 0,
+          "far_trumpet_8": 1,
+          "far_strings_8": 0,
+          "far_strings_4": 1,
+          "vibrato": 1,
+          "vibrato_rate": 6.2,
+          "vibrato_depth": 0.6,
+          "bright": 1,
+          "leakage": 0.25,
+          "click": 0.1,
+          "volume_db": -1
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}

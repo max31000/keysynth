@@ -1,0 +1,76 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "B3 Jimmy Smith",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "jazz",
+      "percussion"
+    ],
+    "description": "Tonewheel 888000000, 3rd-harmonic fast percussion, key click, Leslie slow (mod wheel = fast). Reference: Jimmy Smith \u2014 The Sermon / Back at the Chicken Shack.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 8,
+          "db_8": 8,
+          "db_4": 0,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 1,
+          "perc_harmonic": 1,
+          "perc_decay": 0,
+          "perc_volume": 0,
+          "vibrato": 0,
+          "click": 0.7,
+          "leakage": 0.35,
+          "drive": 0.15,
+          "volume_db": 0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "modwheel": true,
+            "sustain_toggle": false,
+            "drive": 0.2,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Vox Break On Through",
+    "category": "Organ",
+    "tags": [
+      "vox",
+      "continental",
+      "doors",
+      "60s",
+      "combo",
+      "bass"
+    ],
+    "description": "Vox Continental 16'/8'/IV reed stack, no vibrato, bass section on the lowest two octaves (stand-in for Manzarek's left-hand piano bass). Reference: The Doors \u2014 Break On Through.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 5,
+          "vox_8": 8,
+          "vox_4": 4,
+          "vox_2": 0,
+          "vox_iv": 6,
+          "vox_flute": 2,
+          "vox_reed": 8,
+          "vibrato": 0,
+          "bright": 1,
+          "bass": 1,
+          "bass_split": 48,
+          "bass_16": 0.8,
+          "bass_8": 0.5,
+          "leakage": 0.2,
+          "click": 0.15,
+          "volume_db": -2
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}
