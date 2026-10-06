@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Mellotron 8-Choir",
+    "category": "Choir & Vox",
+    "tags": [
+      "mellotron",
+      "choir",
+      "70s",
+      "sampled"
+    ],
+    "description": "MelloSFZotron 8-voice choir tapes (CC1 = pitch). Reference: Pink Floyd (Echoes era), The Moody Blues.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Mellotron 8-Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0
+        },
+        "state": {
+          "sfz": "assets/samples/mellosfzotron/8Choir.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -46,7 +46,7 @@ Threads:
 ## 3. Repository layout
 
 ```
-CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ, KS_RT_CHECKS (default ON in all configs, see §4.8)
+CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ (ON), KS_RT_CHECKS (default ON in all configs, see §4.8)
 cmake/Dependencies.cmake  FetchContent, every dep pinned to a tag/commit: JUCE (>=8.0.11, bundles ASIO),
                           nlohmann_json, ixwebsocket (USE_TLS=OFF, no zlib), Catch2 v3, sfizz (isolated target,
                           warnings off). CMAKE_MSVC_RUNTIME_LIBRARY set globally.
@@ -148,8 +148,17 @@ class Module {
   virtual int latencySamples() const { return 0; }
   virtual nlohmann::json saveState() const { return {}; } // non-param state (sample path, syx bank…)
   virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
+  virtual bool isReady() const { return true; }           // false while heavy resources load asynchronously
+  virtual void setOfflineMode(bool) {}                    // control thread, after prepare: faster-than-RT render
 };
 ```
+
+- **Asynchronous loading** (`isReady`): a module whose `prepare()` starts a background load (samples) renders
+  silence and returns `false` until it is done; it never blocks the audio or message thread on it. `OfflineRenderer`
+  (ks-render, tests) calls `setOfflineMode(true)` on every module and waits until all are ready before rendering
+  (`RenderOptions::readyTimeoutSeconds`). In offline mode a streaming module may wait for disk IO inside `process()`
+  (sfizz freewheeling) — that is the only place such waits are allowed, inside an explicit `rt::RtAllowScope`.
+  Both hooks default to no-ops, so existing modules are unaffected.
 
 - `ProcessContext`: sampleRate, numSamples, sampleTime, transport (tempo, ppq position, playing), and per-layer
   `ChannelState` {pitchBend (-1..1), modWheel, aftertouch, cc64 sustain, cc66 sostenuto, cc67 soft, expression}
@@ -242,7 +251,7 @@ Patch (data)                              RackGraph (live, audio thread)
 | `organ` | Tonewheel wheel-bus: 91 wheels (B-3 gear ratios), 9 drawbars with manual foldback, single-trigger percussion, key click, scanner vibrato/chorus V1–C3, leakage, preamp drive; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
-| `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
+| `sampler` | SFZ via sfizz 1.2.3 (isolated static target, `KS_WITH_SFIZZ`). State `{"sfz": path}`; per-instance loader thread (loads serialized across instances; also does non-RT voice reallocation via a lock-free pause handshake), silence + `loading`=1 until ready; sample pool per instance (no cross-instance cache yet); params volume/pan/transpose/tune/polyphony (non-automatable: cuts notes)/velocity curve; the `.sfz` path must resolve inside the §11 roots, or below `$KS_ASSETS_DIR` / the main checkout's `assets/` (`instruments/sampler/SamplePaths.h`); paths *inside* the SFZ (`sample=`, `#include`, `default_path`) are followed by sfizz unchecked | Salamander grand, Rhodes/Wurli/CP80, Mellotron, SSO/VPO choir, strings, brass, harpsichord, organ, clavinet, drum kits |
 | `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
 
 Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string-machine 3-phase), `phaser`

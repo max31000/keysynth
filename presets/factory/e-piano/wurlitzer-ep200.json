@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Wurlitzer EP200",
+    "category": "E.Piano",
+    "tags": [
+      "wurlitzer",
+      "60s",
+      "70s",
+      "sampled"
+    ],
+    "description": "Greg Sullivan Wurlitzer EP200. Reference: Supertramp - Dreamer, Pink Floyd - Money.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Wurlitzer EP200",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0
+        },
+        "state": {
+          "sfz": "assets/samples/gregsullivan-epianos/GregSullivan.E-Pianos-master/Wurlitzer EP200/Wurlitzer EP200.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

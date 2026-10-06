@@ -20,6 +20,7 @@
 #include "instruments/fm/FmSynth.h"
 #include "effects/tremolo/TremoloFx.h"
 #include "instruments/epiano/EPiano.h"
+#include "instruments/sampler/SamplerModule.h"
 
 namespace ks {
 
@@ -30,6 +31,9 @@ void registerBuiltinModules(ModuleRegistry& r) {
     r.add<ComboOrgan>();
     r.add<VaSynth>();
     r.add<FmSynth>();
+#if defined(KS_HAS_SFIZZ)
+    r.add<SamplerModule>();
+#endif
     // Effects
     r.add<GainFx>();
     r.add<LimiterFx>();

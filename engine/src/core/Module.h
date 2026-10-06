@@ -61,6 +61,13 @@ public:
     virtual nlohmann::json saveState() const { return {}; } // non-param state (sample path, syx bank, ...)
     virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
 
+    // Heavy resources (samples, ...) loaded asynchronously after prepare(): false while still loading (the module
+    // renders silence meanwhile). Any thread. OfflineRenderer waits until every module is ready (ARCHITECTURE §5.2).
+    virtual bool isReady() const { return true; }
+    // Control thread, after prepare(), before going live: true when rendered faster than real time (ks-render,
+    // tests). Streaming modules may then block on disk IO inside process() instead of dropping audio.
+    virtual void setOfflineMode(bool /*offline*/) {}
+
 private:
     static std::atomic<int>& liveCount() noexcept {
         static std::atomic<int> c{0};

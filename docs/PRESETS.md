@@ -39,7 +39,9 @@ Field rules:
 - `params`: plain units as defined by the module's `ParamSpec` (see engine catalog via protocol `get_catalog`,
   or `ks-render --list-modules`). Enum params are numeric indices.
 - `state`: module-specific non-param data (e.g. `sampler`: `{ "sfz": "assets/samples/salamander/x.sfz" }`,
-  `fm`: `{ "syx": "...", "voice": 10 }`). Paths relative to repo root or absolute.
+  `fm`: `{ "syx": "...", "voice": 10 }`). Paths relative to repo root or absolute, inside the allow-listed roots
+  (ARCHITECTURE §11). `sampler` also finds `assets/...` paths in `$KS_ASSETS_DIR` and in the main checkout's `assets/`
+  (docs/TESTING.md). Changing `state` rebuilds (reloads) the module; params never do.
 - Splits: multiple layers with disjoint key ranges. Layers: overlapping ranges.
 
 Files: `presets/factory/<category-slug>/<preset-slug>.json` (read-only), `userdata/presets/<slug>.json`.

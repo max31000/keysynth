@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "CP80 Electric Grand",
+    "category": "E.Piano",
+    "tags": [
+      "yamaha cp80",
+      "80s",
+      "sampled"
+    ],
+    "description": "Greg Sullivan Yamaha CP80 electric grand. Reference: 80s ballads and synth-pop (a-ha, Genesis).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "CP80 Electric Grand",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0
+        },
+        "state": {
+          "sfz": "assets/samples/gregsullivan-epianos/GregSullivan.E-Pianos-master/CP80/CP80.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

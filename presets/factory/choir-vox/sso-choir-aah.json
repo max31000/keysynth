@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Choir Aah (SSO)",
+    "category": "Choir & Vox",
+    "tags": [
+      "choir",
+      "aah",
+      "orchestral",
+      "sampled"
+    ],
+    "description": "Sonatina Symphonic Orchestra mixed chorus 'aah'. Reference: Rammstein-style big choir (layer with brass/strings).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Choir Aah",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Chorus - Mixed.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

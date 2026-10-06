@@ -69,6 +69,13 @@ get_target_property(_ix_inc ixwebsocket INTERFACE_INCLUDE_DIRECTORIES)
 if(_ix_inc)
     target_include_directories(ks_core SYSTEM PUBLIC ${_ix_inc})
 endif()
+if(TARGET sfizz_static)
+    # sfizz only inside ks_core (instruments/sampler); its headers as SYSTEM so /W4 /WX stays on our code.
+    target_link_libraries(ks_core PRIVATE sfizz_static)
+    get_target_property(_sfizz_inc sfizz_static INTERFACE_INCLUDE_DIRECTORIES)
+    target_include_directories(ks_core SYSTEM PRIVATE ${_sfizz_inc})
+    target_compile_definitions(ks_core PUBLIC KS_HAS_SFIZZ=1)
+endif()
 target_compile_definitions(ks_core PUBLIC
     KS_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     $<$<BOOL:${KS_RT_CHECKS}>:KS_RT_CHECKS=1>)

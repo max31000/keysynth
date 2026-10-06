@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Big Rusty Drums",
+    "category": "Drums",
+    "tags": [
+      "acoustic",
+      "drum kit",
+      "rock",
+      "sampled"
+    ],
+    "description": "Karoryfer Big Rusty Drums, full kit (GM-style key map). Rock / indie acoustic kit.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Big Rusty Drums",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 9,
+          "polyphony": 128
+        },
+        "state": {
+          "sfz": "assets/samples/big-rusty-drums/Programs/01-full.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

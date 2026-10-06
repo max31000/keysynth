@@ -13,7 +13,8 @@ cmake --build build --config Release --target keysynth-engine ks-render ks-bench
 ```
 
 Binaries land in `build/bin/<Config>/`. Options (pass via `-ExtraArgs '-DKS_RT_CHECKS=OFF'`):
-`KS_BUILD_TESTS` (ON), `KS_RT_CHECKS` (ON in every config), `KS_WITH_SFIZZ` (OFF, Phase 2 placeholder).
+`KS_BUILD_TESTS` (ON), `KS_RT_CHECKS` (ON in every config), `KS_WITH_SFIZZ` (ON: sfizz 1.2.3 for the `sampler`
+module; `OFF` builds without it and the module is not registered).
 Engine code builds with `/W4 /WX`; dependencies don't.
 
 ## Unit + render tests (Catch2)
@@ -27,7 +28,28 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport]`. Run the full tier before merging anything that touches DSP or presets.
+[transport] [sampler]`. Run the full tier before merging anything that touches DSP or presets.
+
+### Sample-based presets (`sampler`)
+
+`[sampler]` unit tests generate their own tiny WAV + SFZ fixtures (in `userdata/.test-sampler-<pid>/`) and never need
+downloaded libraries. Factory presets using `sampler` are **skipped by the render suite** (they need GBs of samples)
+and covered by the hidden `[samples]` test instead, which renders every one whose library is installed (skips the
+rest) with the same criteria (drum kits: RMS > -50 dB, tail < -50 dB, since one-shot cymbals ring) and prints
+load+render time per preset:
+
+```powershell
+build/bin/Release/ks-tests.exe "[samples]"            # needs python scripts/fetch_samples.py first
+$env:KS_SAMPLES_FILTER = "piano,vpo"                  # optional: only presets whose path contains one of these
+$env:KS_SAMPLES_DUMP = "renders"                      # optional: write each render to renders/<preset>.wav
+```
+
+Sample paths in presets are `assets/samples/<lib>/<entry>.sfz`, resolved against the repo root. A checkout without
+its own `assets/samples` (e.g. an agent worktree) falls back to `$KS_ASSETS_DIR/samples/...` and then to the main
+checkout's `assets/` (for roots laid out as `<main>/.claude/worktrees/<name>`), see
+`engine/src/instruments/sampler/SamplePaths.h`. `KS_ASSETS_DIR` points at a directory laid out like `assets/`
+(e.g. `$env:KS_ASSETS_DIR = "M:/Projects/Piano/assets"`). ks-render waits until every module reports ready
+(samples loaded) before rendering.
 
 Render suite (`engine/tests/test_render.cpp`): every `presets/factory/**` preset renders the standard pattern
 (`OfflineRenderer::standardTestEvents()`: C-major chord, scale with rising velocity, low/high extremes, sustain-pedal

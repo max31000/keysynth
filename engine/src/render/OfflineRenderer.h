@@ -27,6 +27,7 @@ struct RenderOptions {
     double sampleRate = 48000.0;
     int blockSize = 64;
     double tailSeconds = 2.0; // rendered after the last event
+    int readyTimeoutSeconds = 300; // max wait for modules to finish loading (Module::isReady)
 };
 
 struct RenderResult {

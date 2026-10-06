@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Rhodes Mk I Stage (jRhodes3c)",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "70s",
+      "sampled"
+    ],
+    "description": "jRhodes3c: 1977 Rhodes Mk I Stage 73, stereo, looped. Reference: The Doors - Riders on the Storm, Pink Floyd - Breathe.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Rhodes Mk I Stage",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0
+        },
+        "state": {
+          "sfz": "assets/samples/jrhodes3c/jlearman.jRhodes3c-master/jRhodes3c-looped-flac-sfz/_jRhodes-stereo-looped.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
