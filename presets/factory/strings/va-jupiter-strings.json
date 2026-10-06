@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Jupiter Strings",
+    "category": "Strings",
+    "tags": [
+      "va",
+      "jupiter",
+      "strings",
+      "80s"
+    ],
+    "description": "Roland Jupiter-8-style string ensemble: two detuned saws, IR3109 24 dB, slow attack, delayed vibrato. Reference: Jupiter-8 strings (Duran Duran / Journey era).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Jupiter Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.9,
+          "osc2_fine": 9,
+          "osc1_fine": -4,
+          "filter_model": 1,
+          "cutoff": 3200,
+          "resonance": 0.1,
+          "key_track": 0.7,
+          "filter_env_amt": 0.6,
+          "hpf_cutoff": 180,
+          "fenv_attack": 0.5,
+          "fenv_decay": 1.5,
+          "fenv_sustain": 0.7,
+          "fenv_release": 1.2,
+          "amp_attack": 0.38,
+          "amp_decay": 1.0,
+          "amp_sustain": 1.0,
+          "amp_release": 1.3,
+          "amp_vel": 0.25,
+          "lfo1_wave": 1,
+          "lfo1_rate": 5.3,
+          "lfo1_delay": 1.2,
+          "lfo1_pitch": 0.09,
+          "pan_spread": 0.5,
+          "drift": 0.3,
+          "volume_db": -10.5
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}
