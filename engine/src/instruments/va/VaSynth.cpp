@@ -511,7 +511,7 @@ void VaSynth::Voice::control(int blockPos) noexcept {
     svfK = dsp::Svf::dampingFor(res * 0.97f);
     const float hpfOct = clampv(sm[SmHpf] + d[DstHpf], 3.0f, 14.5f);
     hpfOn = hpfOct > 3.6f; // > ~12 Hz
-    hpfG = dsp::tptG(std::exp2(hpfOct), sh.sr);
+    hpfG = dsp::tptOnePoleG(std::exp2(hpfOct), sh.sr);
 
     const float velGain = (1.0f - sh.ampVel) + sh.ampVel * velocity;
     // l1 can exceed +-1 via the LFO1 Depth mod destination: keep the tremolo gain non-negative.

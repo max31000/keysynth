@@ -1,13 +1,13 @@
 #pragma once
 // Topology-preserving (trapezoidal) one-pole filter: LP and HP outputs from one tick. Stable under fast
-// cutoff modulation. Set the coefficient with G = g / (1 + g), g = tan(pi * fc / fs) (see tptG()).
+// cutoff modulation. Set the coefficient with G = g / (1 + g), g = tan(pi * fc / fs) (see tptOnePoleG()).
 
 #include "dsp/Math.h"
 
 namespace ks::dsp {
 
 // Prewarped one-pole gain for cutoff `hz` at sample rate `sr` (cutoff clamped to [1 Hz, 0.49 sr]).
-inline float tptG(float hz, float sr) noexcept {
+inline float tptOnePoleG(float hz, float sr) noexcept {
     const float f = std::fmin(std::fmax(hz, 1.0f), sr * 0.49f);
     const float g = std::tan(kPi * f / sr);
     return g / (1.0f + g);

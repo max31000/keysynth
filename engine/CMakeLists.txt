@@ -39,6 +39,21 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------------------------------------
+# ks_msfa: vendored DX7 FM core (third_party/msfa, Apache-2.0 + Dexed engines GPL-3.0+), warnings off.
+# Only the `fm` instrument includes its headers (SYSTEM, so /W4 /WX doesn't apply to them).
+set(KS_MSFA_DIR ${CMAKE_SOURCE_DIR}/third_party/msfa)
+file(GLOB KS_MSFA_SOURCES CONFIGURE_DEPENDS ${KS_MSFA_DIR}/*.cc ${KS_MSFA_DIR}/*.cpp ${KS_MSFA_DIR}/dexed/*.cpp)
+add_library(ks_msfa STATIC ${KS_MSFA_SOURCES})
+target_include_directories(ks_msfa SYSTEM PUBLIC ${KS_MSFA_DIR} ${CMAKE_SOURCE_DIR}/third_party)
+set_target_properties(ks_msfa PROPERTIES FOLDER "deps")
+if(MSVC)
+    target_compile_options(ks_msfa PRIVATE /W0 /utf-8)
+    target_compile_definitions(ks_msfa PRIVATE _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS NOMINMAX)
+else()
+    target_compile_options(ks_msfa PRIVATE -w)
+endif()
+
+# ---------------------------------------------------------------------------------------------------------
 # ks_core: everything except app/ and tools/.
 file(GLOB_RECURSE KS_CORE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
@@ -48,7 +63,7 @@ add_library(ks_core STATIC ${KS_CORE_SOURCES})
 target_include_directories(ks_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ks_core
     PUBLIC ks_juce nlohmann_json::nlohmann_json ixwebsocket
-    PRIVATE ks_warnings)
+    PRIVATE ks_warnings ks_msfa)
 # Dep headers as SYSTEM so /W4 /WX only applies to our code.
 get_target_property(_ix_inc ixwebsocket INTERFACE_INCLUDE_DIRECTORIES)
 if(_ix_inc)

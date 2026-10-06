@@ -238,17 +238,27 @@ Patch (data)                              RackGraph (live, audio thread)
 | typeId | What | Covers |
 |---|---|---|
 | `va` | Virtual analog poly (16 notes): 3 PolyBLEP/BLAMP osc (saw/pulse+PWM/tri/sine/JP-8000 supersaw/noise), sub −1/−2 oct, hard sync 2→1, ring 1×2, FM 3→1, filter-env→osc1 poly-mod; filters Moog ladder 24 / IR3109 24 (ZDF, nonlinear, self-osc) / SEM 12 SVF, LP/BP/HP/notch, HPF; analog ADSRs, 2 LFO (delay, key/tempo sync), 6-slot mod matrix; unison ≤8 within a 64 sub-voice budget, glide (constant time, legato-only), poly/mono/legato, drift, pan spread; output saturation | Juno/Jupiter/OB-Xa/Prophet/Minimoog/CS-80: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
-| `fm` | DX7-compatible 6-op FM via vendored MSFA; loads .syx banks | DX7 E.Piano, bells, basses |
+| `fm` | DX7-compatible 6-op FM via vendored MSFA (Apache-2.0, Dexed fork; engine models Modern / Mark I / OPL, the latter two GPL-3.0+): every DX7 voice param as a ParamSpec (`alg`, `feedback`, `op1_level`, `op1_eg_rate1`…), macros (brightness, attack/release, tune, voices), DX7-style wheel/aftertouch routing; state `{syx, voice}` loads a voice from a 32-voice bulk or single dump into the ParamSet. Renders 64-sample MSFA chunks ahead (latencySamples 0, events ≤63 samples late); one sample rate per process (msfa globals) | DX7 E.Piano, bells, basses, brass |
 | `organ` | Tonewheel wheel-bus: 91 wheels (B-3 gear ratios), 9 drawbars with manual foldback, single-trigger percussion, key click, scanner vibrato/chorus V1–C3, leakage, preamp drive; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
-| `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |
+| `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
 | `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
 | `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
 
-Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
-(stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
-`rotary` (Leslie 122/147 horn+drum, Doppler/AM, ramped slow/fast/brake, mod-wheel speed), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
-safety, fixed).
+Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string-machine 3-phase), `phaser`
+(4/6/8/12 stages), `flanger` (BBD, optional through-zero), `delay` (stereo/ping-pong/tape, tempo sync), `reverb`
+(16-line FDN hall/plate/room/chamber/gated/shimmer), `drive` (tube/fuzz/tape, IIR-oversampled 2x/4x), `rotary`
+(Leslie 122/147 horn+drum, Doppler/AM, ramped slow/fast/brake, mod-wheel speed, ReadOnly `horn_rpm`/`drum_rpm`),
+`tremolo` (amp trem with L/R phase / equal-power autopan; sine/tri/smoothed square; free or tempo-synced),
+`compressor` (VCA/opto, `gr_db` meter), `eq` (HP/LS/3 bells/HS/LP), `limiter` (master safety, fixed).
+Effects are in-place stereo, zero latency, smoothed.
+Shared effect param ids: `mix` (0..1 dry→wet crossfade; 0 = dry, bit-exact except `drive`, whose dry runs
+through the matching all-pass oversampling filters), `rate` (Hz), `depth` (0..1), `feedback`, `time` (ms),
+`sync` (note division enum, `dsp/NoteDivision.h`; index 0 = Off/free, else tempo from ProcessContext), `tone`
+(0..1), `width` (0..1), `level_db`; other dB/ms/Hz ids carry the unit as suffix (`_db`, `_ms`, `_hz`); `decay`
+is RT60 in s. Accepted exception to §4.7: `flanger` `through_zero` (off by default) replaces the dry path with a
+reference line of `time` (≤ 10 ms) — the effect itself, `latencySamples()` stays 0. BBD/delay/oversampling/filter
+primitives live in `dsp/` (Bbd, InterpDelay, HalfbandIir, ...).
 
 ## 8. Transport
 
