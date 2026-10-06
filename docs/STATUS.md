@@ -3,6 +3,10 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Phase 2 (merged, 166 Catch2 cases + 83 Vitest): `va` (reviewed twice, fixes merged), `fm` (MSFA, .syx),
+  `organ`/`combo`/`rotary`, `epiano`/`tremolo`, `sampler` (sfizz 1.2.3, 16 sample presets), effects suite (9),
+  `drums` + DrumSequencer + rhythm UI (12 patterns), plugin host (Faust JIT via faust.dll C API, C ABI DLLs,
+  hot reload). Each branch had its own fresh-context review. Details: ARCHITECTURE §7, §8, §10; PLUGINS.md.
 - Phase 1 core engine: CMake + pinned deps (JUCE 8.0.15 w/ bundled ASIO, nlohmann_json 3.12.0, IXWebSocket 11.4.6
   no TLS/zlib, Catch2 3.8.1; shared `.deps/` sources, per-build-dir dep builds, static MSVC runtime);
   core/ (ParamSpec/ParamSet, Module/Registry, MidiEvent, ChannelState, SpscQueue, VoiceAllocator, PatchModel,
@@ -18,15 +22,13 @@ Update when a chunk of work lands. Newest first inside each section.
 - Phase 1 UI: generated module panels, rack/zones, FX chain, keyboard, audio dialog, mock engine. Reviewed, fixed.
 - Sample libraries (core set ~3.5 GB, assets/samples.json) and Faust 2.88 (.tools/faust).
 
-## In progress (Phase 2, parallel worktree branches)
-- `va`, `fm`, `organ`+`combo`+`rotary`, `epiano`+`tremolo`, `sampler` (sfizz), effects suite,
-  `drums`+DrumSequencer+rhythm UI, plugin host (Faust JIT + C ABI DLL, hot reload).
+## In progress
+- Signature presets (Doors + Pink Floyd; 80s pop + Rammstein) — two preset branches.
+- Integration: real UI ⇄ engine walkthrough, ASIO panel/latency UX, launcher scripts, configure.ps1 lock,
+  FM .syx param read-back, FM note-start jitter (MSFA 64-sample chunks), sampler load errors to UI.
 
 ## Next
-- Merge phase 2 branches; integration review.
-- UI against the real engine; ASIO control-panel button (see Yamaha buffer note below).
-- Phase 4: signature presets (Doors, 80s pop, Rammstein, Pink Floyd) with FX, tuning by render analysis.
-- Later: looper, recording, MIDI controller mapping.
+- Later: looper, recording, MIDI controller mapping, cross-instance sample cache, sandboxing paths inside SFZ files.
 
 ## Known issues / decisions log
 - Review #1 of Phase 1 (fresh-context subagent): fixed render-once cache sizing/pass-through, double processing of
