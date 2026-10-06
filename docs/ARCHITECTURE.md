@@ -234,7 +234,7 @@ Patch (data)                              RackGraph (live, audio thread)
 
 | typeId | What | Covers |
 |---|---|---|
-| `va` | Virtual analog poly: 3 osc (saw/pulse+PWM/tri/sine/supersaw/noise), sub, sync/ring, ladder 24 dB + SVF 12 dB (LP/BP/HP), amp+filter ADSR, 2 LFO, fixed mod slots, unison/detune/spread, glide, mono/legato | Juno/Jupiter/OB-Xa/Prophet/Minimoog: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
+| `va` | Virtual analog poly (16 notes): 3 PolyBLEP/BLAMP osc (saw/pulse+PWM/tri/sine/JP-8000 supersaw/noise), sub −1/−2 oct, hard sync 2→1, ring 1×2, FM 3→1, filter-env→osc1 poly-mod; filters Moog ladder 24 / IR3109 24 (ZDF, nonlinear, self-osc) / SEM 12 SVF, LP/BP/HP/notch, HPF; analog ADSRs, 2 LFO (delay, key/tempo sync), 6-slot mod matrix; unison ≤8 within a 64 sub-voice budget, glide (constant time, legato-only), poly/mono/legato, drift, pan spread; output saturation | Juno/Jupiter/OB-Xa/Prophet/Minimoog/CS-80: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
 | `fm` | DX7-compatible 6-op FM via vendored MSFA; loads .syx banks | DX7 E.Piano, bells, basses |
 | `organ` | Tonewheel: 9 drawbars, percussion, key click, scanner vibrato/chorus, crosstalk; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: Vox Continental / Farfisa voicings, footages, vibrato, bass section | Doors: Light My Fire; early Floyd |
