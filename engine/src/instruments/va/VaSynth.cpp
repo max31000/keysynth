@@ -181,12 +181,17 @@ void VaSynth::prepare(double sampleRate, int /*maxBlock*/) {
     shared_.sr = static_cast<float>(sampleRate);
     shared_.invSr = 1.0f / shared_.sr;
     shared_.tickSeconds = static_cast<float>(kControlInterval) / shared_.sr;
+    const double tickRate = sampleRate / kControlInterval;
+    shared_.smCoef = dsp::onePoleCoef(0.008f, tickRate);
+    shared_.driftCoef = dsp::onePoleCoef(0.4f, tickRate);
+    shared_.driftTickScale = static_cast<float>(sampleRate / 48000.0);
     dsp::WhiteNoise rng(0xC0FFEEu);
     for (int i = 0; i < kMaxVoices; ++i) {
         auto& v = alloc_.voice(i);
         v.seed = dsp::hash32(static_cast<uint32_t>(i) + 101u);
         for (int s = 0; s < kMaxUnison; ++s) {
             auto& sv = v.subs[static_cast<size_t>(s)];
+            sv.svf.setSampleRate(sampleRate);
             sv.seed = dsp::hash32(v.seed + static_cast<uint32_t>(s) * 7919u);
             sv.noise.setSeed(sv.seed | 1u);
             sv.driftStatic = rng.next();
@@ -238,12 +243,17 @@ void VaSynth::updateShared(const ProcessContext& ctx) noexcept {
     for (int k = 0; k < kNumOscs; ++k) {
         const int base = k == 0 ? Osc1Wave : (k == 1 ? Osc2Wave : Osc3Wave);
         OscShared& o = s.osc[k];
-        o.type = static_cast<OscType>(clampv(toInt(p.get(base + 0)), 0, 5));
+        const auto type = static_cast<OscType>(clampv(toInt(p.get(base + 0)), 0, 5));
+        if (type != o.type) ++s.typeEpoch;
+        o.type = type;
         o.pitchOffset = 12.0f * p.get(base + 1) + p.get(base + 2) + 0.01f * p.get(base + 3);
         o.level = p.get(base + 4);
         o.pw = p.get(base + 5);
         o.pwm = p.get(base + 6);
         o.detune = p.get(base + 7);
+        s.ssCurve[k] = o.type == OscType::SuperSaw ? dsp::SuperSaw::detuneCurve(o.detune) : 0.0f;
+        s.smTarget[SmLevel1 + k] = o.level;
+        s.smTarget[SmPw1 + k] = o.pw;
     }
     s.sync = p.get(Osc1Sync) >= 0.5f;
     s.fm = p.get(Osc1Fm);
@@ -265,6 +275,14 @@ void VaSynth::updateShared(const ProcessContext& ctx) noexcept {
     s.fenvAmt = p.get(FilterEnvAmt);
     s.filterVel = p.get(FilterVel);
     s.hpfOct = std::log2(std::fmax(p.get(HpfCutoff), 1.0f));
+    s.smTarget[SmCutoff] = s.cutoffOct;
+    s.smTarget[SmResonance] = s.resonance;
+    s.smTarget[SmDrive] = drive;
+    s.smTarget[SmSub] = s.subLevel;
+    s.smTarget[SmNoise] = s.noiseLevel;
+    s.smTarget[SmRing] = s.ringLevel;
+    s.smTarget[SmFm] = s.fm;
+    s.smTarget[SmHpf] = s.hpfOct;
 
     const double tickRate = s.sampleRate / kControlInterval;
     s.fenv = dsp::AnalogEnv::makeCoefs({p.get(FenvAttack), p.get(FenvDecay), p.get(FenvSustain), p.get(FenvRelease)},
@@ -307,7 +325,9 @@ void VaSynth::updateShared(const ProcessContext& ctx) noexcept {
     s.glideSeconds = p.get(Glide);
     s.glideLegatoOnly = toInt(p.get(GlideMode)) == 1;
     s.drift = p.get(Drift);
-    s.panSpread = p.get(PanSpread);
+    const auto mode = static_cast<VoiceMode>(clampv(toInt(p.get(VoiceModeP)), 0, 2));
+    // Pan spread spreads poly voices; a mono/legato part (always voice 0) stays centred.
+    s.panSpread = mode == VoiceMode::Poly ? p.get(PanSpread) : 0.0f;
     const ChannelState cs = ctx.channel ? *ctx.channel : ChannelState{};
     s.bendNorm = cs.pitchBend;
     s.bendSemis = cs.pitchBend * p.get(BendRange);
@@ -319,7 +339,6 @@ void VaSynth::updateShared(const ProcessContext& ctx) noexcept {
     s.atVibrato = p.get(AtVibrato);
     s.atCutoff = p.get(AtCutoff);
 
-    const auto mode = static_cast<VoiceMode>(clampv(toInt(p.get(VoiceModeP)), 0, 2));
     if (mode != mode_) {
         mode_ = mode;
         alloc_.setMode(mode);
@@ -338,7 +357,8 @@ void VaSynth::Voice::noteOn(const VoiceStart& st) noexcept {
     const bool glide = sh.glideSeconds > 0.0005f && st.glideFrom >= 0 &&
                        (!sh.glideLegatoOnly || st.legato || sh.fingeredLegato);
     if (glide) {
-        if (!wasActive) note = static_cast<float>(st.glideFrom);
+        // A stolen poly voice glides from the previously played note, not from its own old note.
+        if (!wasActive || st.stolen) note = static_cast<float>(st.glideFrom);
         const float ticks = std::fmax(1.0f, sh.glideSeconds / sh.tickSeconds);
         glideStep = std::fabs(targetNote - note) / ticks; // constant time
     } else {
@@ -352,7 +372,12 @@ void VaSynth::Voice::noteOn(const VoiceStart& st) noexcept {
         timeSinceOn = 0.0f;
         const bool fresh = !wasActive || aenv.level() < 0.01f;
         const int prevSubs = wasActive ? numSubs : 0;
-        numSubs = sh.unison;
+        // Sub-voice budget: polyphony is capped to budget / unison, but notes held across a unison change
+        // (or re-struck voices above the cap) could still exceed it; never take more than what is left.
+        int others = 0;
+        for (int j = 0; j < kMaxVoices; ++j)
+            if (j != index) others += sh.voiceSubs[j];
+        numSubs = clampv(kSubVoiceBudget - others, 1, sh.unison);
         for (int i = 0; i < numSubs; ++i) {
             SubVoice& sv = subs[static_cast<size_t>(i)];
             if (fresh || i >= prevSubs) {
@@ -373,6 +398,11 @@ void VaSynth::Voice::noteOn(const VoiceStart& st) noexcept {
         for (int j = 0; j < 2; ++j)
             if (sh.lfoKeySync[j]) lfoPhase[j] = 0.0;
         if (!wasActive) gainCur = 0.0f;
+        if (fresh) {
+            smSnap = true;
+            for (float& c : pwCur) c = -1.0f;
+            curFilter = sh.filter;
+        }
         aenv.noteOn();
         fenv.noteOn();
     }
@@ -389,11 +419,28 @@ void VaSynth::Voice::reset() noexcept {
     }
     gainCur = gainInc = 0.0f;
     for (auto& sv : subs) sv.gCur = -1.0f;
+    for (float& c : pwCur) c = -1.0f;
+    smSnap = true;
     tickRemain = 0;
 }
 
 void VaSynth::Voice::control(int blockPos) noexcept {
     const Shared& sh = *shared;
+    typeEpoch = sh.typeEpoch;
+    if (smSnap) {
+        for (int k = 0; k < SmCount; ++k) sm[k] = sh.smTarget[k];
+        smSnap = false;
+    } else {
+        for (int k = 0; k < SmCount; ++k) sm[k] += (sh.smTarget[k] - sm[k]) * sh.smCoef;
+    }
+    if (sh.filter != curFilter) { // model switch mid-note: start the new filter from rest
+        curFilter = sh.filter;
+        for (int i = 0; i < numSubs; ++i) {
+            subs[static_cast<size_t>(i)].ladder.reset();
+            subs[static_cast<size_t>(i)].svf.reset();
+            subs[static_cast<size_t>(i)].gCur = -1.0f;
+        }
+    }
     fenvValue = fenv.next(sh.fenv);
     timeSinceOn += sh.tickSeconds;
     if (note != targetNote) {
@@ -432,40 +479,50 @@ void VaSynth::Voice::control(int blockPos) noexcept {
     float pw[kNumOscs];
     for (int k = 0; k < kNumOscs; ++k) {
         oscPitch[k] = pitch + sh.osc[k].pitchOffset + d[DstOsc1Pitch + k];
-        pw[k] = clampv(sh.osc[k].pw + l1 * sh.osc[k].pwm * 0.45f + d[DstOsc1Pw + k], 0.02f, 0.98f);
-        level[k] = clampv(sh.osc[k].level + d[DstOsc1Level + k], 0.0f, 1.5f);
+        pw[k] = clampv(sm[SmPw1 + k] + l1 * sh.osc[k].pwm * 0.45f + d[DstOsc1Pw + k], 0.02f, 0.98f);
+        if (pwCur[k] < 0.0f) pwCur[k] = pw[k];
+        pwInc[k] = (pw[k] - pwCur[k]) / static_cast<float>(kControlInterval);
+        level[k] = clampv(sm[SmLevel1 + k] + d[DstOsc1Level + k], 0.0f, 1.5f);
     }
     oscPitch[0] += fenvValue * sh.pmEnv;
-    subLevel = clampv(sh.subLevel + d[DstSubLevel], 0.0f, 1.5f);
-    noiseLevel = clampv(sh.noiseLevel + d[DstNoiseLevel], 0.0f, 1.5f);
-    ringLevel = sh.ringLevel;
-    fm = clampv(sh.fm + d[DstFm], 0.0f, 1.0f);
+    subLevel = clampv(sm[SmSub] + d[DstSubLevel], 0.0f, 1.5f);
+    noiseLevel = clampv(sm[SmNoise] + d[DstNoiseLevel], 0.0f, 1.5f);
+    ringLevel = sm[SmRing];
+    fm = clampv(sm[SmFm] + d[DstFm], 0.0f, 1.0f);
+    driveGain = dsp::dbToGain(24.0f * sm[SmDrive]);
+    driveComp = 1.0f / std::sqrt(driveGain);
     const float ssDetune = d[DstDetune];
+    float ssCurve[kNumOscs];
+    for (int k = 0; k < kNumOscs; ++k)
+        ssCurve[k] = sh.osc[k].type != OscType::SuperSaw ? 0.0f
+                     : ssDetune != 0.0f ? dsp::SuperSaw::detuneCurve(clampv(sh.osc[k].detune + ssDetune, 0.0f, 1.0f))
+                                        : sh.ssCurve[k];
 
     const float envVel = (1.0f - sh.fenvVel) + sh.fenvVel * velocity;
-    const float cutOct = sh.cutoffOct + sh.keyTrack * (note - 60.0f) / 12.0f +
+    const float cutOct = sm[SmCutoff] + sh.keyTrack * (note - 60.0f) / 12.0f +
                          fenvValue * (sh.fenvAmt + d[DstFenvAmt]) * envVel + sh.filterVel * (velocity - 1.0f) +
                          l1 * sh.lfo1Cutoff + lfo[1] * sh.modWheel * sh.mwCutoff + sh.aftertouch * sh.atCutoff +
                          d[DstCutoff];
-    const float res = clampv(sh.resonance + d[DstResonance], 0.0f, 1.0f);
+    const float res = clampv(sm[SmResonance] + d[DstResonance], 0.0f, 1.0f);
     const bool ladder = sh.filter != FilterType::Sem;
     fbK = ladder ? dsp::LadderFilter::feedbackFor(res, sh.filter == FilterType::Moog ? dsp::LadderFilter::Model::Transistor
                                                                                    : dsp::LadderFilter::Model::Ota)
                : 0.0f;
-    svfRes = res * 0.97f;
-    const float hpfOct = clampv(sh.hpfOct + d[DstHpf], 3.0f, 14.5f);
+    svfK = dsp::Svf::dampingFor(res * 0.97f);
+    const float hpfOct = clampv(sm[SmHpf] + d[DstHpf], 3.0f, 14.5f);
     hpfOn = hpfOct > 3.6f; // > ~12 Hz
     hpfG = dsp::tptOnePoleG(std::exp2(hpfOct), sh.sr);
 
     const float velGain = (1.0f - sh.ampVel) + sh.ampVel * velocity;
-    const float trem = 1.0f - sh.lfo1Amp * (0.5f + 0.5f * l1);
+    // l1 can exceed +-1 via the LFO1 Depth mod destination: keep the tremolo gain non-negative.
+    const float trem = std::fmax(0.0f, 1.0f - sh.lfo1Amp * (0.5f + 0.5f * l1));
     const float gain = kVoiceGain * velGain * clampv(1.0f + d[DstAmp], 0.0f, 2.0f) * trem /
            std::sqrt(static_cast<float>(numSubs));
     gainInc = (gain - gainCur) / static_cast<float>(kControlInterval);
     silentHeld = aenv.stage() == dsp::AnalogEnv::Stage::Sustain && aenv.level() < 1e-6f;
 
     const float basePan = voicePanPattern(index) * sh.panSpread + d[DstPan];
-    const float driftCoef = dsp::onePoleCoef(0.4f, 1.0 / sh.tickSeconds);
+    const float driftCoef = sh.driftCoef;
     const float maxHz = sh.sr * 0.45f;
     for (int i = 0; i < numSubs; ++i) {
         SubVoice& sv = subs[static_cast<size_t>(i)];
@@ -474,30 +531,24 @@ void VaSynth::Voice::control(int blockPos) noexcept {
             sv.seed = dsp::hash32(sv.seed + 1u);
             sv.driftTarget = dsp::bipolarFromBits(sv.seed);
             sv.driftCutTarget = dsp::bipolarFromBits(dsp::hash32(sv.seed ^ 0xabcdefu));
-            sv.driftTicks = 100 + static_cast<int>(sv.seed % 400u);
+            sv.driftTicks = static_cast<int>(static_cast<float>(100u + sv.seed % 400u) * sh.driftTickScale);
         }
         sv.driftValue += (sv.driftTarget - sv.driftValue) * driftCoef;
         sv.driftCut += (sv.driftCutTarget - sv.driftCut) * driftCoef;
         const float detune = pos * sh.unisonDetune * 0.005f + sh.drift * (sv.driftValue * 0.08f + sv.driftStatic * 0.05f);
         for (int o = 0; o < kNumOscs; ++o) {
             sv.inc[o] = dsp::noteToHz(oscPitch[o] + detune) * sh.invSr;
-            sv.pw[o] = pw[o];
             if (sh.osc[o].type == OscType::SuperSaw) {
-                sv.saw[o].setShape(clampv(sh.osc[o].detune + ssDetune, 0.0f, 1.0f), (sh.osc[o].pw - 0.05f) / 0.9f);
+                sv.saw[o].setShapeCurve(ssCurve[o], (sm[SmPw1 + o] - 0.05f) / 0.9f);
                 sv.saw[o].setInc(sv.inc[o]);
             }
         }
         const float fc = clampv(std::exp2(cutOct + sh.drift * (sv.driftCut * 0.15f + sv.driftCutStatic * 0.1f)),
                                 8.0f, maxHz);
-        if (ladder) {
-            const float g = dsp::LadderFilter::coefG(fc, sh.sr);
-            if (sv.gCur < 0.0f) sv.gCur = g;
-            sv.gInc = (g - sv.gCur) / static_cast<float>(kControlInterval);
-        } else {
-            sv.svf.setCutoff(fc, svfRes);
-            sv.gCur = -1.0f;
-            sv.gInc = 0.0f;
-        }
+        // Ladder: G = g/(1+g); SVF: g = tan(pi fc/fs). Both ramped linearly per sample over the tick.
+        const float g = ladder ? dsp::LadderFilter::coefG(fc, sh.sr) : std::tan(dsp::kPi * fc * sh.invSr);
+        if (sv.gCur < 0.0f) sv.gCur = g;
+        sv.gInc = (g - sv.gCur) / static_cast<float>(kControlInterval);
         sv.hpf.setG(hpfG);
         dsp::panGains(clampv(basePan + pos * sh.unisonSpread, -1.0f, 1.0f), sv.panL, sv.panR);
     }
@@ -506,11 +557,11 @@ void VaSynth::Voice::control(int blockPos) noexcept {
 namespace {
 
 // fmScale: per-sample FM factor already applied to `inc` (used by the supersaw, whose increments are per saw).
-inline float tickOsc(VaSynth::SubVoice& sv, int k, VaSynth::OscType t, float inc, float syncD,
+inline float tickOsc(VaSynth::SubVoice& sv, int k, VaSynth::OscType t, float inc, float pw, float syncD,
                      float fmScale = 1.0f) noexcept {
     switch (t) {
     case VaSynth::OscType::Saw: return sv.osc[k].tick(dsp::OscWave::Saw, inc, 0.5f, syncD);
-    case VaSynth::OscType::Pulse: return sv.osc[k].tick(dsp::OscWave::Pulse, inc, sv.pw[k], syncD);
+    case VaSynth::OscType::Pulse: return sv.osc[k].tick(dsp::OscWave::Pulse, inc, pw, syncD);
     case VaSynth::OscType::Triangle: return sv.osc[k].tick(dsp::OscWave::Triangle, inc, 0.5f, syncD);
     case VaSynth::OscType::Sine: return sv.osc[k].tick(dsp::OscWave::Sine, inc, 0.5f, syncD);
     case VaSynth::OscType::SuperSaw: return sv.saw[k].tick(fmScale);
@@ -551,8 +602,7 @@ void VaSynth::Voice::renderChunk(float* left, float* right, int n) noexcept {
     const FilterType ft = sh.filter;
     const auto model = ft == FilterType::Moog ? dsp::LadderFilter::Model::Transistor : dsp::LadderFilter::Model::Ota;
     const auto resp = static_cast<dsp::LadderFilter::Response>(sh.filterMode);
-    const float driveGain = sh.driveGain, driveComp = sh.driveComp;
-    const bool svfDrive = driveGain > 1.01f;
+    const bool svfDrive = driveGain > 1.01f; // driveGain/driveComp/svfK: control-rate members
 
     for (int s = 0; s < numSubs; ++s) {
         SubVoice& sv = subs[static_cast<size_t>(s)];
@@ -560,12 +610,17 @@ void VaSynth::Voice::renderChunk(float* left, float* right, int n) noexcept {
         float g = sv.gCur;
         float gn = gain0;
         const float inc0 = sv.inc[0], inc1 = sv.inc[1], inc2 = sv.inc[2];
+        float pw0 = pwCur[0], pw1 = pwCur[1], pw2 = pwCur[2];
+        const float pwS0 = pwInc[0], pwS1 = pwInc[1], pwS2 = pwInc[2];
         for (int i = 0; i < n; ++i) {
-            const float o3 = need3 ? tickOsc(sv, 2, t2, inc2, -1.0f) : 0.0f;
-            const float o2 = need2 ? tickOsc(sv, 1, t1, inc1, -1.0f) : 0.0f;
+            pw0 += pwS0;
+            pw1 += pwS1;
+            pw2 += pwS2;
+            const float o3 = need3 ? tickOsc(sv, 2, t2, inc2, pw2, -1.0f) : 0.0f;
+            const float o2 = need2 ? tickOsc(sv, 1, t1, inc1, pw1, -1.0f) : 0.0f;
             const float syncD = sync ? masterWrap(sv, 1, t1) : -1.0f;
             const float fmScale = fmDepth > 0.0f ? std::fmax(0.0f, 1.0f + fmDepth * o3) : 1.0f;
-            const float o1 = tickOsc(sv, 0, t0, inc0 * fmScale, syncD, fmScale);
+            const float o1 = tickOsc(sv, 0, t0, inc0 * fmScale, pw0, syncD, fmScale);
             float x = l0 * o1 + l1 * o2 + l2 * o3;
             if (needSub) x += ls * sv.sub.tick(dsp::OscWave::Pulse, inc0 * subDivInv, 0.5f);
             if (needNoise) x += ln * sv.noise.next();
@@ -574,6 +629,8 @@ void VaSynth::Voice::renderChunk(float* left, float* right, int n) noexcept {
             float y;
             if (ft == FilterType::Sem) {
                 const float xin = svfDrive ? dsp::fastTanh(x * driveGain) : x;
+                sv.svf.setGK(g, svfK);
+                g += gStep;
                 const dsp::Svf::Out f = sv.svf.tick(xin);
                 switch (sh.filterMode) {
                 case 1: y = f.bp; break;
@@ -593,15 +650,16 @@ void VaSynth::Voice::renderChunk(float* left, float* right, int n) noexcept {
         }
     }
     gainCur = gain0 + gainStep * static_cast<float>(n);
-    if (ft != FilterType::Sem)
-        for (int s = 0; s < numSubs; ++s) {
-            SubVoice& sv = subs[static_cast<size_t>(s)];
-            sv.gCur += sv.gInc * static_cast<float>(n);
-        }
+    for (int k = 0; k < kNumOscs; ++k) pwCur[k] += pwInc[k] * static_cast<float>(n);
+    for (int s = 0; s < numSubs; ++s) {
+        SubVoice& sv = subs[static_cast<size_t>(s)];
+        sv.gCur += sv.gInc * static_cast<float>(n);
+    }
 }
 
 void VaSynth::Voice::render(float* left, float* right, int n) noexcept {
     int i = 0;
+    if (typeEpoch != shared->typeEpoch) tickRemain = 0; // osc type changed: refresh oscillator setup now
     while (i < n) {
         if (tickRemain <= 0) {
             control(shared->blockPos + i);
@@ -652,6 +710,10 @@ void VaSynth::process(AudioBlock& out, MidiEventSpan events, const ProcessContex
             keysDown_ = 0;
             break;
         default: break;
+        }
+        for (int v = 0; v < kMaxVoices; ++v) {
+            const Voice& vv = alloc_.voice(v);
+            shared_.voiceSubs[v] = vv.isActive() ? vv.numSubs : 0;
         }
         alloc_.handleEvent(e);
     }

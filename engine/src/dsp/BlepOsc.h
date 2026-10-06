@@ -35,6 +35,7 @@ public:
         phase_ = phase - std::floor(phase);
         held_ = 0.0f;
         wrapD_ = -1.0f;
+        pw_ = -1.0f;
     }
     float phase() const noexcept { return phase_; }
     // Time since this oscillator's natural wrap during the last tick (samples, [0,1)), or -1 if none.
@@ -54,29 +55,39 @@ public:
 
     // Advance one sample. inc = cycles/sample (clamped to [0, 0.45]); pw in (0,1) for Pulse.
     // syncD >= 0: hard-sync reset happened syncD samples before this sample.
+    // A pulse-width change is treated as a linear sweep of the PW edge across the sample, so an edge that
+    // crosses the phase because PW moved (not the phase) is band-limited too (PWM, stepped PW).
     float tick(OscWave w, float inc, float pw = 0.5f, float syncD = -1.0f) noexcept {
         inc = std::fmin(std::fmax(inc, 0.0f), 0.45f);
         pw = std::fmin(std::fmax(pw, 0.01f), 0.99f);
+        const float pwPrev = pw_ < 0.0f ? pw : pw_;
+        pw_ = pw;
         wrapD_ = -1.0f;
         float pre = 0.0f, cur = 0.0f;
         float p = phase_;
         if (syncD >= 0.0f && syncD < 1.0f && inc > 1e-9f) {
             float pe = p + inc * (1.0f - syncD); // slave phase at the sync instant
-            events(w, p, pe, syncD, inc, pw, pre, cur);
+            const float pwMid = pwPrev + (pw - pwPrev) * (1.0f - syncD);
+            events(w, p, pe, syncD, inc, pwPrev, pwMid, pre, cur);
             if (pe >= 1.0f) pe -= 1.0f;
-            const float h = naive(w, 0.0f, pw) - naive(w, pe, pw);
+            const float h = naive(w, 0.0f, pwMid) - naive(w, pe, pwMid);
             pre += h * blepPre(syncD);
             cur += h * blepPost(syncD);
             if (w == OscWave::Triangle) {
                 const float ds = 4.0f * inc - (pe < 0.5f ? 4.0f * inc : -4.0f * inc);
                 pre += ds * blampPre(syncD);
                 cur += ds * blampPost(syncD);
+            } else if (w == OscWave::Sine) {
+                // Slope change: restarts at the zero-phase slope (sync is rare per sample, cos is fine here).
+                const float ds = kTwoPi * inc * (1.0f - std::cos(kTwoPi * pe));
+                pre += ds * blampPre(syncD);
+                cur += ds * blampPost(syncD);
             }
             p = inc * syncD;
-            events(w, 0.0f, p, 0.0f, inc, pw, pre, cur);
+            events(w, 0.0f, p, 0.0f, inc, pwMid, pw, pre, cur);
         } else {
             float pe = p + inc;
-            events(w, p, pe, 0.0f, inc, pw, pre, cur);
+            events(w, p, pe, 0.0f, inc, pwPrev, pw, pre, cur);
             if (pe >= 1.0f) {
                 wrapD_ = (pe - 1.0f) / inc;
                 pe -= 1.0f;
@@ -92,8 +103,8 @@ public:
 
 private:
     // Accumulate residuals of every natural discontinuity in phase interval (a, b]; the interval ends dEnd
-    // samples before the current sample.
-    static void events(OscWave w, float a, float b, float dEnd, float inc, float pw, float& pre,
+    // samples before the current sample. The pulse-width edge moves linearly from pwA to pwB over the interval.
+    static void events(OscWave w, float a, float b, float dEnd, float inc, float pwA, float pwB, float& pre,
                        float& cur) noexcept {
         if (b <= a || inc <= 1e-9f) return;
         // Divisions only on the (rare) samples that contain a discontinuity.
@@ -113,11 +124,24 @@ private:
         };
         switch (w) {
         case OscWave::Saw: step(1.0f, -2.0f); break;
-        case OscWave::Pulse:
-            step(pw, -2.0f);
+        case OscWave::Pulse: {
             step(1.0f, 2.0f);
-            step(1.0f + pw, -2.0f);
+            // PW edges at pw and 1 + pw, relative to the phase: f(t) = phase(t) - edge(t), linear in t.
+            const float len = (b - a) / inc; // interval length in samples
+            for (int m = 0; m < 2; ++m) {
+                const float f0 = a - pwA - static_cast<float>(m), f1 = b - pwB - static_cast<float>(m);
+                float h = 0.0f;
+                if (f0 < 0.0f && f1 >= 0.0f) h = -2.0f;      // phase passes the edge: high -> low
+                else if (f0 >= 0.0f && f1 < 0.0f) h = 2.0f;  // edge overtakes the phase: low -> high
+                if (h != 0.0f) {
+                    const float t = f0 / (f0 - f1); // crossing instant as a fraction of the interval
+                    const float d = std::fmin(dEnd + (1.0f - t) * len, 1.0f);
+                    pre += h * blepPre(d);
+                    cur += h * blepPost(d);
+                }
+            }
             break;
+        }
         case OscWave::Triangle:
             ramp(0.5f, -8.0f * inc);
             ramp(1.0f, 8.0f * inc);
@@ -130,6 +154,7 @@ private:
     float phase_ = 0.0f;
     float held_ = 0.0f;
     float wrapD_ = -1.0f;
+    float pw_ = -1.0f; // pulse width of the previous tick (< 0: none yet)
 };
 
 class SuperSaw {
@@ -148,10 +173,12 @@ public:
     }
 
     // detune, mix in 0..1. Call at control rate.
-    void setShape(float detune, float mix) noexcept {
+    void setShape(float detune, float mix) noexcept { setShapeCurve(detuneCurve(detune), mix); }
+
+    // As setShape, with detuneCurve() already evaluated (lets callers hoist the polynomial out of voice loops).
+    void setShapeCurve(float dt, float mix) noexcept {
         static constexpr float kOffsets[kSaws] = {-0.11002313f, -0.06288439f, -0.01952356f, 0.0f,
                                                   0.01991221f,  0.06216538f,  0.10745242f};
-        const float dt = detuneCurve(detune);
         mix = std::fmin(std::fmax(mix, 0.0f), 1.0f);
         const float centre = -0.55366f * mix + 0.99785f;
         const float side = -0.73764f * mix * mix + 1.2841f * mix + 0.044372f;

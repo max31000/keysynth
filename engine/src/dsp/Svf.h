@@ -16,8 +16,18 @@ public:
     void setCutoff(float hz, float resonance) noexcept {
         const float f = std::fmin(std::fmax(hz, 10.0f), sampleRate_ * 0.49f);
         g_ = std::tan(kPi * f / sampleRate_);
-        const float r = std::fmin(std::fmax(resonance, 0.0f), 1.0f);
-        k_ = 2.0f - 1.98f * r; // k = 1/Q: 2 (Q=0.5) .. 0.02 (Q=50)
+        setGK(g_, dampingFor(resonance));
+    }
+
+    // k = 1/Q for resonance 0..1: 2 (Q=0.5) .. 0.02 (Q=50).
+    static float dampingFor(float resonance) noexcept {
+        return 2.0f - 1.98f * std::fmin(std::fmax(resonance, 0.0f), 1.0f);
+    }
+    // Raw coefficients: g = tan(pi fc / fs) (prewarped), k = damping. One division; cheap enough to call per
+    // sample when the caller interpolates g (click-free fast cutoff modulation).
+    void setGK(float g, float k) noexcept {
+        g_ = g;
+        k_ = k;
         a1_ = 1.0f / (1.0f + g_ * (g_ + k_));
         a2_ = g_ * a1_;
         a3_ = g_ * a2_;
