@@ -8,6 +8,7 @@
 #include "instruments/combo/ComboOrgan.h"
 #include "instruments/organ/ToneWheelOrgan.h"
 #include "instruments/va/VaSynth.h"
+#include "instruments/fm/FmSynth.h"
 
 namespace ks {
 
@@ -17,6 +18,7 @@ void registerBuiltinModules(ModuleRegistry& r) {
     r.add<ToneWheelOrgan>();
     r.add<ComboOrgan>();
     r.add<VaSynth>();
+    r.add<FmSynth>();
     // Effects
     r.add<GainFx>();
     r.add<LimiterFx>();
