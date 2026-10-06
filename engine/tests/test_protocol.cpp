@@ -38,6 +38,13 @@ struct FakeAudio final : AudioControl {
         st.name = name;
         return {}; // like a driver that only offers its control-panel buffer: bufferSize stays 64
     }
+    int restarts = 0;
+    std::string restartError;
+    std::string restart() override {
+        ++restarts;
+        if (restartError.empty()) st.bufferSize = 128; // the driver's (new) preferred size
+        return restartError;
+    }
     int panelOpens = 0;
     std::string openControlPanel() override {
         if (!st.hasControlPanel) return "no panel";
@@ -337,6 +344,31 @@ TEST_CASE("protocol: note, cc, transport, panic, devices", "[protocol]") {
     REQUIRE(f.audio.lastName == "Other");
     f.audio.st.panelOpen = false;
     REQUIRE(f.reply({{"type", "open_audio_panel"}, {"id", 16}})["type"] == "open_audio_panel_ok");
+}
+
+TEST_CASE("protocol: restart_audio", "[protocol][audio]") {
+    Fixture f;
+    auto out = f.send({{"type", "restart_audio"}, {"id", 21}});
+    REQUIRE(f.audio.restarts == 1);
+    int states = 0, others = 0;
+    json reply;
+    for (auto& o : out) {
+        if (o.message["type"] == "devices" && o.target == Outgoing::Target::Reply) reply = o.message;
+        if (o.message["type"] == "devices" && o.target == Outgoing::Target::Others) ++others;
+        if (o.message["type"] == "state" && o.target == Outgoing::Target::Broadcast) ++states;
+    }
+    REQUIRE(reply["id"] == 21);
+    REQUIRE(reply["current"]["bufferSize"] == 128);
+    REQUIRE(others == 1);
+    REQUIRE(states == 1);
+    f.audio.st.panelOpen = true;
+    REQUIRE(f.reply({{"type", "restart_audio"}})["code"] == "busy");
+    REQUIRE(f.audio.restarts == 1);
+    f.audio.st.panelOpen = false;
+    f.audio.restartError = "driver gone";
+    const json e = f.reply({{"type", "restart_audio"}});
+    REQUIRE(e["code"] == "device_error");
+    REQUIRE(e["message"] == "driver gone");
 }
 
 TEST_CASE("protocol: rhythm (transport fields, patterns, kit node)", "[protocol][sequencer]") {

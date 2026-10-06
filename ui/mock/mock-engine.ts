@@ -520,6 +520,13 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         }, 300);
         return;
       }
+      case 'restart_audio': {
+        if (audio.panelOpen) return err(ws, id, 'busy', "close the driver's control panel first");
+        audio = { ...audio, running: true };
+        for (const c of wss.clients) send(c, c === ws ? devicesMsg(id) : devicesMsg());
+        broadcastState();
+        return;
+      }
       case 'panic':
         for (const n of [...held.keys()]) noteEvent(false, n, 0);
         energy.clear();

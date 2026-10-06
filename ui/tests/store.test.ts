@@ -208,9 +208,11 @@ describe('engine store', () => {
     void st.setInstrument(1, 'organ');
     void st.addFx(0, 'reverb');
     void st.setAudioDevice('ASIO', 'Dev', 96000, 32);
+    void st.restartAudio();
     expect(ctx.sock.sent[0]).toMatchObject({ type: 'set_instrument', layer: 1, module: 'organ' });
     expect(ctx.sock.sent[1]).toMatchObject({ type: 'add_fx', layer: 0, module: 'reverb' });
     expect(ctx.sock.sent[2]).toMatchObject({ type: 'set_audio_device', device_type: 'ASIO', name: 'Dev', sample_rate: 96000, buffer_size: 32 });
+    expect(ctx.sock.sent[3]).toMatchObject({ type: 'restart_audio' });
   });
 
   it('offline edits stay pending and are re-sent after reconnect + state; stale targets are pruned', () => {

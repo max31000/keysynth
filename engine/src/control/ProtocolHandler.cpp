@@ -360,6 +360,17 @@ const std::map<std::string, Handler>& handlers() {
              if (!err.empty()) throw PatchError("not_available", err);
              c.reply({{"type", "open_audio_panel_ok"}});
          }},
+        {"restart_audio",
+         [](Ctx& c) {
+             if (!c.s.audio()) throw PatchError("not_available", "no audio host");
+             if (c.s.audio()->status().panelOpen) throw PatchError("busy", "close the driver's control panel first");
+             const std::string err = c.s.audio()->restart();
+             if (!err.empty()) throw PatchError("device_error", err);
+             json d = c.s.devicesJson();
+             c.others(d);
+             c.reply(std::move(d));
+             c.broadcast(c.s.stateJson());
+         }},
         {"panic", [](Ctx& c) { c.s.engine().panic(); }},
         {"list_plugins",
          [](Ctx& c) {

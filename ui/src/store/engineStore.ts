@@ -90,6 +90,8 @@ export interface EngineState {
   rescanMidi(): Promise<void>;
   /** ASIO driver panel (the only way to change the buffer of drivers like the Yamaha Steinberg USB ASIO). */
   openAudioPanel(): Promise<void>;
+  /** `restart_audio`: reopen the device with the driver's current settings (sound broke after a driver change). */
+  restartAudio(): Promise<void>;
   clearError(): void;
   refreshPlugins(): Promise<void>;
   reloadPlugin(name: string): Promise<void>;
@@ -532,6 +534,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
         }),
       rescanMidi: () => structural(() => client.request({ type: 'rescan_midi' }, { expect: 'devices' })),
       openAudioPanel: () => structural(() => client.request({ type: 'open_audio_panel' }, { expect: 'open_audio_panel_ok' })),
+      restartAudio: () =>
+        structural(() => client.request({ type: 'restart_audio' }, { expect: 'devices', timeoutMs: 15000 })),
       clearError: () => set({ lastError: null }),
       refreshPlugins: () => structural(() => client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' })),
       reloadPlugin: (name) =>

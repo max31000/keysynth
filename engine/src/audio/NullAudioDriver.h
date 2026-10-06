@@ -21,6 +21,7 @@ public:
     AudioStatus status() const override;
     AudioDeviceList listDevices() override;
     std::string setDevice(const std::string& type, const std::string& name, double sampleRate, int bufferSize) override;
+    std::string restart() override;
 
 private:
     void run();

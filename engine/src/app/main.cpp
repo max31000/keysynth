@@ -193,15 +193,19 @@ int main(int argc, char** argv) {
         printStatus(nullAudio->status(), "audio");
     } else {
         audioHost = std::make_unique<ks::AudioHost>(*engine, paths, onPrepared);
+        // Device events (driver restart, stall, recovery, errors): also in userdata/logs/audio.log.
+        audioHost->onLog = [&session](const std::string& level, const std::string& msg, bool notify) {
+            session.log(level, msg, notify);
+        };
         ks::AudioHost::Options opt;
         opt.bufferSize = args.buffer;
         opt.sampleRate = args.sampleRate;
         const std::string aerr = audioHost->start(opt);
         if (!aerr.empty()) std::fprintf(stderr, "audio: %s\n", aerr.c_str());
-        audioHost->onError = [&session](const std::string& msg) { session.log("error", "audio: " + msg, true); };
         session.setAudio(audioHost.get());
         const auto st = audioHost->status();
         printStatus(st, "audio");
+        std::printf("audio device log: %s\n", ks::pathToUtf8(audioHost->logFile()).c_str());
         std::string sizes;
         for (const auto& t : audioHost->listDevices().available)
             if (t.type == st.type)
@@ -211,16 +215,9 @@ int main(int argc, char** argv) {
             std::printf("audio note: requested buffer %d not accepted by the driver (ASIO drivers often only offer the "
                         "size set in their control panel: UI 'Open ASIO panel')\n",
                         *args.buffer);
-        // Device restarted / panel closed: re-report to every client (buffer size may have changed).
-        audioHost->onChanged = [&session, &server, host = audioHost.get(), last = st]() mutable {
-            const auto now = host->status();
-            if (now.bufferSize != last.bufferSize || now.sampleRate != last.sampleRate || now.name != last.name) {
-                char msg[256];
-                std::snprintf(msg, sizeof msg, "audio: %s, %.0f Hz, buffer %d samples, output latency %.1f ms",
-                              now.name.c_str(), now.sampleRate, now.bufferSize, now.outputLatencyMs);
-                session.log("info", msg, false);
-            }
-            last = now;
+        // Device restarted / panel closed: re-report to every client (buffer size may have changed). The host logs
+        // the change itself (onLog).
+        audioHost->onChanged = [&session, &server] {
             if (server.clientCount() == 0) return;
             server.broadcast(session.devicesJson());
             server.broadcast(session.stateJson());
