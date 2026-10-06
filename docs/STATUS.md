@@ -31,7 +31,7 @@ Update when a chunk of work lands. Newest first inside each section.
 - Sample libraries (core set ~3.5 GB, assets/samples.json) and Faust 2.88 (.tools/faust).
 
 ## In progress
-- Fixes from integration review (ASIO modal panel re-entrancy, launcher port checks, log→toast `notify`, …).
+- (none)
 
 ## Next
 - Test on real hardware: ASIO panel button with UR22C, play-feel per engine on the P-143.
