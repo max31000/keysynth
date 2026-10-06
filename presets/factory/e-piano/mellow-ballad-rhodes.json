@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Mellow Ballad Rhodes",
     "category": "E.Piano",
@@ -58,14 +58,15 @@
             "mode": 1,
             "rate": 2.5,
             "depth": 0.2,
-            "shape": 0
+            "shape": 0,
+            "sync": 0
           }
         }
       ]
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 6.7,
     "fx": [
       {
         "type": "limiter",

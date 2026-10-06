@@ -4,6 +4,7 @@
 //   9.75 Hz shallow sweep). The two BBD lines get the mono sum and opposite-phase LFOs; left = line A, right =
 //   line B (the real unit's stereo). `Custom` uses `rate`/`depth`; `Dimension` is a Dimension-D-like 2-line
 //   matrix with cross-subtracted outputs (subtle, wide, little pitch wobble), also on `rate`/`depth`.
+//   `sync` (dsp/NoteDivision.h, 0 = Off) replaces `rate` by one LFO cycle per note division in those two modes.
 // BBD character: dsp::Bbd (anti-alias/reconstruction filters, mild nonlinearity, compander hiss `hiss`).
 
 #include "core/Module.h"
@@ -21,7 +22,7 @@ public:
     void process(AudioBlock& io, MidiEventSpan events, const ProcessContext& ctx) override;
     int tailSamples() const override;
 
-    enum P { Mode, Rate, Depth, Mix, Width, Hiss, Count };
+    enum P { Mode, Rate, Depth, Mix, Width, Hiss, Sync, Count };
     enum ModeId { JunoI, JunoII, JunoI_II, Custom, Dimension };
 
     static constexpr float kMaxDelayMs = 16.0f;

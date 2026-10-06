@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Vox Break On Through",
     "category": "Organ",
@@ -58,7 +58,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -2.5,
     "fx": []
   }
 }

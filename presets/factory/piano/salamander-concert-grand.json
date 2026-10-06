@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Concert Grand (Salamander)",
     "category": "Piano",
@@ -43,7 +43,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 11.4,
     "fx": [
       {
         "type": "limiter",

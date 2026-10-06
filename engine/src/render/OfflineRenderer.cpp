@@ -178,6 +178,136 @@ bool OfflineRenderer::parseNotes(const std::string& spec, std::vector<NoteSpec>&
     return true;
 }
 
+namespace {
+
+// Splits "a:b:c,d:e:f" into items of ':'-separated fields (blank items skipped).
+std::vector<std::vector<std::string>> splitSpec(const std::string& spec) {
+    std::vector<std::vector<std::string>> items;
+    std::stringstream ss(spec);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        if (item.find_first_not_of(" \t") == std::string::npos) continue;
+        std::vector<std::string> parts;
+        std::stringstream is(item);
+        std::string p;
+        while (std::getline(is, p, ':')) parts.push_back(p);
+        items.push_back(std::move(parts));
+    }
+    return items;
+}
+
+bool parseDouble(const std::string& s, double& v) {
+    try {
+        size_t used = 0;
+        v = std::stod(s, &used);
+        while (used < s.size() && std::isspace(static_cast<unsigned char>(s[used]))) ++used;
+        return used == s.size() && std::isfinite(v);
+    } catch (...) {
+        return false;
+    }
+}
+
+struct AutomationPoint {
+    double value = 0.0, time = 0.0, ramp = 0.0;
+};
+
+// Emits `make(value)` events: a step at `time`, or a ramp from `prev` over `ramp` seconds. Updates `prev`.
+template <typename Make>
+void emitAutomation(const AutomationPoint& p, double& prev, std::vector<TimedEvent>& out, Make make) {
+    if (p.ramp > 0.0) {
+        const int steps = std::max(1, static_cast<int>(std::ceil(p.ramp / 0.005)));
+        for (int k = 1; k <= steps; ++k) {
+            const double f = static_cast<double>(k) / steps;
+            out.push_back({p.time + f * p.ramp, make(prev + (p.value - prev) * f)});
+        }
+    } else {
+        out.push_back({p.time, make(p.value)});
+    }
+    prev = p.value;
+}
+
+// Parses VALUE:TIME[:RAMP] starting at parts[first]; checks the value range.
+bool parsePoint(const std::vector<std::string>& parts, size_t first, double lo, double hi, AutomationPoint& p,
+                std::string& error, const std::string& what) {
+    auto item = [&] {
+        std::string s;
+        for (size_t i = 0; i < parts.size(); ++i) s += (i ? ":" : "") + parts[i];
+        return s;
+    };
+    if (parts.size() < first + 2 || parts.size() > first + 3) {
+        error = "bad " + what + " spec '" + item() + "'";
+        return false;
+    }
+    if (!parseDouble(parts[first], p.value) || !parseDouble(parts[first + 1], p.time) ||
+        (parts.size() == first + 3 && !parseDouble(parts[first + 2], p.ramp))) {
+        error = "bad number in '" + item() + "'";
+        return false;
+    }
+    if (p.value < lo || p.value > hi || p.time < 0.0 || p.ramp < 0.0) {
+        error = "out-of-range value in '" + item() + "'";
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+bool OfflineRenderer::parseControllers(const std::string& spec, std::vector<TimedEvent>& out, std::string& error,
+                                       int channel) {
+    struct Item {
+        int cc;
+        AutomationPoint p;
+    };
+    std::vector<Item> items;
+    for (const auto& parts : splitSpec(spec)) {
+        if (parts.empty()) continue;
+        std::string name;
+        for (char c : parts[0])
+            if (!std::isspace(static_cast<unsigned char>(c))) name.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        int cc = -1;
+        if (name == "mod" || name == "modwheel") cc = 1;
+        else if (name == "breath") cc = 2;
+        else if (name == "expr" || name == "expression") cc = 11;
+        else if (name == "sustain" || name == "pedal") cc = 64;
+        else {
+            double v = -1.0;
+            if (parseDouble(name, v) && v == std::floor(v) && v >= 0.0 && v <= 119.0) cc = static_cast<int>(v);
+        }
+        if (cc < 0) {
+            error = "bad controller '" + parts[0] + "' (0..119, mod, breath, expr, sustain)";
+            return false;
+        }
+        Item it{cc, {}};
+        if (!parsePoint(parts, 1, 0.0, 127.0, it.p, error, "cc (CC:VALUE:TIME[:RAMP])")) return false;
+        items.push_back(it);
+    }
+    std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.p.time < b.p.time; });
+    double prev[128];
+    for (double& v : prev) v = 0.0;
+    prev[11] = 127.0; // expression rests at full
+    for (const auto& it : items)
+        emitAutomation(it.p, prev[it.cc], out, [&](double v) {
+            return MidiEvent::cc(it.cc, static_cast<int>(std::lround(std::clamp(v, 0.0, 127.0))), channel);
+        });
+    return true;
+}
+
+bool OfflineRenderer::parseBends(const std::string& spec, std::vector<TimedEvent>& out, std::string& error,
+                                 int channel) {
+    std::vector<AutomationPoint> pts;
+    for (const auto& parts : splitSpec(spec)) {
+        AutomationPoint p;
+        if (!parsePoint(parts, 0, -1.0, 1.0, p, error, "bend (VALUE:TIME[:RAMP])")) return false;
+        pts.push_back(p);
+    }
+    std::stable_sort(pts.begin(), pts.end(),
+                     [](const AutomationPoint& a, const AutomationPoint& b) { return a.time < b.time; });
+    double prev = 0.0;
+    for (const auto& p : pts)
+        emitAutomation(p, prev, out, [&](double v) { return MidiEvent::pitchBend(static_cast<float>(v), channel); });
+    return true;
+}
+
 std::vector<TimedEvent> OfflineRenderer::standardTestEvents() {
     std::vector<NoteSpec> notes;
     // Chord (C major, mf) 0..1 s

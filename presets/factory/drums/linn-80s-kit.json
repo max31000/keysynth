@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "LinnDrum 80s Kit",
     "category": "Drums",
@@ -17,6 +17,6 @@
       "fx": []
     }
   ],
-  "master": { "volume_db": -3, "fx": [] },
+  "master": { "volume_db": 2.2, "fx": [] },
   "rhythm": { "kit": { "kit": 2 }, "pattern": "presets/patterns/billie-jean-groove.json" }
 }

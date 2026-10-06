@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "The End (Doors)",
     "category": "Organ",
@@ -98,7 +98,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -1.8,
     "fx": [
       {
         "type": "limiter",

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Juno-106 Strings",
     "category": "Strings",
@@ -59,7 +59,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -4.9,
     "fx": [
       {
         "type": "chorus",

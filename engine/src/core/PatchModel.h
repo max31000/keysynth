@@ -25,6 +25,9 @@ class PatchModel {
 public:
     static constexpr int kMaxLayers = 16;
     static constexpr int kMaxFxPerChain = 16;
+    // Layer / master `volume_db` range; out-of-range values are clamped (with a load warning in setPatch).
+    static constexpr float kMinVolumeDb = -96.0f;
+    static constexpr float kMaxVolumeDb = 12.0f;
 
     explicit PatchModel(const ModuleRegistry& registry);
 

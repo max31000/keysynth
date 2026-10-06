@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Industrial Kit",
     "category": "Drums",
@@ -17,6 +17,6 @@
       "fx": []
     }
   ],
-  "master": { "volume_db": -3, "fx": [] },
+  "master": { "volume_db": 3.5, "fx": [] },
   "rhythm": { "kit": { "kit": 3 }, "pattern": "presets/patterns/du-hast-stomp.json" }
 }

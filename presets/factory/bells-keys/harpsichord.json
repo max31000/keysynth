@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Harpsichord",
     "category": "Bells & Keys",
@@ -41,7 +41,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 9.9,
     "fx": [
       {
         "type": "limiter",

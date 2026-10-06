@@ -192,7 +192,9 @@ Patch (data)                              RackGraph (live, audio thread)
   made during a build are never lost.
 - Signal flow: MIDI (all inboxes merged per block) → ChannelState update → Transport/DrumSequencer → each LayerNode
   zone filter (key/vel range on physical key, then transpose, channel) → instrument → layer FX → sum → master FX →
-  + metronome → limiter → device.
+  master `volume_db` → trailing master `limiter` slot(s), if any → + metronome → safety limiter → device. The master
+  volume goes *before* the limiters, so a preset's own limiter (and always the safety limiter) stays last; the
+  range is −96..+12 dB, out-of-range values are clamped with a load warning (protocol `log`).
 - The metronome and the safety limiter are owned by the Engine's output stage, not by RackGraph: they persist
   across swaps and are applied once to the mixed output of both graphs during a transition.
 - The Engine's maxBlock = device buffer size (offline: `--block`); larger callbacks are split.
@@ -268,7 +270,10 @@ Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string
 Effects are in-place stereo, zero latency, smoothed.
 Shared effect param ids: `mix` (0..1 dry→wet crossfade; 0 = dry, bit-exact except `drive`, whose dry runs
 through the matching all-pass oversampling filters), `rate` (Hz), `depth` (0..1), `feedback`, `time` (ms),
-`sync` (note division enum, `dsp/NoteDivision.h`; index 0 = Off/free, else tempo from ProcessContext), `tone`
+`sync` (the one tempo-sync convention: an enum over `dsp/NoteDivision.h`, index 0 = Off → free `rate`/`time`,
+1.. = 4/1, 2/1, 1/1, 1/2, 1/2., 1/2T, … 1/32T at the ProcessContext tempo; used by `delay`, `phaser`, `flanger`,
+`chorus` (Custom/Dimension), `tremolo` and the `va` LFOs as `lfo1_sync`/`lfo2_sync` — no separate on/off or
+`division` params; the order is a format surface, patch format 1 → 2 migrated in `preset/Migrations.cpp`), `tone`
 (0..1), `width` (0..1), `level_db`; other dB/ms/Hz ids carry the unit as suffix (`_db`, `_ms`, `_hz`); `decay`
 is RT60 in s. Accepted exception to §4.7: `flanger` `through_zero` (off by default) replaces the dry path with a
 reference line of `time` (≤ 10 ms) — the effect itself, `latencySamples()` stays 0. BBD/delay/oversampling/filter
@@ -293,7 +298,7 @@ the control thread, read once per block).
 
 ## 9. Presets
 
-Schema in `docs/PRESETS.md` (`"format": 1`). Lenient loading: unknown params ignored, missing = default.
+Schema in `docs/PRESETS.md` (`"format": 2`). Lenient loading: unknown params ignored, missing = default.
 Factory presets `presets/factory/<category>/<slug>.json` (read-only); user presets `userdata/presets/`.
 Categories: Piano, E.Piano, Organ, Synth Lead, Synth Pad, Synth Bass, Brass, Strings, Bells & Keys, Choir & Vox,
 Drums, FX, Splits & Layers. Signature presets name their reference in `description`.

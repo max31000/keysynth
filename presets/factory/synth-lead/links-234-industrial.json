@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Links 2 3 4 Industrial Lead",
     "category": "Synth Lead",
@@ -94,7 +94,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -2.2,
     "fx": [
       {
         "type": "eq",

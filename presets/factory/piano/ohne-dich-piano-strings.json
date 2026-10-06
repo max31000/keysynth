@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Ohne Dich Piano & Strings",
     "category": "Piano",
@@ -81,7 +81,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -3.9,
     "fx": [
       {
         "type": "reverb",

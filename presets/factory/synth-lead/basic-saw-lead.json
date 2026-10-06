@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Basic Saw Lead",
     "category": "Synth Lead",
@@ -24,5 +24,5 @@
       ]
     }
   ],
-  "master": { "volume_db": -3, "fx": [ { "type": "limiter", "bypass": false, "params": { "ceiling_db": -1, "release_ms": 80 } } ] }
+  "master": { "volume_db": 9.7, "fx": [ { "type": "limiter", "bypass": false, "params": { "ceiling_db": -1, "release_ms": 80 } } ] }
 }

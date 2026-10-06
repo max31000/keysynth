@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "CS-80 Brass",
     "category": "Brass",
@@ -68,7 +68,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -2.6,
     "fx": []
   }
 }

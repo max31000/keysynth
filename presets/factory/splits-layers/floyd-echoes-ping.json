@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Echoes Ping (Floyd)",
     "category": "Splits & Layers",
@@ -125,7 +125,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": 8.1,
     "fx": [
       {
         "type": "reverb",
@@ -145,7 +145,7 @@
         "type": "gain",
         "bypass": false,
         "params": {
-          "gain_db": 11.7,
+          "gain_db": 6.0,
           "pan": 0.0
         }
       },

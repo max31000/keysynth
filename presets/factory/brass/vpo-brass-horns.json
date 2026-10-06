@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Brass & Horns (VPO)",
     "category": "Brass",
@@ -44,7 +44,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -0.9,
     "fx": [
       {
         "type": "limiter",

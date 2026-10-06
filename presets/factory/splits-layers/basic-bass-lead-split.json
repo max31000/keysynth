@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Basic Bass / Lead Split",
     "category": "Splits & Layers",
@@ -30,5 +30,5 @@
       "fx": [ { "type": "gain", "params": { "gain_db": -1 } } ]
     }
   ],
-  "master": { "volume_db": -3, "fx": [] }
+  "master": { "volume_db": 3.8, "fx": [] }
 }

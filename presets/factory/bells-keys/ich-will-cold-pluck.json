@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Ich Will Cold Pluck",
     "category": "Bells & Keys",
@@ -64,14 +64,14 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": 5.2,
     "fx": [
       {
         "type": "delay",
         "bypass": false,
         "params": {
           "mode": 1,
-          "sync": 12,
+          "sync": 13,
           "time": 375,
           "feedback": 0.32,
           "mix": 0.2,

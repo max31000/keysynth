@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "meta": {
   "name": "FM Clav",
   "category": "Bells & Keys",
@@ -208,7 +208,7 @@
   }
  ],
  "master": {
-  "volume_db": -3,
+  "volume_db": 10.3,
   "fx": [
    {
     "type": "limiter",

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Running Up That Hill Pad",
     "category": "Synth Pad",
@@ -106,7 +106,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -5.5,
     "fx": [
       {
         "type": "reverb",

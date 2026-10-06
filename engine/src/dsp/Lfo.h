@@ -1,6 +1,6 @@
 #pragma once
 // LFO helpers: stateless shape of a running phase (in cycles, integer part = cycle count, used for sample &
-// hold), tempo divisions, delay/fade-in curve. Callers own the phase (per voice for key sync, global
+// hold), delay/fade-in curve (tempo divisions: dsp/NoteDivision.h). Callers own the phase (per voice for key sync, global
 // otherwise), which keeps per-voice LFOs to one double each.
 
 #include "dsp/Math.h"
@@ -28,13 +28,6 @@ inline float lfoShape(LfoWave w, double cycles, uint32_t seed) noexcept {
     }
     return 0.0f;
 }
-
-// Tempo-sync divisions (labels for an Enum param) and their length in quarter notes.
-inline constexpr int kLfoDivisionCount = 15;
-inline const char* const kLfoDivisionLabels[kLfoDivisionCount] = {
-    "1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1/1", "2/1", "4/1"};
-inline constexpr double kLfoDivisionBeats[kLfoDivisionCount] = {
-    0.125, 1.0 / 6.0, 0.25, 1.0 / 3.0, 0.375, 0.5, 2.0 / 3.0, 0.75, 1.0, 4.0 / 3.0, 1.5, 2.0, 4.0, 8.0, 16.0};
 
 // Juno-style delay: silent for the first half of `delay`, then a linear fade-in over the second half.
 inline float lfoDelayGain(float timeSinceNoteOn, float delay) noexcept {

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Mellotron Strings",
     "category": "Strings",
@@ -43,7 +43,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 1.1,
     "fx": [
       {
         "type": "limiter",

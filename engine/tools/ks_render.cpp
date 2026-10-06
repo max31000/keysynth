@@ -2,6 +2,7 @@
 //   ks-render --preset presets/factory/synth-lead/basic-saw-lead.json --notes "C4:0:1,E4:0:1,G4:0:1" --out x.wav
 //   ks-render --patch-json '{...}' | --patch-json @file.json   --midi song.mid   --sr 48000 --block 64 --tail 2
 //   ks-render --test-pattern ...      (standard chord/scale/sustain pattern used by the render tests)
+//   ks-render ... --cc "mod:0:0,mod:127:1:2,64:127:3" --bend "0:0,1:0.5:0.25"   (controller / bend automation)
 //   ks-render --list-modules          (catalog JSON, incl. plugins)
 //   Plugin modules (`plugin:<name>`) are compiled/loaded synchronously from <root>/plugins before rendering
 //   (machine-code cache in plugins/.build/cache); --no-plugins skips that.
@@ -34,15 +35,18 @@ int usage(const char* err = nullptr) {
                  "usage: ks-render (--preset PATH | --patch-json JSON|@FILE) [--notes SPEC | --midi FILE | --test-pattern]\n"
                  "                 [--play-pattern FILE.json [--bars N] [--tempo BPM]]\n"
                  "                 [--sr HZ] [--block N] [--tail SEC] [--out FILE.wav]\n"
-                 "                 [--no-plugins] [--root DIR]\n"
+                 "                 [--cc CCSPEC] [--bend BENDSPEC] [--no-plugins] [--root DIR]\n"
                  "       ks-render --list-modules\n"
-                 "  SPEC: NOTE:start:dur[:vel],...  e.g. \"C4:0:1:100,E4:0.5:1\" (seconds; C4 = 60)\n");
+                 "  SPEC: NOTE:start:dur[:vel],...  e.g. \"C4:0:1:100,E4:0.5:1\" (seconds; C4 = 60)\n"
+                 "  CCSPEC: CC:value:time[:ramp],...  CC 0..119 | mod | breath | expr | sustain, value 0..127,\n"
+                 "          e.g. \"mod:127:1:0.5,sustain:127:0,sustain:0:3\" (ramp s, from the previous value)\n"
+                 "  BENDSPEC: value:time[:ramp],...  value -1..1 (full bend range), e.g. \"1:0.5:0.2,0:1.5\"\n");
     return 2;
 }
 } // namespace
 
 int main(int argc, char** argv) {
-    std::string preset, patchJson, notes, midi, pattern, out = "renders/out.wav";
+    std::string preset, patchJson, notes, midi, pattern, ccs, bends, out = "renders/out.wav";
     double sr = 48000.0, tail = 2.0, tempo = 0.0;
     int block = 64, bars = 2;
     std::string root;
@@ -55,6 +59,8 @@ int main(int argc, char** argv) {
             else if (a == "--patch-json") patchJson = next();
             else if (a == "--notes") notes = next();
             else if (a == "--midi") midi = next();
+            else if (a == "--cc") ccs = next();
+            else if (a == "--bend") bends = next();
             else if (a == "--play-pattern") pattern = next();
             else if (a == "--bars") bars = std::stoi(next());
             else if (a == "--tempo") tempo = std::stod(next());
@@ -154,9 +160,12 @@ int main(int argc, char** argv) {
         events = ks::OfflineRenderer::standardTestEvents();
     } else if (!pattern.empty()) {
         // pattern only
-    } else {
+    } else { // (also with only --cc/--bend: automation over the default note)
         events = ks::OfflineRenderer::notesToEvents({{60, 0.0, 1.0, 100}});
     }
+
+    if (!ccs.empty() && !ks::OfflineRenderer::parseControllers(ccs, events, err)) return usage(err.c_str());
+    if (!bends.empty() && !ks::OfflineRenderer::parseBends(bends, events, err)) return usage(err.c_str());
 
     ks::RenderOptions opt;
     opt.sampleRate = sr;

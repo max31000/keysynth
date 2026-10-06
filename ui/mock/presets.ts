@@ -167,7 +167,7 @@ export function factoryPresets(): MockPreset[] {
     tags: d.tags,
     factory: true,
     patch: {
-      format: 1,
+      format: 2,
       meta: { name: d.name, category: d.category, tags: d.tags, description: d.description ?? '', author: 'factory' },
       tempo: d.tempo ?? 120,
       layers: d.layers,
@@ -177,7 +177,7 @@ export function factoryPresets(): MockPreset[] {
 }
 
 export const INIT_PATCH = (): Patch => ({
-  format: 1,
+  format: 2,
   meta: { name: 'Init', category: 'Synth Lead', tags: [] },
   tempo: 120,
   layers: [layer('Layer 1', 'va', {})],

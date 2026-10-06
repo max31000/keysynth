@@ -499,10 +499,11 @@ TEST_CASE("sampler: factory sampler presets render (installed libraries only)", 
         CHECK(peak <= 1.0f);
         CHECK(std::fabs(dc) < 1e-3);
         // Drum kits: the generic pattern hits many unmapped keys (lower RMS) and one-shot cymbals ring for
-        // seconds by design, so they get looser bounds than pitched instruments.
+        // seconds by design, so they get looser bounds than pitched instruments (tail relative to the overall level,
+        // since kits are loudness-normalized: docs/research/LOUDNESS.md).
         const bool drums = patch.meta.category == "Drums";
         CHECK(all > (drums ? -50.0 : -40.0));
-        CHECK(tail < (drums ? -50.0 : -80.0));
+        CHECK(tail < (drums ? all - 20.0 : -80.0));
         if (rt::checksEnabled()) CHECK(rt::violationCount() == 0);
         ++rendered;
     }

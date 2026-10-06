@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Break On Through (Doors)",
     "category": "Splits & Layers",
@@ -138,7 +138,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -0.5,
     "fx": [
       {
         "type": "limiter",

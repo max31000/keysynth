@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Big Rusty Drums",
     "category": "Drums",
@@ -43,13 +43,13 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 12,
     "fx": [
       {
         "type": "limiter",
         "bypass": false,
         "params": {
-          "ceiling_db": -1,
+          "ceiling_db": -2,
           "release_ms": 80
         }
       }

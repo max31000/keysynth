@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Deutschland Bass & Lead Split",
     "category": "Splits & Layers",
@@ -130,7 +130,7 @@
           "bypass": false,
           "params": {
             "mode": 1,
-            "sync": 10,
+            "sync": 11,
             "time": 375,
             "feedback": 0.28,
             "mix": 0.15,
@@ -156,7 +156,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": 2.5,
     "fx": [
       {
         "type": "limiter",

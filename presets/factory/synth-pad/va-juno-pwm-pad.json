@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Juno PWM Pad",
     "category": "Synth Pad",
@@ -63,7 +63,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -7.6,
     "fx": []
   }
 }

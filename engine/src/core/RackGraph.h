@@ -138,6 +138,9 @@ private:
     double sampleRate_;
     int maxBlock_;
     dsp::OnePoleSmoother masterGain_;
+    // masterFx index where `masterVolumeDb` is applied: before the trailing run of `limiter` slots (the limiter
+    // stays last), else after the whole chain (finalize()).
+    size_t masterVolumeAt_ = 0;
     std::unordered_map<NodeId, ModuleNode*> moduleIndex_;
     std::unordered_map<NodeId, LayerNode*> layerIndex_;
 };

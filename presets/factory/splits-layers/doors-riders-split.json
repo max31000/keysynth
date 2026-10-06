@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Doors Riders Split",
     "category": "Splits & Layers",
@@ -100,7 +100,7 @@
           "params": {
             "mode": 0,
             "rate": 4.2,
-            "sync": false,
+            "sync": 0,
             "depth": 0.22,
             "shape": 0,
             "smoothing": 0.5,
@@ -111,7 +111,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 9.5,
     "fx": [
       {
         "type": "limiter",

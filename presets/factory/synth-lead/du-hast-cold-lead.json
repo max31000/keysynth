@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Du Hast Cold Lead",
     "category": "Synth Lead",
@@ -268,14 +268,14 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": 0.5,
     "fx": [
       {
         "type": "delay",
         "bypass": false,
         "params": {
           "mode": 1,
-          "sync": 6,
+          "sync": 7,
           "time": 375,
           "feedback": 0.25,
           "mix": 0.12,
