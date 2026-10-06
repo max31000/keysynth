@@ -52,6 +52,7 @@ public:
     int regionCount() const noexcept;  // 0 while loading or on failure
     bool loadFailed() const noexcept;  // finished loading without any region
     std::string lastError() const;     // control thread
+    std::string loadError() const override { return lastError(); }
     std::string resolvedPath() const;  // control thread
     double loadSeconds() const noexcept; // wall time of the last load (0 until finished)
     // Tests: artificial delay before each load starts, so the loading state can be observed deterministically.

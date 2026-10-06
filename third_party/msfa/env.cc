@@ -154,7 +154,8 @@ void Env::advance(int newix) {
 #endif
         inc_ = (4 + (qrate & 3)) << (2 + LG_N + (qrate >> 2));
         // meh, this should be fixed elsewhere
-        inc_ = (int)(((int64_t)inc_ * (int64_t)sr_multiplier) >> 24);
+        // keysynth: rounded instead of truncated (with N = 8 inc_ is 8x smaller, truncation was a 0.4% bias)
+        inc_ = (int)(((int64_t)inc_ * (int64_t)sr_multiplier + (1 << 23)) >> 24);
     }
 }
 

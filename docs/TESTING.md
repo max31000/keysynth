@@ -17,6 +17,21 @@ Binaries land in `build/bin/<Config>/`. Options (pass via `-ExtraArgs '-DKS_RT_C
 module; `OFF` builds without it and the module is not registered).
 `KS_WITH_FAUST` (ON; Faust from `KS_FAUST_DIR`, default `<main checkout>/.tools/faust`, see `docs/PLUGINS.md`).
 Engine code builds with `/W4 /WX`; dependencies don't.
+`configure.ps1` configures with `FETCHCONTENT_FULLY_DISCONNECTED=ON` (no network, shared sources untouched) when every
+dependency source already exists in `.deps/` (`-Online` forces a connected configure, e.g. after a pin bump), holds an
+exclusive lock on `.deps/.configure.lock` so concurrent configures wait for each other, and treats cmake stderr
+warnings as output (only the exit code fails it).
+
+## Launchers
+
+```powershell
+scripts/start.ps1              # play: builds ui/dist if missing/stale, engine (Release, real audio) + browser at :7340
+scripts/start.ps1 -BuildDir build-int -Port 7351 -HttpPort 7350 -NoAudio -NoBrowser   # smoke test, side by side
+scripts/start-dev.ps1          # UI work: engine --no-audio --no-midi + Vite dev server (:5173, ?engine=...)
+```
+
+Both wait for the port, open the default browser (unless `-NoBrowser`) and stop everything on Ctrl+C.
+`-EngineArgs '--preset','<path>'` passes extra engine flags.
 
 ## Unit + render tests (Catch2)
 
@@ -101,6 +116,12 @@ build/bin/Release/ks-bench.exe --sr 96000 --block 32 --seconds 20 --filter split
 
 Prints the realtime factor per preset; exit code 1 if the worst preset has < 2x headroom (ARCHITECTURE §12).
 
+`ks-bench --latency [--sr HZ] [--block N]` instead prints, per registered instrument engine (default params, one
+layer, whole graph via OfflineRenderer; `sampler` uses the first factory preset whose library is installed), the
+samples/ms from a C4 note-on at block offsets 0 and 37 to the first output sample above the pre-note noise floor
+(≥ 1e-6); exit code 1 if any engine needs more than one block. Same check in `engine/tests/test_note_latency.cpp`
+(`[latency]`; fm ≤ 8 samples; sampler in the hidden `[samples]` tier).
+
 ## Running the engine headless
 
 ```powershell
@@ -115,7 +136,8 @@ Flags: `--no-audio`, `--no-midi`, `--no-plugins` (don't load/watch `plugins/`), 
 sample rate, buffer, device-reported latency and (after the first callback) the MMCSS / power-throttling state.
 The chosen device is saved to `userdata/settings.json`; delete it to return to auto-selection. Note: ASIO drivers
 may only accept the buffer size set in their own control panel (the UR22C driver did: 1024 regardless of
-`--asio-buffer`) — change it there. Quit with Ctrl+C.
+`--asio-buffer`; it offers only `[1024]`, printed as "buffer sizes offered by the driver") — change it there, from the
+UI's "Open ASIO panel" button (protocol `open_audio_panel`, PROTOCOL.md *Audio latency*). Quit with Ctrl+C.
 
 Quick protocol smoke test (Python, `python -m pip install websockets`):
 

@@ -148,6 +148,8 @@ class Module {
   virtual int latencySamples() const { return 0; }
   virtual nlohmann::json saveState() const { return {}; } // non-param state (sample path, syx bank…)
   virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
+  virtual bool loadStateWroteParams() const { return false; } // loadState wrote params (fm .syx voice)
+  virtual std::string loadError() const { return {}; }    // control thread: failed resource load (bad sfz/syx)
   virtual bool isReady() const { return true; }           // false while heavy resources load asynchronously
   virtual void setOfflineMode(bool) {}                    // control thread, after prepare: faster-than-RT render
 };
@@ -159,6 +161,13 @@ class Module {
   (`RenderOptions::readyTimeoutSeconds`). In offline mode a streaming module may wait for disk IO inside `process()`
   (sfizz freewheeling) — that is the only place such waits are allowed, inside an explicit `rt::RtAllowScope`.
   Both hooks default to no-ops, so existing modules are unaffected.
+- **State that writes params** (`loadStateWroteParams`): GraphBuilder applies patch params *before* `loadState`, so a
+  state that sets params (fm `{syx, voice}`) would override later edits on every rebuild. Such a module marks its
+  state consumed (fm: `"applied": true`, then `loadState` skips the file) and GraphBuilder returns its params + new
+  state in `BuildResult::adopted`; `Session::rebuild` copies them into the patch (`PatchModel::adoptModuleState`, not
+  dirty) and the built node already carries the new state, so the next build reuses the module.
+- **Load errors** (`loadError`): polled by `Session::pollModuleErrors` on the 30 Hz pump and reported once per module
+  instance as a `log` error event (PROTOCOL.md); `OfflineRenderer` adds them to its warnings (ks-render prints them).
 
 - `ProcessContext`: sampleRate, numSamples, sampleTime, transport (tempo, ppq position, playing), and per-layer
   `ChannelState` {pitchBend (-1..1), modWheel, aftertouch, cc64 sustain, cc66 sostenuto, cc67 soft, expression}
@@ -213,7 +222,9 @@ Patch (data)                              RackGraph (live, audio thread)
   reverb tails). Effects are reused the same way.
 - **Swap.** Single `pending` atomic slot. `publish()` exchanges into `pending`; if the exchange returns a graph the
   audio thread never took, the control thread deletes it. The audio thread takes `pending` only when no transition
-  is running → at most 2 live graphs.
+  is running → at most 2 live graphs. When it takes a graph it copies each layer's sounding-note map (physical key →
+  transposed note) from the outgoing live graph, so note-offs of held keys reach a shared instrument even if the
+  graph was built before the key went down (or from a pending graph that never ran).
 - **Transition.** Modules shared by both graphs are processed once per block (render-once cache keyed by module
   pointer; output feeds both graphs' downstream). If nothing is shared (preset switch), the old graph gets
   all-notes-off and keeps rendering until silent or `min(tailSamples, 1 s)`, mixed with the new one; a new pending
@@ -240,6 +251,10 @@ Patch (data)                              RackGraph (live, audio thread)
 - `AudioHost` wraps `juce::AudioDeviceManager`. Default: ASIO device matching "Steinberg"/"Yamaha" if present, else
   system default. Device type/name, sample rate, buffer size, output channels persisted in `userdata/settings.json`,
   switchable at runtime. Reports device-reported input/output latency + buffer to the UI.
+  ASIO drivers may accept only the buffer size set in their own control panel; `open_audio_panel` shows it
+  (message thread). Any device restart (panel change → driver reset request, or setDevice) runs
+  `audioDeviceAboutToStart` → Engine::prepare + rebuild, then asynchronously saves settings and fires
+  `AudioControl::onChanged` (app: broadcast `devices` + `state`). Details: PROTOCOL.md *Audio latency*.
 - On the first callback `platform/` registers the audio thread with MMCSS (`AvSetMmThreadCharacteristicsW
   "Pro Audio"`) and disables power throttling for it (Intel hybrid P/E cores).
 - `MidiHub` opens all MIDI inputs, one SPSC per device; rescan on demand (protocol `rescan_midi`) and at startup.
@@ -252,7 +267,7 @@ Patch (data)                              RackGraph (live, audio thread)
 | typeId | What | Covers |
 |---|---|---|
 | `va` | Virtual analog poly (16 notes): 3 PolyBLEP/BLAMP osc (saw/pulse+PWM/tri/sine/JP-8000 supersaw/noise), sub −1/−2 oct, hard sync 2→1, ring 1×2, FM 3→1, filter-env→osc1 poly-mod; filters Moog ladder 24 / IR3109 24 (ZDF, nonlinear, self-osc) / SEM 12 SVF, LP/BP/HP/notch, HPF; analog ADSRs, 2 LFO (delay, key/tempo sync), 6-slot mod matrix; unison ≤8 within a 64 sub-voice budget, glide (constant time, legato-only), poly/mono/legato, drift, pan spread; output saturation | Juno/Jupiter/OB-Xa/Prophet/Minimoog/CS-80: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
-| `fm` | DX7-compatible 6-op FM via vendored MSFA (Apache-2.0, Dexed fork; engine models Modern / Mark I / OPL, the latter two GPL-3.0+): every DX7 voice param as a ParamSpec (`alg`, `feedback`, `op1_level`, `op1_eg_rate1`…), macros (brightness, attack/release, tune, voices), DX7-style wheel/aftertouch routing; state `{syx, voice}` loads a voice from a 32-voice bulk or single dump into the ParamSet. Renders 64-sample MSFA chunks ahead (latencySamples 0, events ≤63 samples late); one sample rate per process (msfa globals) | DX7 E.Piano, bells, basses, brass |
+| `fm` | DX7-compatible 6-op FM via vendored MSFA (Apache-2.0, Dexed fork; engine models Modern / Mark I / OPL, the latter two GPL-3.0+): every DX7 voice param as a ParamSpec (`alg`, `feedback`, `op1_level`, `op1_eg_rate1`…), macros (brightness, attack/release, tune, voices), DX7-style wheel/aftertouch routing; state `{syx, voice}` loads a voice from a 32-voice bulk or single dump into the ParamSet. Renders 8-sample MSFA chunks ahead (msfa `LG_N` = 3, Dexed uses 64; latencySamples 0, events ≤7 samples late, onset tested ≤8); one sample rate per process (msfa globals) | DX7 E.Piano, bells, basses, brass |
 | `organ` | Tonewheel wheel-bus: 91 wheels (B-3 gear ratios), 9 drawbars with manual foldback, single-trigger percussion, key click, scanner vibrato/chorus V1–C3, leakage, preamp drive; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |

@@ -69,7 +69,8 @@ struct LayerNode {
     void setZone(const Zone& z) noexcept;
     Zone zone() const noexcept;
 
-    // Physical (channel,key) -> sounding note + 1 (0 = not sounding). Atomics so the builder can copy it.
+    // Physical (channel,key) -> sounding note + 1 (0 = not sounding). Copied into the next graph by
+    // GraphSwapper::begin (audio thread); atomics so the control thread may inspect it.
     std::array<std::atomic<uint8_t>, 16 * 128> noteMap{};
 
     // Audio-thread scratch.

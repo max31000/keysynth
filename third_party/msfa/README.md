@@ -19,4 +19,8 @@ AGPL-3.0-or-later (GPLv3 §13 / AGPLv3 §13). Modification: `EngineMkI.cpp` cons
   portamento pitch (no glide chirp on legato / live edits).
 - `env.cc`, `env.h`, `dx7note.h`: a re-initialized envelope restarts from its current level instead of 0 (no click
   on re-strike / voice steal, as on the DX7); new `Env::forget()` / `Dx7Note::forget()` for a hard reset.
+- `synth.h`: block size `N` = 8 (`LG_N` = 3, upstream 64) so events take effect within 8 samples. All rates are
+  scaled by `N`/`LG_N` (env `inc_`, lfo `unit_`/`lforatio_`, pitchenv `unit_`, porta rates, gain interpolation,
+  phase advance), so timings are unchanged. Precision fixes for the smaller per-block increments: `env.cc` rounds
+  the sample-rate scaling of `inc_` (was truncated), `pitchenv.cc` keeps `unit_` in Q8.
 - Not vendored: Dexed's JUCE submodule, MTS-ESP, the tuning library, any GUI/plugin code.

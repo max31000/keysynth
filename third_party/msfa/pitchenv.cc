@@ -20,7 +20,8 @@
 int PitchEnv::unit_;
 
 void PitchEnv::init(double sample_rate) {
-  unit_ = N * (1 << 24) / (21.3 * sample_rate) + 0.5;
+  // keysynth: unit_ in Q8 (with N = 8 the integer unit lost up to 0.6% of the rate at 96 kHz)
+  unit_ = N * (1 << 24) * 256.0 / (21.3 * sample_rate) + 0.5;
 }
 
 const uint8_t pitchenv_rate[] = {
@@ -84,7 +85,7 @@ void PitchEnv::advance(int newix) {
     int newlevel = levels_[ix_];
     targetlevel_ = pitchenv_tab[newlevel] << 19;
     rising_ = (targetlevel_ > level_);
-    inc_ = pitchenv_rate[rates_[ix_]] * unit_;
+    inc_ = (pitchenv_rate[rates_[ix_]] * unit_ + 128) >> 8; // keysynth: unit_ is Q8
   }
 }
 

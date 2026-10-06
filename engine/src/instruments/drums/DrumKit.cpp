@@ -58,7 +58,13 @@ const ModuleInfo& DrumKit::moduleInfo() {
             groupOrder.push_back(g);
         }
         i.uiHints = {{"groupOrder", groupOrder},
-                     {"front", {"kit", "volume_db", "kick_level", "snare_level", "chh_level", "kick_tune", "kick_decay"}}};
+                     {"front", {"kit", "volume_db", "kick_level", "snare_level", "chh_level", "kick_tune", "kick_decay"}},
+                     {"tabs",
+                      {{{"name", "Kit"}, {"groups", {"Kit"}}},
+                       {{"name", "Kick / Snare"}, {"groups", {"Kick", "Snare", "Clap", "Rim"}}},
+                       {{"name", "Hats / Cymbals"}, {"groups", {"Closed Hat", "Open Hat", "Crash", "Ride"}}},
+                       {{"name", "Toms"}, {"groups", {"Low Tom", "Mid Tom", "High Tom"}}},
+                       {{"name", "Perc"}, {"groups", {"Cowbell", "Tambourine"}}}}}};
         return i;
     }();
     return info;

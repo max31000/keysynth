@@ -67,6 +67,33 @@ TEST_CASE("GraphSwapper: first publish goes live, shared modules keep sounding",
     REQUIRE(Module::liveInstances() == base);
 }
 
+TEST_CASE("GraphSwapper: note map is carried over from the live graph at swap time", "[swap]") {
+    Engine e;
+    e.prepare(48000.0, 64);
+    PatchModel m(defaultRegistry());
+    const NodeId layer = m.patch().layers[0].node;
+    Zone z = m.patch().layers[0].zone;
+    z.transpose = 12;
+    m.setZone(layer, z);
+    publish(e, m);
+    renderBlocks(e, 1);
+    const Module* instr = e.swapper().current()->layers[0]->instrument.module.get();
+
+    // Build the next graph (instrument shared, transpose now 0) *before* the key goes down on the live graph:
+    // the builder can't know about this note; the swap must take the map from the graph that actually played it.
+    m.addFx(layer, "gain", std::nullopt);
+    z.transpose = 0;
+    m.setZone(layer, z);
+    auto next = GraphBuilder::build(m.patch(), defaultRegistry(), e.latestGraph(), e.sampleRate(), e.maxBlock());
+    REQUIRE(renderBlocks(e, 2, {MidiEvent::noteOn(60, 100)}) > 0.01f); // sounds as 72
+    REQUIRE(instr->activeVoices() == 1);
+    e.publish(std::move(next.graph));
+    renderBlocks(e, 1, {MidiEvent::noteOff(60)}); // must release 72, not 60 + new transpose
+    REQUIRE(e.swapper().current()->layers[0]->instrument.module.get() == instr);
+    renderBlocks(e, 48000 / 64 * 2);
+    REQUIRE(instr->activeVoices() == 0);
+}
+
 TEST_CASE("GraphSwapper stress: 10k random publishes while rendering", "[swap][stress]") {
     rt::resetViolations();
     const int base = Module::liveInstances();

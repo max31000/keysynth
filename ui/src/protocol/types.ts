@@ -40,6 +40,11 @@ export interface UiHints {
   front?: string[];
   /** per-param control style override */
   controls?: Record<string, 'knob' | 'slider' | 'drawbar'>;
+  /**
+   * Tabbed panel: groups bundled into named tabs (e.g. fm "Op 1".."Op 6"); unlisted groups get a tab each.
+   * Modules with many params are tabbed per group even without this (ModulePanel AUTO_TAB_THRESHOLD).
+   */
+  tabs?: { name: string; groups: string[] }[];
   [key: string]: unknown;
 }
 
@@ -161,6 +166,8 @@ export interface AudioStatus {
   inputLatencyMs: number;
   outputLatencyMs: number;
   running: boolean;
+  /** the driver has its own settings panel (ASIO): `open_audio_panel` */
+  hasControlPanel?: boolean;
 }
 
 /** Transport state, same keys as the `transport` request (+ `pattern_edited`). */
@@ -234,13 +241,15 @@ export interface SetInstrumentMsg { type: 'set_instrument'; id?: number; layer: 
 export interface AddFxMsg { type: 'add_fx'; id?: number; layer: NodeId; module: string; index?: number }
 /** `set_audio_device` has the same collision: device type travels as `device_type`. */
 export interface SetAudioDeviceMsg { type: 'set_audio_device'; id?: number; device_type: string; name: string; sample_rate?: number; buffer_size?: number }
+/** Opens the driver's own control panel (ASIO buffer size); the device restarts → `devices` + `state` broadcast. */
+export interface OpenAudioPanelMsg { type: 'open_audio_panel'; id?: number }
 
 export type ClientMsg =
   | HelloMsg | GetCatalogMsg | SetParamMsg | LoadPresetMsg | SavePresetMsg | ListPresetsMsg | GetPatchMsg
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
   | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
-   | ListPluginsMsg | ReloadPluginMsg;
+  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg;
 
 export type ClientMsgType = ClientMsg['type'];
 
@@ -274,7 +283,8 @@ export interface DevicesEvent {
   id?: number;
   types: string[];
   current: AudioStatus;
-  available: { type: string; names: string[] }[];
+  /** sampleRates / bufferSizes: supported values of the open device when of this type, else empty */
+  available: { type: string; names: string[]; sampleRates?: number[]; bufferSizes?: number[] }[];
   midiInputs: string[];
 }
 export interface LogEvent { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error' | string; message: string }
@@ -304,6 +314,7 @@ export interface ListPluginsOk {
   faust: { available: boolean; version: string; reason: string };
 }
 export interface ReloadPluginOk { type: 'reload_plugin_ok'; id?: number; name: string }
+export interface OpenAudioPanelOk { type: 'open_audio_panel_ok'; id?: number }
 
 export interface CatalogOk { type: 'catalog_ok'; id?: number; modules: ModuleInfo[] }
 export interface LoadPresetOk { type: 'load_preset_ok'; id?: number }
@@ -322,7 +333,7 @@ export type EngineMsg =
   | StateEvent | ParamEvent | TelemetryEvent | MidiEvent | DevicesEvent | LogEvent | ErrorReply
   | CatalogOk | LoadPresetOk | SavePresetOk | ListPresetsOk
   | PatternEvent | ListPatternsOk | GetPatternOk | SetPatternOk | SavePatternOk
-  | PluginStatusEvent | ListPluginsOk | ReloadPluginOk;
+  | PluginStatusEvent | ListPluginsOk | ReloadPluginOk | OpenAudioPanelOk;
 
 export type EngineMsgType = EngineMsg['type'];
 export type EngineMsgOf<T extends EngineMsgType> = Extract<EngineMsg, { type: T }>;

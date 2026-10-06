@@ -7,4 +7,4 @@ Software synthesizer for MIDI keyboards. C++20 / JUCE engine (ASIO, low latency)
 - Layers and keyboard splits, JSON presets, metronome and drum sequencer
 - Hot-reloadable DSP plugins (Faust or C++)
 
-Docs: [docs/](docs/). License: AGPL-3.0-or-later.
+Run: `scripts/start.ps1` (engine + UI in the browser; `scripts/start-dev.ps1` for UI work). Docs: [docs/](docs/). License: AGPL-3.0-or-later.
