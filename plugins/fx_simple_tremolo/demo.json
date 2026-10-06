@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "meta": { "name": "Tremolo demo", "category": "FX", "author": "plugins",
+            "description": "ks-render --patch-json @plugins/fx_simple_tremolo/demo.json --test-pattern" },
+  "layers": [ { "name": "Saw", "instrument": { "type": "basic", "params": { "release": 0.5 } },
+                "fx": [ { "type": "plugin:fx_simple_tremolo", "params": { "rate": 6, "depth": 0.8, "spread": 0.25 } } ] } ],
+  "master": { "volume_db": 0, "fx": [] }
+}

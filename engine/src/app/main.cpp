@@ -6,6 +6,7 @@
 //   --preset PATH        initial preset (relative to repo root or absolute, inside the allow-list)
 //   --root DIR           repo root (default: auto-detected)
 //   --no-midi            do not open MIDI inputs
+//   --no-plugins         do not load/watch plugins/ (Faust JIT + DLL plugins, docs/PLUGINS.md)
 
 #include "audio/AudioHost.h"
 #include "audio/MidiHub.h"
@@ -17,6 +18,7 @@
 #include "core/Engine.h"
 #include "core/ModuleRegistry.h"
 #include "core/RtCheck.h"
+#include "plugins/PluginHost.h"
 
 #include <juce_events/juce_events.h>
 
@@ -34,7 +36,7 @@ std::atomic<bool> g_quit{false};
 extern "C" void onSignal(int) { g_quit.store(true); }
 
 struct Args {
-    bool noAudio = false, noMidi = false, help = false;
+    bool noAudio = false, noMidi = false, noPlugins = false, help = false;
     int wsPort = 7341, httpPort = 7340;
     std::optional<int> buffer;
     std::optional<double> sampleRate;
@@ -55,6 +57,7 @@ Args parseArgs(int argc, char** argv, std::string& err) {
         try {
             if (s == "--no-audio") a.noAudio = true;
             else if (s == "--no-midi") a.noMidi = true;
+            else if (s == "--no-plugins") a.noPlugins = true;
             else if (s == "--port") a.wsPort = std::stoi(next());
             else if (s == "--http-port") a.httpPort = std::stoi(next());
             else if (s == "--asio-buffer") a.buffer = std::stoi(next());
@@ -73,7 +76,8 @@ Args parseArgs(int argc, char** argv, std::string& err) {
 
 class Pump final : public juce::Timer {
 public:
-    Pump(ks::Session& s, ks::ControlServer& srv) : s_(s), srv_(srv) { startTimerHz(30); }
+    Pump(ks::Session& s, ks::ControlServer& srv, ks::plugins::PluginHost* plugins)
+        : s_(s), srv_(srv), plugins_(plugins) { startTimerHz(30); }
     void timerCallback() override {
         if (g_quit.load()) {
             stopTimer();
@@ -81,6 +85,7 @@ public:
             return;
         }
         s_.engine().collectGarbage(); // every 33 ms (ARCHITECTURE: <= 50 ms)
+        if (plugins_) plugins_->poll(); // finished compiles -> registry; file watch every 500 ms; faults
         const auto midi = s_.pollMidi();
         const auto tele = s_.pollTelemetry();
         if (srv_.clientCount() == 0) return;
@@ -91,6 +96,7 @@ public:
 private:
     ks::Session& s_;
     ks::ControlServer& srv_;
+    ks::plugins::PluginHost* plugins_;
 };
 
 void printStatus(const ks::AudioStatus& st, const char* prefix) {
@@ -137,6 +143,32 @@ int main(int argc, char** argv) {
         std::fflush(stdout);
         server.broadcast({{"type", "log"}, {"level", level}, {"message", msg}});
     };
+
+    // Plugins compile asynchronously; patches referencing them are rebuilt when they become available.
+    std::unique_ptr<ks::plugins::PluginHost> plugins;
+    if (!args.noPlugins) {
+        ks::plugins::PluginHost::Options popt;
+        popt.pluginsDir = paths.root / "plugins";
+        plugins = std::make_unique<ks::plugins::PluginHost>(ks::defaultRegistry(), popt);
+        plugins->onStatus = [&server, &session](const ks::plugins::PluginStatus& st) {
+            if (st.state == "error" || st.state == "faulted")
+                session.log("error", "plugin " + st.name + ": " + st.message);
+            else if (st.state == "ok")
+                std::printf("[plugin] %s v%d ok (%s, %.0f ms%s)\n", st.name.c_str(), st.version,
+                            st.source.c_str(), st.compileMs, st.cached ? ", cached" : "");
+            std::fflush(stdout);
+            server.broadcast({{"type", "plugin_status"}, {"plugin", ks::plugins::toJson(st)}});
+        };
+        plugins->onModulesChanged = [&server, &session](const std::vector<std::string>& typeIds) {
+            if (session.refreshModules(typeIds)) server.broadcast(session.stateJson());
+        };
+        session.setPlugins(plugins.get());
+        const auto fi = ks::plugins::PluginHost::faustInfo();
+        std::printf("plugins: %s (faust %s)\n", ks::pathToUtf8(popt.pluginsDir).c_str(),
+                    fi["available"].get<bool>() ? fi["version"].get<std::string>().c_str()
+                                                : ("unavailable: " + fi["reason"].get<std::string>()).c_str());
+        plugins->start();
+    }
 
     if (!args.preset.empty()) {
         try {
@@ -194,7 +226,7 @@ int main(int argc, char** argv) {
     std::printf("ready. Ctrl+C to quit.\n");
     std::fflush(stdout);
 
-    Pump pump(session, server);
+    Pump pump(session, server, plugins.get());
     if (audioHost)
         juce::Timer::callAfterDelay(1000, [host = audioHost.get()] {
             std::printf("audio thread: MMCSS \"Pro Audio\" %s (err %lu), power throttling %s\n",
@@ -210,6 +242,8 @@ int main(int argc, char** argv) {
     if (midi) midi->closeAll();
     if (audioHost) audioHost->stop();
     if (nullAudio) nullAudio->stop();
+    session.setPlugins(nullptr);
+    plugins.reset();
     engine->collectGarbage();
     return 0;
 }

@@ -1,0 +1,7 @@
+{
+  "id": "fx_simple_tremolo",
+  "name": "Simple Tremolo",
+  "kind": "effect",
+  "category": "Modulation",
+  "tail_s": 0
+}

@@ -1,0 +1,8 @@
+{
+  "id": "string_machine",
+  "name": "String Machine",
+  "kind": "instrument",
+  "category": "Strings",
+  "polyphony": 16,
+  "max_release_s": 8
+}

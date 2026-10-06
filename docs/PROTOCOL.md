@@ -34,6 +34,8 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `list_devices` | — | `devices` |
 | `set_audio_device` | `{ device_type, name, sample_rate?, buffer_size? }` | `devices` |
 | `panic` | — | none (all notes off, reset tails) |
+| `list_plugins` | — | `list_plugins_ok { plugins: PluginStatus[], faust: { available, version, reason } }` |
+| `reload_plugin` | `{ name }` (plugin directory name, `[a-z][a-z0-9_]*`) | `reload_plugin_ok { name }`, then `plugin_status` events |
 
 ## Engine → client (events)
 
@@ -45,8 +47,20 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `midi` | `{ notes: [ {note, on, velocity} ] }` batched ≤30 Hz, for keyboard highlighting |
 | `devices` | `{ types: string[], current: AudioStatus, available: { type, names[], sampleRates: number[], bufferSizes: number[] }[], midiInputs: string[] }` |
 | `log` | `{ level, message }` |
+| `plugin_status` | `{ plugin: PluginStatus }` — every plugin state change (see below) |
 
 `AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running }`.
+
+`PluginStatus = { name, typeId, source: "faust"|"dll", state: "compiling"|"ok"|"error"|"faulted"|"removed",
+message, kind: "instrument"|"effect"|"", version, compileMs, cached }` (docs/PLUGINS.md, ARCHITECTURE §10).
+- `typeId` is `plugin:<name>` (the module type in the catalog/patch). `version` counts successful loads (0 = never
+  loaded). `message` carries the Faust compiler / loader error for `error`, the fault description for `faulted`.
+- Sequence on a source change (file watch) or `reload_plugin`: `compiling` → `ok` | `error`. On `error` the previous
+  good version (if any) stays registered and keeps sounding. `faulted`: an instance crashed or produced NaN/Inf
+  (crashed instances stay muted until the plugin is reloaded). `removed`: the plugin directory is gone.
+- After `ok` and `removed` the catalog changed: clients re-request `get_catalog`. If the current patch uses the
+  plugin, the engine rebuilds it (param values of surviving ids are kept) and broadcasts `state`.
+- Errors and faults are also sent as `log { level: "error" }`.
 
 ### Wire details (clarifications)
 - Payload fields never reuse the envelope key `type`: module typeIds travel as `module`, the audio device type as

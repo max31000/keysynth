@@ -5,6 +5,7 @@
 #include "dsp/Math.h"
 #include "preset/PatchJson.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace ks {
@@ -30,6 +31,33 @@ void Session::rebuild(bool reuse) {
     logWarnings(r.warnings);
     engine_.transport().setTempo(model_.patch().tempo);
     engine_.publish(std::move(r.graph));
+}
+
+bool Session::refreshModules(const std::vector<std::string>& typeIds) {
+    auto affected = [&](const std::string& t) { return std::find(typeIds.begin(), typeIds.end(), t) != typeIds.end(); };
+    Patch p = model_.patch();
+    bool any = false;
+    RackGraph* g = engine_.latestGraph();
+    auto visit = [&](ModuleSlot& s) {
+        if (!affected(s.type)) return;
+        any = true;
+        if (!g) return;
+        if (Module* m = g->findModule(s.node)) {
+            nlohmann::json st = m->saveState();
+            if (st.is_object() && !st.empty()) s.state = std::move(st);
+        }
+    };
+    for (Layer& l : p.layers) {
+        visit(l.instrument);
+        for (ModuleSlot& f : l.fx) visit(f);
+    }
+    for (ModuleSlot& f : p.master.fx) visit(f);
+    if (!any) return false;
+    const bool dirty = model_.dirty();
+    model_.setPatch(std::move(p)); // node ids are kept (all valid); params re-normalized
+    model_.setDirty(dirty);
+    rebuild(true);
+    return true;
 }
 
 std::vector<std::string> Session::setPatch(Patch p, const std::string& presetPath, bool reuse) {

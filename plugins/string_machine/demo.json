@@ -1,0 +1,7 @@
+{
+  "format": 1,
+  "meta": { "name": "String Machine demo", "category": "Strings", "author": "plugins",
+            "description": "ks-render --patch-json @plugins/string_machine/demo.json --test-pattern" },
+  "layers": [ { "name": "Strings", "instrument": { "type": "plugin:string_machine", "params": {} }, "fx": [] } ],
+  "master": { "volume_db": 0, "fx": [] }
+}

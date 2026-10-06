@@ -13,7 +13,8 @@ cmake --build build --config Release --target keysynth-engine ks-render ks-bench
 ```
 
 Binaries land in `build/bin/<Config>/`. Options (pass via `-ExtraArgs '-DKS_RT_CHECKS=OFF'`):
-`KS_BUILD_TESTS` (ON), `KS_RT_CHECKS` (ON in every config), `KS_WITH_SFIZZ` (OFF, Phase 2 placeholder).
+`KS_BUILD_TESTS` (ON), `KS_RT_CHECKS` (ON in every config), `KS_WITH_SFIZZ` (OFF, Phase 2 placeholder),
+`KS_WITH_FAUST` (ON; Faust from `KS_FAUST_DIR`, default `<main checkout>/.tools/faust`, see `docs/PLUGINS.md`).
 Engine code builds with `/W4 /WX`; dependencies don't.
 
 ## Unit + render tests (Catch2)
@@ -27,7 +28,8 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport]`. Run the full tier before merging anything that touches DSP or presets.
+[transport] [plugins] [faust] [dll]`. `[faust]` tests SKIP when libfaust is missing; `[dll]` tests build plugins with
+`scripts/build_plugin.ps1` (≈ 4 s, SKIP when MSVC is missing). Run the full tier before merging anything that touches DSP or presets.
 
 Render suite (`engine/tests/test_render.cpp`): every `presets/factory/**` preset renders the standard pattern
 (`OfflineRenderer::standardTestEvents()`: C-major chord, scale with rising velocity, low/high extremes, sustain-pedal
@@ -41,8 +43,12 @@ build/bin/Release/ks-render.exe --preset presets/factory/synth-lead/basic-saw-le
     --notes "A3:0:1.5:100" --tail 1 --out renders/a3.wav
 build/bin/Release/ks-render.exe --preset presets/factory/splits-layers/basic-bass-lead-split.json --test-pattern --out renders/split.wav
 build/bin/Release/ks-render.exe --patch-json '@my_patch.json' --midi song.mid --sr 96000 --block 32 --out renders/song.wav
-build/bin/Release/ks-render.exe --list-modules          # catalog JSON (ModuleInfo[])
+build/bin/Release/ks-render.exe --list-modules          # catalog JSON (ModuleInfo[], incl. plugins)
+build/bin/Release/ks-render.exe --patch-json '@plugins/faust_pluck/demo.json' --test-pattern --out renders/pluck.wav
 ```
+
+Patches using `plugin:<name>` modules make ks-render compile/load those plugins from `plugins/` first (synchronously,
+Faust machine-code cache in `plugins/.build/cache`); `--no-plugins` skips that, `--root DIR` picks another repo root.
 
 `--notes "NOTE:start:dur[:vel],..."` — note name (`C4` = 60, `F#3`, `Bb2`) or number, times in seconds, velocity
 1–127 (default 100). Without `--notes/--midi/--test-pattern` a single C4 is rendered; without `--preset/--patch-json`
@@ -77,7 +83,7 @@ build/bin/Release/keysynth-engine.exe --asio-buffer 64 --preset presets/factory/
 build/bin/Release/keysynth-engine.exe --port 7351 --http-port 0 --no-midi   # side-by-side instance, no static UI
 ```
 
-Flags: `--no-audio`, `--no-midi`, `--port N` (WebSocket, default 7341), `--http-port N` (static `ui/dist`, default
+Flags: `--no-audio`, `--no-midi`, `--no-plugins` (don't load/watch `plugins/`), `--port N` (WebSocket, default 7341), `--http-port N` (static `ui/dist`, default
 7340, 0 = off), `--asio-buffer N`, `--sample-rate HZ`, `--preset PATH`, `--root DIR`. On start it prints device,
 sample rate, buffer, device-reported latency and (after the first callback) the MMCSS / power-throttling state.
 The chosen device is saved to `userdata/settings.json`; delete it to return to auto-selection. Note: ASIO drivers

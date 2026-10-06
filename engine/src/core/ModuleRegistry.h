@@ -23,6 +23,8 @@ public:
 
     // Replaces an existing entry with the same typeId (hot reload).
     void add(const ModuleInfo& info, Factory factory);
+    // Removes an entry (plugin deleted). Live modules keep working; the next rebuild treats the type as unknown.
+    bool remove(const std::string& typeId) { return entries_.erase(typeId) != 0; }
     bool contains(const std::string& typeId) const { return entries_.count(typeId) != 0; }
     const ModuleInfo* find(const std::string& typeId) const;
     std::unique_ptr<Module> create(const std::string& typeId) const; // nullptr if unknown

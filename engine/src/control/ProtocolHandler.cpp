@@ -1,5 +1,6 @@
 #include "control/ProtocolHandler.h"
 
+#include "plugins/PluginHost.h"
 #include "preset/PatchJson.h"
 
 #include <cmath>
@@ -247,6 +248,23 @@ const std::map<std::string, Handler>& handlers() {
              c.reply(std::move(d));
          }},
         {"panic", [](Ctx& c) { c.s.engine().panic(); }},
+        {"list_plugins",
+         [](Ctx& c) {
+             json arr = json::array();
+             if (c.s.plugins())
+                 for (const auto& st : c.s.plugins()->list()) arr.push_back(plugins::toJson(st));
+             c.reply({{"type", "list_plugins_ok"}, {"plugins", arr}, {"faust", plugins::PluginHost::faustInfo()}});
+         }},
+        {"reload_plugin",
+         [](Ctx& c) {
+             if (!c.s.plugins()) throw PatchError("not_available", "plugin host not running");
+             const std::string name = strField(c.msg, "name");
+             if (!plugins::PluginHost::isValidName(name)) throw PatchError("bad_request", "invalid plugin name");
+             std::string err;
+             if (!c.s.plugins()->reload(name, err)) throw PatchError("not_found", err);
+             // Progress/result arrive as plugin_status events.
+             c.reply({{"type", "reload_plugin_ok"}, {"name", name}});
+         }},
     };
     return h;
 }
