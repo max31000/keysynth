@@ -455,7 +455,7 @@ void VaSynth::Voice::control(int blockPos) noexcept {
     svfRes = res * 0.97f;
     const float hpfOct = clampv(sh.hpfOct + d[DstHpf], 3.0f, 14.5f);
     hpfOn = hpfOct > 3.6f; // > ~12 Hz
-    hpfG = dsp::tptG(std::exp2(hpfOct), sh.sr);
+    hpfG = dsp::tptOnePoleG(std::exp2(hpfOct), sh.sr);
 
     const float velGain = (1.0f - sh.ampVel) + sh.ampVel * velocity;
     const float trem = 1.0f - sh.lfo1Amp * (0.5f + 0.5f * l1);
