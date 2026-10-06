@@ -1,24 +1,12 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { actions, useEngine } from '../store';
 import { findModule } from '../store/patchOps';
-import { isHidden } from '../lib/paramMath';
+import { FRONT_TAB, groupParams, panelTabs, type ParamGroup } from '../lib/panelLayout';
 import type { ModuleInfo, ParamSpec } from '../protocol/types';
 import { ParamControl } from './Controls';
 
-/** Groups in display order: uiHints.groupOrder first, then first-appearance order. */
-export function groupParams(info: ModuleInfo): { name: string; params: ParamSpec[] }[] {
-  const map = new Map<string, ParamSpec[]>();
-  for (const p of info.params) {
-    if (isHidden(p)) continue;
-    const g = p.group || 'Main';
-    const list = map.get(g) ?? [];
-    list.push(p);
-    map.set(g, list);
-  }
-  const order = info.uiHints?.groupOrder ?? [];
-  const names = [...order.filter((g) => map.has(g)), ...[...map.keys()].filter((g) => !order.includes(g))];
-  return names.map((name) => ({ name, params: map.get(name)! }));
-}
+// Selected tab per module type, kept for the session (switching presets keeps you on "Op 3").
+const lastTab = new Map<string, string>();
 
 const ParamCell = memo(function ParamCell({
   node,
@@ -41,9 +29,30 @@ const ParamCell = memo(function ParamCell({
   );
 });
 
+function Groups({ node, groups, info, bare }: { node: number; groups: ParamGroup[]; info: ModuleInfo; bare?: boolean }) {
+  const controls = info.uiHints?.controls ?? {};
+  return (
+    <div className="groups">
+      {groups.map((g) => {
+        const drawbars = g.params.every((p) => controls[p.id] === 'drawbar');
+        return (
+          <fieldset key={g.name} className={`group ${drawbars ? 'group-drawbars' : ''} ${bare ? 'group-bare' : ''}`}>
+            {!bare && <legend>{g.name}</legend>}
+            <div className="group-body">
+              {g.params.map((p) => (
+                <ParamCell key={p.id} node={node} spec={p} {...(controls[p.id] ? { style: controls[p.id] } : {})} />
+              ))}
+            </div>
+          </fieldset>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Auto-generated panel built from the module's ParamSpec list: the selected module, or `node` when given
- * (the Rhythm panel shows the drum-sequencer kit this way).
+ * (the Rhythm panel shows the drum-sequencer kit this way). Large modules (fm, va, drums) are tabbed.
  */
 export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) {
   const selected = useEngine((s) => s.selectedModule);
@@ -53,6 +62,8 @@ export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) 
   const layerName = useEngine((s) => (node === null ? undefined : findModule(s.patch, node)?.layer?.name));
   const info = useEngine((s) => (type ? s.catalogMap[type] : undefined));
   const groups = useMemo(() => (info ? groupParams(info) : []), [info]);
+  const tabs = useMemo(() => (info ? panelTabs(info, groups) : null), [info, groups]);
+  const [, rerender] = useState(0);
 
   if (node === null || !type) return <section className="module panel empty-state">Select an instrument or effect.</section>;
   if (!info)
@@ -62,9 +73,15 @@ export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) 
       </section>
     );
 
-  const controls = info.uiHints?.controls ?? {};
+  const wanted = lastTab.get(info.typeId);
+  const current = tabs ? (tabs.find((t) => t.name === wanted) ?? tabs[0]!) : null;
+  const pick = (name: string) => {
+    lastTab.set(info.typeId, name);
+    rerender((n) => n + 1);
+  };
+
   return (
-    <section className="module panel" aria-label={`${info.name} parameters`}>
+    <section className={`module panel ${tabs ? 'tabbed' : ''}`} aria-label={`${info.name} parameters`}>
       <header className="module-head">
         <span className={`kind-tag ${kind}`}>{kind === 'instrument' ? 'INST' : kind === 'rhythm' ? 'RHY' : 'FX'}</span>
         <h2 className="module-name">{info.name}</h2>
@@ -74,21 +91,31 @@ export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) 
         </span>
         <span className="module-node mono">#{node}</span>
       </header>
-      <div className="groups">
-        {groups.map((g) => {
-          const drawbars = g.params.every((p) => controls[p.id] === 'drawbar');
-          return (
-            <fieldset key={g.name} className={`group ${drawbars ? 'group-drawbars' : ''}`}>
-              <legend>{g.name}</legend>
-              <div className="group-body">
-                {g.params.map((p) => (
-                  <ParamCell key={p.id} node={node} spec={p} {...(controls[p.id] ? { style: controls[p.id] } : {})} />
-                ))}
-              </div>
-            </fieldset>
-          );
-        })}
-      </div>
+      {tabs && current ? (
+        <>
+          <div className="module-tabs" role="tablist" aria-label={`${info.name} sections`}>
+            {tabs.map((t) => (
+              <button
+                type="button"
+                role="tab"
+                key={t.name}
+                aria-selected={t === current}
+                className={t === current ? 'on' : ''}
+                onClick={() => pick(t.name)}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+          <div className="module-body" role="tabpanel" aria-label={current.name}>
+            <Groups node={node} groups={current.groups} info={info} bare={current.name === FRONT_TAB} />
+          </div>
+        </>
+      ) : (
+        <div className="module-body">
+          <Groups node={node} groups={groups} info={info} />
+        </div>
+      )}
     </section>
   );
 }

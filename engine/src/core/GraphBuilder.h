@@ -16,6 +16,14 @@ namespace ks {
 struct BuildResult {
     std::unique_ptr<RackGraph> graph;
     std::vector<std::string> warnings;
+    // Modules whose loadState() wrote params (Module::loadStateWroteParams): their full params and new state, to be
+    // copied back into the patch (PatchModel::adoptModuleState) so the loaded values become the patch's.
+    struct Adopted {
+        NodeId node = 0;
+        std::map<std::string, float> params;
+        nlohmann::json state;
+    };
+    std::vector<Adopted> adopted;
     int reused = 0;
     int created = 0;
 };

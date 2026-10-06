@@ -161,7 +161,15 @@ const ModuleInfo& VaSynth::moduleInfo() {
                        "Mod Matrix", "Voice", "Output"}},
                      {"front",
                       {"osc1_wave", "osc2_wave", "osc2_fine", "cutoff", "resonance", "filter_env_amt", "amp_attack",
-                       "amp_release", "unison", "glide", "volume_db"}}};
+                       "amp_release", "unison", "glide", "volume_db"}},
+                     // Tabbed panel (UI ModulePanel): ~100 params don't fit one screen.
+                     {"tabs",
+                      {{{"name", "Osc 1+2"}, {"groups", {"Osc1", "Osc2"}}},
+                       {{"name", "Osc 3 / Mix"}, {"groups", {"Osc3", "Sub/Noise", "Mixer"}}},
+                       {{"name", "Filter / Env"}, {"groups", {"Filter", "Filter Env", "Amp Env"}}},
+                       {{"name", "LFO"}, {"groups", {"LFO1", "LFO2"}}},
+                       {{"name", "Mod Matrix"}, {"groups", {"Mod Matrix"}}},
+                       {{"name", "Voice / Out"}, {"groups", {"Voice", "Output"}}}}}};
         return i;
     }();
     return info;

@@ -60,6 +60,13 @@ public:
 
     virtual nlohmann::json saveState() const { return {}; } // non-param state (sample path, syx bank, ...)
     virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
+    // True if the last loadState() wrote params from the state (fm: a .syx voice). GraphBuilder then copies the
+    // module's params and saveState() back into the patch (which should now mark the state as consumed), so edits
+    // made after the load survive rebuilds.
+    virtual bool loadStateWroteParams() const { return false; }
+    // Control thread: non-empty when loading the module's resources failed (bad state path, asynchronous sample
+    // load that produced nothing). Session reports it once as a `log` error; OfflineRenderer as a warning.
+    virtual std::string loadError() const { return {}; }
 
     // Heavy resources (samples, ...) loaded asynchronously after prepare(): false while still loading (the module
     // renders silence meanwhile). Any thread. OfflineRenderer waits until every module is ready (ARCHITECTURE §5.2).

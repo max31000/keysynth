@@ -37,6 +37,7 @@ cmake --build build --config Release --target keysynth-engine ks-render ks-tests
 build/bin/Release/ks-tests.exe
 build/bin/Release/keysynth-engine.exe            # real audio (ASIO)
 build/bin/Release/keysynth-engine.exe --no-audio # null device, for UI work
+scripts/start.ps1 / scripts/start-dev.ps1        # launchers (play / UI dev), see docs/TESTING.md
 cd ui; npm install; npm run dev                   # UI dev server (http://localhost:5173)
 cd ui; npm test
 ```

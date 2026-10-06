@@ -59,6 +59,10 @@ RenderResult OfflineRenderer::render(const Patch& patch, std::vector<TimedEvent>
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
         }
+        for (ModuleNode* n : nodes)
+            if (n->module)
+                if (const std::string err = n->module->loadError(); !err.empty())
+                    r.warnings.push_back("module '" + n->type + "' (node " + std::to_string(n->node) + "): " + err);
     }
     engine->publish(std::move(b.graph));
 

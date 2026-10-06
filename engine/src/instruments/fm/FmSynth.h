@@ -10,12 +10,14 @@
 //   (range + pitch/amp/EG-bias assign), sustain/sostenuto through VoiceAllocator.
 // - State `{ "syx": "<path>", "voice": n }` loads voice n of a .syx bank/single dump and writes it into the
 //   ParamSet (loadState, control thread). GraphBuilder applies the patch params *before* loadState, so the syx
-//   voice wins on every rebuild; once the control side has copied the voice into the patch params it should set
-//   `"applied": true` in the state, which makes loadState skip the syx (keeps later edits). Path must be inside
-//   the allow-listed roots (ARCHITECTURE §11).
+//   voice would win on every rebuild; therefore after applying it loadState adds `"applied": true` to the state
+//   and reports loadStateWroteParams(), and GraphBuilder/Session copy the params + state back into the patch.
+//   With `applied` set loadState skips the syx (keeps later edits). Path must be inside the allow-listed roots
+//   (ARCHITECTURE §11).
 //
-// MSFA renders in fixed 64-sample chunks; the module renders a chunk ahead and buffers the remainder, so
-// latencySamples() == 0, but an event takes effect at the next chunk boundary (<= 63 samples late).
+// MSFA renders in fixed 8-sample chunks (LG_N = 3 in third_party/msfa/synth.h; Dexed uses 64): the module
+// renders a chunk ahead and buffers the remainder, so latencySamples() == 0 and an event takes effect at the next
+// chunk boundary (<= 7 samples late; engine/tests/test_note_latency.cpp checks onsets within 8 samples).
 // MSFA keeps sample-rate-dependent lookup tables in globals: they are (re)initialized in prepare() only when the
 // sample rate changes, which happens only while the device is stopped (ARCHITECTURE §5.4). Consequence: all fm
 // instances in one process must run at the same sample rate.
@@ -48,6 +50,8 @@ public:
 
     nlohmann::json saveState() const override { return state_; }
     void loadState(const nlohmann::json& state) override;
+    bool loadStateWroteParams() const override { return voiceApplied_; }
+    std::string loadError() const override { return stateError_; }
     // Last loadState problem (empty = ok). Control thread.
     const std::string& stateError() const noexcept { return stateError_; }
 
@@ -83,6 +87,7 @@ private:
     std::unique_ptr<Impl> impl_;
     nlohmann::json state_ = nlohmann::json::object();
     std::string stateError_;
+    bool voiceApplied_ = false; // last loadState wrote a syx voice into the params (state_ now has "applied")
     std::atomic<int> activeVoices_{0};
 };
 

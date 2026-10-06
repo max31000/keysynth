@@ -44,6 +44,15 @@ void fillNode(Ctx& c, ModuleNode& dst, const ModuleSlot& slot, ModuleKind expect
     }
     for (const auto& [id, v] : slot.params) m->params().set(id, v);
     m->loadState(slot.state);
+    if (m->loadStateWroteParams()) {
+        BuildResult::Adopted a;
+        a.node = slot.node;
+        const auto& specs = m->info().params;
+        for (size_t i = 0; i < specs.size(); ++i) a.params[specs[i].id] = m->params().get(static_cast<int>(i));
+        a.state = m->saveState();
+        dst.state = a.state; // the patch will carry this state: the next build reuses the module
+        c.result.adopted.push_back(std::move(a));
+    }
     m->prepare(c.sampleRate, c.maxBlock);
     dst.module = std::shared_ptr<Module>(std::move(m));
     ++c.result.created;
@@ -68,13 +77,8 @@ BuildResult GraphBuilder::build(const Patch& patch, const ModuleRegistry& regist
             fillNode(c, *fn, f, ModuleKind::Effect);
             ln->fx.push_back(std::move(fn));
         }
-        // Carry sounding-note mapping over so note-offs for held keys reach a shared instrument.
-        if (previous) {
-            if (const LayerNode* old = previous->findLayer(l.node)) {
-                for (size_t i = 0; i < ln->noteMap.size(); ++i)
-                    ln->noteMap[i].store(old->noteMap[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
-            }
-        }
+        // The sounding-note map (noteMap) is carried over by GraphSwapper::begin from the graph that is live when
+        // this one takes over (not from `previous`, which may be a pending graph that never ran).
         g.layers.push_back(std::move(ln));
     }
     for (const ModuleSlot& f : patch.master.fx) {

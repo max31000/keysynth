@@ -259,6 +259,14 @@ void PatchModel::setModuleState(NodeId node, const nlohmann::json& state) {
     dirty_ = true;
 }
 
+bool PatchModel::adoptModuleState(NodeId node, const std::map<std::string, float>& params, const nlohmann::json& state) {
+    ModuleSlot* s = slotMut(node);
+    if (!s) return false;
+    for (const auto& [id, v] : params) s->params[id] = v; // values come from the module's ParamSet (in range)
+    s->state = state.is_object() ? state : nlohmann::json::object();
+    return true; // not dirty: same sound as the loaded patch, only made explicit
+}
+
 void PatchModel::setZone(NodeId layer, const Zone& zone) {
     Layer* l = layerMut(layer);
     if (!l) throw PatchError("not_found", "no layer " + std::to_string(layer));

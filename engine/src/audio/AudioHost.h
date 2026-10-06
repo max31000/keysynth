@@ -2,7 +2,8 @@
 // AudioHost (ARCHITECTURE §6): wraps juce::AudioDeviceManager. Default device: ASIO matching "Steinberg"/"Yamaha"
 // if present, else the system default. Type/name/sample rate/buffer size persisted in userdata/settings.json and
 // switchable at runtime. Device (re)start -> Engine::prepare + full graph rebuild (onPrepared) on the message
-// thread, while no callback runs.
+// thread, while no callback runs; then (async, message thread) settings are saved and onChanged re-reports the
+// device. openControlPanel shows the ASIO driver panel (deferred to the message loop; may be modal).
 
 #include "audio/AudioControl.h"
 #include "core/AppPaths.h"
@@ -16,7 +17,7 @@
 
 namespace ks {
 
-class AudioHost final : public AudioControl, private juce::AudioIODeviceCallback {
+class AudioHost final : public AudioControl, private juce::AudioIODeviceCallback, private juce::AsyncUpdater {
 public:
     struct Options {
         std::optional<int> bufferSize;   // --asio-buffer
@@ -36,6 +37,7 @@ public:
     AudioDeviceList listDevices() override;
     std::string setDevice(const std::string& type, const std::string& name, double sampleRate, int bufferSize) override;
     uint64_t xruns() const override;
+    std::string openControlPanel() override;
 
     juce::AudioDeviceManager& deviceManager() noexcept { return dm_; }
     // Set once by the audio thread after its first callback.
@@ -50,6 +52,8 @@ private:
     void audioDeviceStopped() override;
     void audioDeviceError(const juce::String& message) override;
 
+    void handleAsyncUpdate() override;
+    void showControlPanelNow();
     void saveSettings() const;
     nlohmann::json loadSettings() const;
 
@@ -62,6 +66,7 @@ private:
     std::atomic<bool> mmcss_{false}, powerOff_{false};
     std::atomic<unsigned long> mmcssError_{0};
     std::atomic<uint64_t> xrunBase_{0};
+    std::atomic<bool> panelRequested_{false}, changed_{false};
 };
 
 } // namespace ks

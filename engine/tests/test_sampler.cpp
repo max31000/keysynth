@@ -5,6 +5,7 @@
 #include "core/AppPaths.h"
 #include "core/GraphBuilder.h"
 #include "core/ModuleRegistry.h"
+#include "control/Session.h"
 #include "core/RtCheck.h"
 #include "preset/PresetStore.h"
 #include "render/OfflineRenderer.h"
@@ -342,6 +343,34 @@ TEST_CASE("sampler: loading state, silence while loading, failures", "[sampler]"
         CHECK(SamplerModule::liveCores() == cores);
         CHECK(SamplerModule::totalLoads() == loads);
     }
+}
+
+TEST_CASE("sampler: failed loads surface as render warnings and session log errors", "[sampler]") {
+    const Patch p = samplerPatch("assets/samples/does-not-exist/x.sfz");
+    const RenderResult r = renderNotes(p, OfflineRenderer::notesToEvents({{60, 0.0, 0.1, 100}}), 0.05);
+    bool warned = false;
+    for (const auto& w : r.warnings) warned = warned || (w.find("sampler") != std::string::npos && w.find("x.sfz") != std::string::npos);
+    INFO(r.warnings.size());
+    CHECK(warned);
+
+    // Session: reported once per module via log("error"), not again on the next poll.
+    Engine engine;
+    engine.prepare(kSr, 64);
+    Session s(engine, defaultRegistry(), AppPaths::discover());
+    std::vector<std::string> logs;
+    s.log = [&](const std::string& level, const std::string& msg) {
+        if (level == "error") logs.push_back(msg);
+    };
+    s.setPatch(p);
+    const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (logs.empty() && std::chrono::steady_clock::now() < end) {
+        s.pollModuleErrors();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    REQUIRE(logs.size() == 1);
+    CHECK(logs[0].find("sampler") != std::string::npos);
+    CHECK(s.pollModuleErrors() == 0);
+    CHECK(logs.size() == 1);
 }
 
 TEST_CASE("sampler: graph rebuild reuses the instance without reloading", "[sampler][graph]") {

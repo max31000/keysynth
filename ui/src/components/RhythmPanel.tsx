@@ -183,7 +183,8 @@ function Meter({ pattern }: { pattern: Pattern }) {
 
 /** Collapsible drum machine: pattern browser, transport, meter/swing, step grid, kit params. */
 export function RhythmPanel() {
-  const [open, setOpen] = useState(() => readPref(OPEN_KEY, '1') === '1');
+  // First run: collapsed on short screens so the instrument panel gets the room (the choice is remembered).
+  const [open, setOpen] = useState(() => readPref(OPEN_KEY, typeof window !== 'undefined' && window.innerHeight < 1000 ? '0' : '1') === '1');
   const [tab, setTab] = useState<'steps' | 'kit'>(() => (readPref(TAB_KEY, 'steps') === 'kit' ? 'kit' : 'steps'));
   const t = useEngine((s) => s.transport);
   const snap = useEngine((s) => s.pattern);

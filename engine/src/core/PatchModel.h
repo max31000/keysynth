@@ -49,6 +49,9 @@ public:
     void removeFx(NodeId fx);
     void moveFx(NodeId fx, int to);
     void setModuleState(NodeId node, const nlohmann::json& state);
+    // A module's loadState wrote params (fm .syx voice, Module::loadStateWroteParams): take its params and state
+    // into the patch. Does not mark the patch dirty. False if the node is gone.
+    bool adoptModuleState(NodeId node, const std::map<std::string, float>& params, const nlohmann::json& state);
 
     // --- param-like edits (no rebuild; caller updates the live graph) ---
     void setZone(NodeId layer, const Zone& zone); // sanitized

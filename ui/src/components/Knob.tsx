@@ -134,7 +134,9 @@ export function Knob({ spec, value, onChange, size = 44, label, bare, className 
       </div>
       {!bare && (
         <>
-          <div className="knob-label">{name}</div>
+          <div className="knob-label" title={name}>
+            {name}
+          </div>
           <div className="knob-readout">{text}</div>
         </>
       )}
