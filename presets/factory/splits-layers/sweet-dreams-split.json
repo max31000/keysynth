@@ -1,0 +1,165 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Sweet Dreams Split (SH-101 + OB-X)",
+    "category": "Splits & Layers",
+    "tags": [
+      "80s",
+      "eurythmics",
+      "sh-101",
+      "oberheim",
+      "split",
+      "bass"
+    ],
+    "description": "Split at C4. Left hand: Roland SH-101-style mono bass (saw + square sub, resonant IR3109 filter, short decay) with a dotted-eighth echo. Right hand: Oberheim OB-X-style soft string/flute lead with chorus and hall. Reference: Eurythmics - Sweet Dreams (Are Made of This) (Dave Stewart: SH-101 bass riff, Oberheim OB-X strings).",
+    "author": "factory"
+  },
+  "tempo": 126,
+  "layers": [
+    {
+      "name": "SH-101 Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 59,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "sub_level": 0.6,
+          "sub_octave": 0,
+          "filter_model": 1,
+          "cutoff": 380,
+          "resonance": 0.5,
+          "key_track": 0.4,
+          "filter_env_amt": 3.2,
+          "filter_vel": 0.6,
+          "fenv_attack": 0.001,
+          "fenv_decay": 0.16,
+          "fenv_sustain": 0.12,
+          "fenv_release": 0.1,
+          "amp_attack": 0.001,
+          "amp_decay": 0.35,
+          "amp_sustain": 0.55,
+          "amp_release": 0.08,
+          "amp_vel": 0.3,
+          "voice_mode": 1,
+          "drift": 0.1,
+          "volume_db": -0.5
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "sync": 10,
+            "time": 375,
+            "feedback": 0.28,
+            "mix": 0.16,
+            "low_cut_hz": 250,
+            "high_cut_hz": 3500
+          }
+        }
+      ]
+    },
+    {
+      "name": "OB-X Strings",
+      "zone": {
+        "key_lo": 60,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.4,
+          "osc2_pwm": 0.3,
+          "osc2_level": 0.7,
+          "osc2_fine": 5,
+          "filter_model": 2,
+          "cutoff": 2400,
+          "resonance": 0.1,
+          "key_track": 0.4,
+          "filter_env_amt": 0.8,
+          "fenv_attack": 0.15,
+          "fenv_decay": 1.0,
+          "fenv_sustain": 0.7,
+          "amp_attack": 0.06,
+          "amp_decay": 1.0,
+          "amp_sustain": 0.9,
+          "amp_release": 0.5,
+          "amp_vel": 0.25,
+          "lfo1_rate": 0.6,
+          "lfo2_rate": 5.5,
+          "hpf_cutoff": 200,
+          "drift": 0.3,
+          "volume_db": -7.5
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "rate": 0.6,
+            "depth": 0.5,
+            "mix": 0.5,
+            "width": 1.0,
+            "hiss": 0.05
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.28,
+            "size": 0.65,
+            "decay": 2.2,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Industrial Choir Stack",
+    "category": "Choir & Vox",
+    "tags": [
+      "rammstein",
+      "flake",
+      "choir",
+      "mellotron",
+      "pad",
+      "layer",
+      "industrial"
+    ],
+    "description": "The Rammstein 'industrial choir': SSO mixed choir doubled with lo-fi Mellotron 8-voice choir tapes and a dark saw pad underneath, ensemble shimmer and a large hall. Reference: Rammstein choir pads (Mein Teil / Sonne / Mutter style choir keyboards).",
+    "author": "factory"
+  },
+  "tempo": 90,
+  "layers": [
+    {
+      "name": "SSO Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 2.3,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 9.0
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Chorus - Mixed.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Mellotron Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 3.3
+        },
+        "state": {
+          "sfz": "assets/samples/mellosfzotron/8Choir.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "ensemble",
+          "bypass": false,
+          "params": {
+            "mix": 0.4,
+            "depth": 0.6,
+            "rate": 0.6,
+            "depth_fast": 0.35,
+            "rate_fast": 6.0,
+            "tone": 0.6,
+            "width": 1.0,
+            "hiss": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dark Pad",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_fine": -8,
+          "osc2_octave": -1,
+          "osc2_level": 0.7,
+          "filter_model": 0,
+          "cutoff": 600,
+          "resonance": 0.1,
+          "key_track": 0.4,
+          "filter_env_amt": 0.8,
+          "fenv_attack": 0.8,
+          "fenv_decay": 2.0,
+          "fenv_sustain": 0.6,
+          "amp_attack": 0.5,
+          "amp_decay": 1.5,
+          "amp_sustain": 0.9,
+          "amp_release": 1.2,
+          "amp_vel": 0.2,
+          "hpf_cutoff": 60,
+          "drift": 0.3,
+          "volume_db": -14.7
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.28,
+          "size": 0.85,
+          "decay": 2.6,
+          "predelay_ms": 35,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Running Up That Hill Pad",
+    "category": "Synth Pad",
+    "tags": [
+      "80s",
+      "kate bush",
+      "fairlight",
+      "cello",
+      "pad",
+      "layer"
+    ],
+    "description": "Fairlight-flavoured layer: Mellotron cello tapes (lo-fi sampled bowed attack) over a dark, slow analog pad, string-machine ensemble and a long hall. Approximation of Kate Bush - Running Up That Hill (Fairlight CMI cello/string riff and synth pad).",
+    "author": "factory"
+  },
+  "tempo": 108,
+  "layers": [
+    {
+      "name": "Lo-fi Cello",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 7.2
+        },
+        "state": {
+          "sfz": "assets/samples/mellosfzotron/Cello.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Dark Pad",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.35,
+          "osc2_pwm": 0.35,
+          "osc2_level": 0.6,
+          "osc2_fine": 6,
+          "filter_model": 1,
+          "cutoff": 900,
+          "resonance": 0.12,
+          "key_track": 0.4,
+          "filter_env_amt": 1.0,
+          "fenv_attack": 0.6,
+          "fenv_decay": 1.5,
+          "fenv_sustain": 0.6,
+          "fenv_release": 1.0,
+          "amp_attack": 0.35,
+          "amp_decay": 1.0,
+          "amp_sustain": 0.9,
+          "amp_release": 1.0,
+          "amp_vel": 0.2,
+          "lfo1_rate": 0.4,
+          "hpf_cutoff": 90,
+          "drift": 0.3,
+          "volume_db": -7.8
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "ensemble",
+          "bypass": false,
+          "params": {
+            "mix": 0.5,
+            "depth": 0.6,
+            "rate": 0.6,
+            "depth_fast": 0.35,
+            "rate_fast": 6.0,
+            "tone": 0.6,
+            "width": 1.0,
+            "hiss": 0.03
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.3,
+          "size": 0.8,
+          "decay": 2.6,
+          "predelay_ms": 30,
+          "damp_hf": 0.55,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
