@@ -235,7 +235,7 @@ Patch (data)                              RackGraph (live, audio thread)
 | typeId | What | Covers |
 |---|---|---|
 | `va` | Virtual analog poly: 3 osc (saw/pulse+PWM/tri/sine/supersaw/noise), sub, sync/ring, ladder 24 dB + SVF 12 dB (LP/BP/HP), amp+filter ADSR, 2 LFO, fixed mod slots, unison/detune/spread, glide, mono/legato | Juno/Jupiter/OB-Xa/Prophet/Minimoog: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
-| `fm` | DX7-compatible 6-op FM via vendored MSFA; loads .syx banks | DX7 E.Piano, bells, basses |
+| `fm` | DX7-compatible 6-op FM via vendored MSFA (Apache-2.0, Dexed fork; engine models Modern / Mark I / OPL, the latter two GPL-3.0+): every DX7 voice param as a ParamSpec (`alg`, `feedback`, `op1_level`, `op1_eg_rate1`…), macros (brightness, attack/release, tune, voices), DX7-style wheel/aftertouch routing; state `{syx, voice}` loads a voice from a 32-voice bulk or single dump into the ParamSet. Renders 64-sample MSFA chunks ahead (latencySamples 0, events ≤63 samples late); one sample rate per process (msfa globals) | DX7 E.Piano, bells, basses, brass |
 | `organ` | Tonewheel: 9 drawbars, percussion, key click, scanner vibrato/chorus, crosstalk; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: Vox Continental / Farfisa voicings, footages, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |

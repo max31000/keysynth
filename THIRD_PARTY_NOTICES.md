@@ -30,3 +30,13 @@ Attribution text for CC BY libraries:
 
 Local fixes applied after download (see `patches` in `assets/samples.json`): Linnoleum `d22` hi-hat sample paths and
 SSO `Concert Harp.sfz` root-absolute paths. These change only the SFZ mapping text, not the samples.
+
+## Code
+
+| Component | Source | Licence | Where |
+|---|---|---|---|
+| MSFA (music-synthesizer-for-android DX7 core), Dexed fork | Google Inc., Pascal Gauthier, Jean Pierre Cimalando; github.com/asb2m10/dexed `Source/msfa` @ 2e182b3 | Apache-2.0 (modified, see `third_party/msfa/README.md`) | `third_party/msfa/` |
+| Dexed EngineMkI / EngineOpl | Pascal Gauthier; EngineOpl based on ppplay (Steffen Ohrendorf) and OPL3 Java code (Robson Cozendey); github.com/asb2m10/dexed `Source/` @ 2e182b3 | GPL-3.0-or-later (compatible with this AGPL-3.0-or-later project); `EngineMkI.cpp` modified | `third_party/msfa/dexed/` |
+
+DX7 banks: `assets/dx7/keysynth-fm-factory.syx` contains only original keysynth voices. Third-party DX7 cartridges
+(Yamaha ROM banks, Dexed's bundled carts) are not redistributed.
