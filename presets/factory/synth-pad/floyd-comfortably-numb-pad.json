@@ -1,0 +1,155 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Comfortably Numb Pad (Floyd)",
+    "category": "Synth Pad",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "prophet-5",
+      "hammond",
+      "pad",
+      "layer",
+      "70s"
+    ],
+    "description": "Prophet-5-style pad (two detuned saws, 24 dB filter with slow envelope swell, BBD chorus) layered with a quiet Hammond on slow Leslie, in a long hall: the floating chords under the verses. Reference: Pink Floyd - Comfortably Numb (The Wall, 1979).",
+    "author": "factory"
+  },
+  "tempo": 64,
+  "layers": [
+    {
+      "name": "Prophet Pad",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.6,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.35,
+          "volume_db": -10,
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.8,
+          "osc2_fine": 7,
+          "filter_model": 1,
+          "cutoff": 1500,
+          "resonance": 0.15,
+          "key_track": 0.5,
+          "filter_env_amt": 1.2,
+          "fenv_attack": 0.9,
+          "fenv_decay": 2.0,
+          "fenv_sustain": 0.6,
+          "fenv_release": 1.2,
+          "amp_attack": 0.6,
+          "amp_decay": 1.0,
+          "amp_sustain": 1.0,
+          "amp_release": 1.2,
+          "amp_vel": 0.2,
+          "hpf_cutoff": 100,
+          "pan_spread": 0.4
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.4,
+            "width": 1.0,
+            "hiss": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hammond",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.6,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 6,
+          "db_5_1_3": 0,
+          "db_8": 8,
+          "db_4": 4,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "vibrato": 6,
+          "click": 0.05,
+          "leakage": 0.25,
+          "drive": 0.08,
+          "volume_db": -12
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.08,
+            "spread": 0.8,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.3,
+          "decay": 2.0,
+          "size": 0.75,
+          "predelay_ms": 30,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

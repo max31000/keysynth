@@ -1,0 +1,115 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Run Like Hell Delay Synth (Floyd)",
+    "category": "Synth Lead",
+    "tags": [
+      "pink floyd",
+      "prophet-5",
+      "delay",
+      "dotted eighth",
+      "80s",
+      "poly"
+    ],
+    "description": "Bright Prophet-style poly synth (pulse + saw, open filter, quick decay to a medium sustain) into a tempo-synced dotted-1/8 ping-pong delay at 145 BPM, borrowing the galloping echo of Gilmour's guitar for the keyboard: play quarter notes and the repeats fill in the rhythm. In the style of Pink Floyd - Run Like Hell (The Wall, 1979).",
+    "author": "factory"
+  },
+  "tempo": 145,
+  "layers": [
+    {
+      "name": "Prophet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 9.2,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.2,
+          "volume_db": -10,
+          "osc1_wave": 1,
+          "osc1_pw": 0.4,
+          "osc2_wave": 0,
+          "osc2_level": 0.7,
+          "osc2_fine": 5,
+          "filter_model": 1,
+          "cutoff": 2200,
+          "resonance": 0.2,
+          "key_track": 0.6,
+          "filter_env_amt": 1.6,
+          "fenv_attack": 0.002,
+          "fenv_decay": 0.4,
+          "fenv_sustain": 0.35,
+          "fenv_release": 0.2,
+          "amp_attack": 0.002,
+          "amp_decay": 0.6,
+          "amp_sustain": 0.6,
+          "amp_release": 0.2,
+          "amp_vel": 0.3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.3,
+            "width": 1.0,
+            "hiss": 0.05
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "time": 375,
+            "sync": 10,
+            "feedback": 0.35,
+            "mix": 0.3,
+            "low_cut_hz": 150,
+            "high_cut_hz": 6000
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.12,
+            "decay": 1.0,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

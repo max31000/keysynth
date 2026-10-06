@@ -1,0 +1,153 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "When the Music's Over (Doors)",
+    "category": "Splits & Layers",
+    "tags": [
+      "doors",
+      "manzarek",
+      "vox",
+      "continental",
+      "split",
+      "60s",
+      "psychedelic"
+    ],
+    "description": "Rhodes Piano Bass left hand (to B2) and a darker, heavier Vox Continental right hand: 16' + 8' + 4' + IV with reed, deep vibrato, driven harder into the amp, and a chamber. For the brooding organ riff and the long improvised middle section. Reference: The Doors - When the Music's Over (Strange Days, 1967).",
+    "author": "factory"
+  },
+  "tempo": 110,
+  "layers": [
+    {
+      "name": "Piano Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 47,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.3,
+        "pan": -0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 4,
+          "tone": 0.35,
+          "bark": 0.35,
+          "hammer_hardness": 0.4,
+          "velocity_curve": 0.15,
+          "dynamics": 24,
+          "decay": 0.9,
+          "release": 0.6,
+          "tine_mix": 0.55,
+          "strike_position": 0.45,
+          "pickup_position": 0.55,
+          "pickup_distance": 0.45,
+          "drive": 0.15,
+          "noise": 0.35,
+          "key_variation": 0.4,
+          "polyphony": 8,
+          "volume_db": -1.0
+        },
+        "state": {}
+      },
+      "fx": []
+    },
+    {
+      "name": "Vox Continental",
+      "zone": {
+        "key_lo": 48,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.3,
+        "pan": 0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 4,
+          "vox_8": 8,
+          "vox_4": 6,
+          "vox_2": 0,
+          "vox_iv": 2,
+          "vox_flute": 0,
+          "vox_reed": 8,
+          "vibrato": 1,
+          "vibrato_rate": 5.6,
+          "vibrato_depth": 0.5,
+          "bright": 1,
+          "leakage": 0.2,
+          "click": 0.12,
+          "velocity": 0,
+          "volume_db": -3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 11,
+            "asymmetry": 0.3,
+            "tone": 0.4,
+            "level_db": -5.5,
+            "mix": 0.55
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 80,
+            "p1_hz": 400,
+            "p1_db": -1.5,
+            "p1_q": 1.0,
+            "hs_hz": 8000,
+            "hs_db": -4
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.18,
+            "decay": 1.7,
+            "size": 0.55,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

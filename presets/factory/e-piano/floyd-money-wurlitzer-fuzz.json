@@ -1,0 +1,126 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Money Wurlitzer Fuzz (Floyd)",
+    "category": "E.Piano",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "wurlitzer",
+      "fuzz",
+      "70s",
+      "drive"
+    ],
+    "description": "Wurlitzer 200A preamp pushed hard, then a fuzz blended in parallel and a short Binson-style slapback (the record's wah pedal is left to the player), mid-forward EQ: the gritty, barking electric piano that doubles the 7/4 riff. Reference: Pink Floyd - Money (The Dark Side of the Moon, 1973).",
+    "author": "factory"
+  },
+  "tempo": 123,
+  "layers": [
+    {
+      "name": "Wurlitzer",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.5,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 3,
+          "tone": 0.55,
+          "bark": 0.55,
+          "hammer_hardness": 0.6,
+          "velocity_curve": 0.1,
+          "dynamics": 28,
+          "decay": 0.9,
+          "release": 0.8,
+          "tine_mix": 0.5,
+          "pickup_position": 0.55,
+          "pickup_distance": 0.4,
+          "drive": 0.4,
+          "noise": 0.3,
+          "polyphony": 32,
+          "volume_db": -1
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "drive_db": 14,
+            "asymmetry": 0.35,
+            "tone": 0.42,
+            "level_db": -8,
+            "mix": 0.45
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 90,
+            "p2_hz": 1100,
+            "p2_db": 2,
+            "p2_q": 0.8,
+            "hs_hz": 7000,
+            "hs_db": -4
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 110,
+            "sync": 0,
+            "feedback": 0.15,
+            "mix": 0.14,
+            "low_cut_hz": 150,
+            "high_cut_hz": 4000,
+            "wow": 0.2,
+            "flutter": 0.3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.1,
+            "decay": 0.8,
+            "size": 0.3,
+            "predelay_ms": 5,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

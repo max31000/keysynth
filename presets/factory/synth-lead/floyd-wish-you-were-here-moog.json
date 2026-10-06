@@ -1,0 +1,115 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Wish You Were Here Moog (Floyd)",
+    "category": "Synth Lead",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "minimoog",
+      "lead",
+      "70s",
+      "glide"
+    ],
+    "description": "Thinner, nasal Minimoog lead (saw + narrow pulse, ladder filter with moderate resonance, legato glide, delayed vibrato) with a soft echo and plate, for the wistful synth lines. Reference: Pink Floyd - Wish You Were Here (1975), Rick Wright's Minimoog.",
+    "author": "factory"
+  },
+  "tempo": 60,
+  "layers": [
+    {
+      "name": "Minimoog",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 6.7,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.3,
+          "volume_db": -6,
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.25,
+          "osc2_level": 0.6,
+          "osc2_fine": 4,
+          "filter_model": 0,
+          "cutoff": 950,
+          "resonance": 0.3,
+          "filter_drive": 0.15,
+          "key_track": 0.55,
+          "filter_env_amt": 1.5,
+          "fenv_attack": 0.02,
+          "fenv_decay": 0.7,
+          "fenv_sustain": 0.5,
+          "fenv_release": 0.4,
+          "amp_attack": 0.01,
+          "amp_decay": 0.5,
+          "amp_sustain": 1.0,
+          "amp_release": 0.4,
+          "amp_vel": 0.2,
+          "voice_mode": 2,
+          "glide": 0.07,
+          "glide_mode": 1,
+          "lfo1_wave": 1,
+          "lfo1_rate": 5.2,
+          "lfo1_delay": 0.6,
+          "lfo1_pitch": 0.25,
+          "mw_vibrato": 0.6
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "time": 380,
+            "sync": 0,
+            "feedback": 0.25,
+            "mix": 0.15,
+            "low_cut_hz": 150,
+            "high_cut_hz": 4500,
+            "offset": 10
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.18,
+            "decay": 1.6,
+            "size": 0.5,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

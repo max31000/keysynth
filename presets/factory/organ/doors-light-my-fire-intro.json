@@ -1,0 +1,100 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Light My Fire Intro (Doors)",
+    "category": "Organ",
+    "tags": [
+      "doors",
+      "manzarek",
+      "vox",
+      "continental",
+      "60s",
+      "intro"
+    ],
+    "description": "Full Vox Continental registration for the baroque-style fanfare intro: 16' + 8' + 4' + 2' + IV mixture with flute and reed, vibrato on, into a warm echo chamber (Sunset Sound's chamber on the first album). Reference: The Doors - Light My Fire (1967), intro/outro figure.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Vox Continental",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 6,
+          "vox_8": 8,
+          "vox_4": 8,
+          "vox_2": 6,
+          "vox_iv": 3,
+          "vox_flute": 4,
+          "vox_reed": 6,
+          "vibrato": 1,
+          "vibrato_rate": 5.8,
+          "vibrato_depth": 0.4,
+          "bright": 1,
+          "leakage": 0.2,
+          "click": 0.12,
+          "velocity": 0,
+          "volume_db": -4
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "p1_hz": 300,
+            "p1_db": -1.5,
+            "p1_q": 0.9,
+            "hs_hz": 8000,
+            "hs_db": -3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.22,
+            "decay": 1.8,
+            "size": 0.55,
+            "predelay_ms": 18,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

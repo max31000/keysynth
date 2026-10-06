@@ -1,0 +1,153 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Break On Through (Doors)",
+    "category": "Splits & Layers",
+    "tags": [
+      "doors",
+      "manzarek",
+      "vox",
+      "continental",
+      "split",
+      "60s",
+      "bass"
+    ],
+    "description": "Punchy Rhodes Piano Bass left hand (to B2) for the driving bossa-rock bass line, Vox Continental right hand with 8' + 4' + reed, shallow vibrato and amp grit for the stabbing riff, small room. Reference: The Doors - Break On Through (To the Other Side) (1967).",
+    "author": "factory"
+  },
+  "tempo": 180,
+  "layers": [
+    {
+      "name": "Piano Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 47,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 2.0,
+        "pan": -0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 4,
+          "tone": 0.44999999999999996,
+          "bark": 0.44999999999999996,
+          "hammer_hardness": 0.55,
+          "velocity_curve": 0.15,
+          "dynamics": 24,
+          "decay": 0.9,
+          "release": 0.6,
+          "tine_mix": 0.55,
+          "strike_position": 0.45,
+          "pickup_position": 0.55,
+          "pickup_distance": 0.45,
+          "drive": 0.25,
+          "noise": 0.35,
+          "key_variation": 0.4,
+          "polyphony": 8,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": []
+    },
+    {
+      "name": "Vox Continental",
+      "zone": {
+        "key_lo": 48,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 2.0,
+        "pan": 0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 0,
+          "vox_8": 8,
+          "vox_4": 6,
+          "vox_2": 2,
+          "vox_iv": 0,
+          "vox_flute": 0,
+          "vox_reed": 8,
+          "vibrato": 1,
+          "vibrato_rate": 5.8,
+          "vibrato_depth": 0.3,
+          "bright": 1,
+          "leakage": 0.2,
+          "click": 0.18,
+          "velocity": 0,
+          "volume_db": -2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 9,
+            "asymmetry": 0.3,
+            "tone": 0.45,
+            "level_db": -4,
+            "mix": 0.6
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 100,
+            "p2_hz": 1800,
+            "p2_db": 1.5,
+            "p2_q": 0.9,
+            "hs_hz": 8500,
+            "hs_db": -3.5
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.12,
+            "decay": 0.9,
+            "size": 0.35,
+            "predelay_ms": 8,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
