@@ -163,7 +163,10 @@ sample rate, buffer, device-reported latency and (after the first callback) the 
 The chosen device is saved to `userdata/settings.json`; delete it to return to auto-selection. Note: ASIO drivers
 may only accept the buffer size set in their own control panel (the UR22C driver did: 1024 regardless of
 `--asio-buffer`; it offers only `[1024]`, printed as "buffer sizes offered by the driver") — change it there, from the
-UI's "Open ASIO panel" button (protocol `open_audio_panel`, PROTOCOL.md *Audio latency*). Quit with Ctrl+C.
+UI's "Open ASIO panel" button (protocol `open_audio_panel`, PROTOCOL.md *Audio latency*). Every device event
+(open, driver restart with old → new buffer/rate, stop, stall, recovery attempts) is appended to
+`userdata/logs/audio.log` (path printed at startup) — attach it to audio bug reports. "Restart audio" in the audio
+dialog (`restart_audio`) reopens the device with the driver's current settings. Quit with Ctrl+C.
 
 Quick protocol smoke test (Python, `python -m pip install websockets`):
 

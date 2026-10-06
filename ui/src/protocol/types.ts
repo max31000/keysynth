@@ -245,13 +245,15 @@ export interface AddFxMsg { type: 'add_fx'; id?: number; layer: NodeId; module: 
 export interface SetAudioDeviceMsg { type: 'set_audio_device'; id?: number; device_type: string; name: string; sample_rate?: number; buffer_size?: number }
 /** Opens the driver's own control panel (ASIO buffer size); the device restarts → `devices` + `state` broadcast. */
 export interface OpenAudioPanelMsg { type: 'open_audio_panel'; id?: number }
+/** Closes + reopens the audio device with the driver's current buffer/rate → `devices`, then `state` to all. */
+export interface RestartAudioMsg { type: 'restart_audio'; id?: number }
 
 export type ClientMsg =
   | HelloMsg | GetCatalogMsg | SetParamMsg | LoadPresetMsg | SavePresetMsg | ListPresetsMsg | GetPatchMsg
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
   | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
-  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg;
+  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg;
 
 export type ClientMsgType = ClientMsg['type'];
 

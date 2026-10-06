@@ -238,7 +238,8 @@ Patch (data)                              RackGraph (live, audio thread)
   (node ids of unrelated patches must not share modules); edits of the current patch reuse.
 - **Retire.** Old graph pointer → retire SPSC (capacity 8). If push fails, the audio thread keeps it and retries next
   block; it never frees. Control thread drains on a 50 ms timer and deletes.
-- Device/sample-rate/buffer change: stop device → rebuild graph with new prepare args (no reuse) → restart.
+- Device/sample-rate/buffer change: stop device → rebuild graph with new prepare args (no reuse) → restart
+  (a restart with unchanged rate/buffer keeps the current graph; §6 *Device restarts behind our back*).
 - Heavy resources (samples, syx banks, DLLs) are loaded on loader threads and cached ref-counted in
   `SampleLibrary`/`PluginHost`; released only on the control thread.
 
@@ -260,6 +261,30 @@ Patch (data)                              RackGraph (live, audio thread)
   `audioDeviceAboutToStart` → Engine::prepare + rebuild, then asynchronously saves settings and fires
   `AudioControl::onChanged` (app: broadcast `devices` + `state`; setDevice reports itself instead).
   Details: PROTOCOL.md *Audio latency*.
+- **Device restarts behind our back.** The driver can change buffer size / sample rate at any time (ASIO
+  `kAsioResetRequest` / `kAsioBufferSizeChange` / `kAsioResyncRequest`, e.g. a buffer change in the Yamaha Steinberg
+  driver's own settings app). JUCE's ASIO device then closes and reopens itself 500 ms later on the message thread
+  (`timerCallback`) and calls `audioDeviceAboutToStart` with the new size — **even when that reopen failed**, leaving a
+  device that reports "playing" but never calls back. AudioHost therefore:
+  - re-prepares on every `audioDeviceAboutToStart` with the device's *current* sample rate/buffer (only when they
+    changed or no graph exists: unchanged restarts keep the graph); `Engine::process` splits any callback larger than
+    `maxBlock` into ≤ maxBlock chunks, so a device delivering more than it announced is still safe (no allocation);
+  - treats `audioDeviceAboutToStart` on a device that is not open / has `getLastError()`, `audioDeviceError` (note:
+    JUCE's AudioDeviceManager currently swallows it — its `CallbackMaxSizeEnforcer` does not forward errors), a
+    vanished device, and **no callbacks while it should run** (watchdog, message-thread timer every 100 ms, paused
+    while the driver panel is open: > 500 ms = stall, logged; > 1.5 s = failure — longer than JUCE's own 500 ms
+    reset + reopen, so a normal driver-initiated change is never interrupted) as a failure → **recovery**: close and
+    reopen the same type/name with the driver's current settings (buffer: the user's explicit size if any — JUCE falls
+    back to the driver's preferred size when it is not offered — else the preferred size; ASIO rate 0 → the driver's
+    current rate), retry with backoff 1 → 2 → 4 … 30 s until callbacks flow again. A device that failed to open at
+    startup is retried the same way;
+  - persists `audio.bufferExplicit` next to `bufferSize`: an ASIO size is re-requested at startup only when the user
+    chose it explicitly (`set_audio_device` / `--asio-buffer`, and the driver accepted it); after a driver-initiated
+    change the driver's size wins, so a stale saved size is never forced;
+  - logs every device event (start/stop/error/stall/recovery, with type, name, rate, buffer, latencies, reason) to
+    `userdata/logs/audio.log` (timestamped, rotated at 1 MB, message thread only — the audio thread only bumps atomics
+    and copies an error text into a fixed buffer) and forwards unexpected ones as `log { notify: true }`
+    (`AudioControl::onLog`). `restart_audio` (protocol) runs the same recovery on demand.
 - On the first callback `platform/` registers the audio thread with MMCSS (`AvSetMmThreadCharacteristicsW
   "Pro Audio"`) and disables power throttling for it (Intel hybrid P/E cores).
 - `MidiHub` opens all MIDI inputs, one SPSC per device; rescan on demand (protocol `rescan_midi`) and at startup.

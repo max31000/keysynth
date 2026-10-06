@@ -51,13 +51,17 @@ public:
     // error. Drivers like the Yamaha Steinberg USB ASIO only accept the buffer size chosen there; the device
     // restarts afterwards and onChanged fires.
     virtual std::string openControlPanel() { return "this audio device has no control panel"; }
+    // Closes and reopens the current device with the driver's current buffer/rate (`restart_audio`). Synchronous
+    // (message thread). Returns "" on success, else an error (AudioHost's watchdog keeps retrying).
+    virtual std::string restart() { return "this audio device cannot be restarted"; }
 
     // Message thread: the device (re)started or its settings changed outside a setDevice call (driver reset
     // request after a control-panel change, panel closed). Set by the app to re-report `devices` + `state`.
     std::function<void()> onChanged;
-    // Message thread: a user-facing problem outside a request (reopening the device after the control panel
-    // failed). The app forwards it as `log { level: "error", notify: true }`.
-    std::function<void(const std::string& msg)> onError;
+    // Message thread: a device event outside a request (driver restart, stall, error, recovery, a failed reopen
+    // after the control panel). level "info"/"warn"/"error"; notify = the player must see it. The app forwards it as
+    // `log { level, message, notify }` (ARCHITECTURE §6).
+    std::function<void(const std::string& level, const std::string& msg, bool notify)> onLog;
 };
 
 class MidiControl {

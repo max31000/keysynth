@@ -71,4 +71,9 @@ std::string NullAudioDriver::setDevice(const std::string& type, const std::strin
     return {};
 }
 
+std::string NullAudioDriver::restart() {
+    start(); // stop + prepare + rebuild + start
+    return {};
+}
+
 } // namespace ks

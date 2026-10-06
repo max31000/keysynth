@@ -87,6 +87,10 @@ describe('mock engine round trip', () => {
     await until(() => store.getState().audio?.panelOpen === false && store.getState().audio?.bufferSize === 128);
     await until(() => store.getState().logs.some((l) => l.level === 'info' && l.message.includes('buffer 128')));
     expect(store.getState().lastError).toBeNull(); // info logs never toast
+
+    await store.getState().restartAudio();
+    expect(store.getState().lastError).toBeNull();
+    expect(store.getState().audio?.running).toBe(true);
   });
 
   it('save_preset adds a user preset', async () => {

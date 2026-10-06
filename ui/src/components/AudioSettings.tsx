@@ -152,6 +152,15 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
             <button type="button" className="btn" onClick={() => void actions().listDevices()}>
               Rescan devices
             </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void actions().restartAudio()}
+              disabled={panelOpen || !audio}
+              title="Close and reopen the audio device with the driver's current buffer size (use when sound stopped after changing driver settings)"
+            >
+              Restart audio
+            </button>
             {audio?.hasControlPanel && !slow && (
               <button type="button" className="btn" onClick={() => void actions().openAudioPanel()} disabled={panelOpen}>
                 Open ASIO panel

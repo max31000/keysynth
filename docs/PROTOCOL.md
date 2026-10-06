@@ -38,6 +38,7 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `list_devices` | — | `devices` |
 | `set_audio_device` | `{ device_type, name, sample_rate?, buffer_size? }` | `devices` (also to others; + `log` warn if the driver kept another buffer size), then `state` to all; `error` `busy` while the driver panel is open |
 | `open_audio_panel` | — (opens the driver's own settings panel, ASIO) | `open_audio_panel_ok`, or `error` `not_available` / `busy` (already open) (see *Audio latency*) |
+| `restart_audio` | — (close + reopen the current device with the driver's current buffer/rate; ASIO: the panel's size) | `devices` (also to others), then `state` to all; `error` `busy` while the driver panel is open, `device_error` when the reopen failed (the watchdog keeps retrying), `not_available` without an audio host |
 | `panic` | — | none (all notes off, reset tails) |
 | `list_plugins` | — | `list_plugins_ok { plugins: PluginStatus[], faust: { available, version, reason } }` |
 | `reload_plugin` | `{ name }` (plugin directory name, `[a-z][a-z0-9_]*`) | `reload_plugin_ok { name }`, then `plugin_status` events |
@@ -73,6 +74,13 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
   device restarts. Every device (re)start re-prepares the engine (full graph rebuild) and then broadcasts `devices` +
   `state` to all clients, plus a `log { level: "info" }` when buffer/rate/device changed; the new size is saved in
   `userdata/settings.json`.
+- Driver-initiated restarts, stalls and errors (ARCHITECTURE §6 *Device restarts behind our back*): when the driver
+  restarts the device itself (buffer/rate changed in its own settings app) the engine re-prepares and broadcasts
+  `devices` + `state` plus `log { level: "info", notify: true }` when buffer/rate changed ("buffer 256 → 128"). When
+  the device stops calling back for > 1.5 s (> 500 ms is only logged), reports an error, or a driver restart failed, the engine sends `log { level: "error", notify:
+  true }`, reopens it with the driver's current settings (retrying with backoff) and sends `log { level: "info",
+  notify: true }` once audio flows again. `restart_audio` does the same on demand (UI: "Restart audio" in the audio
+  dialog). Every device event is also written to `userdata/logs/audio.log`.
 - The UI warns when `outputLatencyMs` > 8 ms (top bar badge + audio dialog, "Open ASIO panel", pick 64 or 128).
 
 `PluginStatus = { name, typeId, source: "faust"|"dll", state: "compiling"|"ok"|"error"|"faulted"|"removed",

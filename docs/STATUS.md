@@ -3,6 +3,13 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Audio robustness after driver-side buffer/rate changes (bug: UR22C buffer change broke sound until restart).
+  Root cause (code reading, JUCE 8.0.15): `ASIOAudioIODevice::timerCallback` (reset request) ignores a failed
+  reopen and restarts callbacks anyway → "playing" device with no callbacks; also reads the preferred size from the
+  old driver instance before reloading it. AudioHost now: re-prepares on any new rate/buffer, detects failed restarts
+  / stalls (> 0.5 s logged, > 1.5 s reopen) / vanished device and reopens with the driver's current settings (backoff), never forces a stale
+  saved ASIO size (`bufferExplicit`), logs device events to `userdata/logs/audio.log` + notify toasts, protocol
+  `restart_audio` + UI "Restart audio". Fake ASIO device tests (`[audio]`). Needs confirmation on the UR22C.
 - Consistency: one `sync` note-division enum (dsp/NoteDivision.h) for all tempo-synced modules, patch format 2 +
   migrations; master volume before limiter; all 115 factory presets at −16 LUFS ±1, ≤ −1 dBTP
   (`scripts/loudness.py --check`, docs/research/LOUDNESS.md); ks-render `--cc`/`--bend`.
@@ -34,7 +41,8 @@ Update when a chunk of work lands. Newest first inside each section.
 - (none)
 
 ## Next
-- Test on real hardware: ASIO panel button with UR22C, play-feel per engine on the P-143.
+- Test on real hardware: ASIO panel button with UR22C, buffer change in the Yamaha driver app while playing
+  (check `userdata/logs/audio.log`), play-feel per engine on the P-143.
 - Ideas from preset work: wah, Binson Echorec-style drum echo, step sequencer/arpeggiator, pitch-bend envelope for
   leads, Leslie usable on combo organ presets, split zones shown on the on-screen keyboard, sampler panel shows
   loaded SFZ.
