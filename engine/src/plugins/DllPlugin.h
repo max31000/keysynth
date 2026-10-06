@@ -10,6 +10,7 @@
 
 #include <keysynth/plugin_abi.h>
 
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -53,7 +54,8 @@ public:
     ~DllModule() override;
 
     bool valid() const noexcept { return inst_ != nullptr; }
-    bool faulted() const noexcept { return faulted_; }
+    bool faulted() const noexcept { return faulted_.load(std::memory_order_relaxed); }
+    static constexpr int kMaxNonFiniteBlocks = 8; // consecutive NaN/Inf blocks (after reset) before muting
 
     void prepare(double sampleRate, int maxBlock) override;
     void reset() override;
@@ -74,7 +76,8 @@ private:
     const ks_plugin_descriptor* d_;
     ks_instance inst_ = nullptr;
     std::vector<float> lastSent_;
-    bool faulted_ = false;
+    std::atomic<bool> faulted_{false}; // audio thread writes, control thread reads
+    int nonFiniteBlocks_ = 0;
     int tail_ = 0, latency_ = 0;
     // guardedProcess arguments
     AudioBlock* cur_ = nullptr;

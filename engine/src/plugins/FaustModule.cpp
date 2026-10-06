@@ -98,7 +98,7 @@ void FaustModuleBase::pullReadOnly(const FaustInstance& inst) noexcept {
 }
 
 void FaustModuleBase::fault(uint32_t code) noexcept {
-    faulted_ = true;
+    faulted_.store(true, std::memory_order_relaxed);
     v_->reportFault(code);
 }
 
@@ -124,13 +124,15 @@ void FaustInstrument::prepare(double sampleRate, int maxBlock) {
     instances_.resize(static_cast<size_t>(poly)); // never resized again: voices keep pointers
     valid_ = true;
     for (auto& inst : instances_) valid_ = valid_ && makeInstance(inst);
+    if (!valid_) v_->reportFault(kFaultNoInstance);
     for (int i = 0; i < kMaxVoices; ++i) alloc_.voice(i).inst = i < poly && valid_ ? &instances_[static_cast<size_t>(i)] : nullptr;
     alloc_.setPolyphony(poly);
     shared_.l.assign(static_cast<size_t>(maxBlock) + 1, 0.0f);
     shared_.r.assign(static_cast<size_t>(maxBlock) + 1, 0.0f);
     shared_.stereo = v_->numOutputs >= 2;
     shared_.maxReleaseSamples = static_cast<int64_t>(std::max(0.05f, v_->maxReleaseSeconds) * sampleRate);
-    faulted_ = false;
+    shared_.version = v_.get();
+    faulted_.store(false, std::memory_order_relaxed);
     reset();
 }
 
@@ -199,8 +201,9 @@ void FaustInstrument::Voice::render(AudioBlock& out, int start, int n) noexcept 
         faust::compute(inst->dsp, n - off, ins, o2);
     }
     if (!finiteBlock(sh.l.data(), n) || (sh.stereo && !finiteBlock(sh.r.data(), n))) {
-        // Plugin bug: drop this voice's block, clear its state, stop it.
+        // Plugin bug: drop this voice's block, clear its state, stop it, report.
         reset();
+        if (sh.version) sh.version->reportFault(kFaultNonFinite);
         return;
     }
     float* L = out.left + start;
@@ -260,7 +263,7 @@ void FaustInstrument::processBody() noexcept {
 }
 
 void FaustInstrument::process(AudioBlock& out, MidiEventSpan events, const ProcessContext& ctx) {
-    if (!valid_ || faulted_ || instances_.empty()) return; // buffer is already cleared
+    if (!valid_ || faulted() || instances_.empty()) return; // buffer is already cleared
     curOut_ = &out;
     curEvents_ = events;
     curCtx_ = &ctx;
@@ -287,9 +290,10 @@ void FaustEffect::prepare(double sampleRate, int maxBlock) {
     instances_.resize(dualMono ? 2 : 1);
     valid_ = true;
     for (auto& inst : instances_) valid_ = valid_ && makeInstance(inst);
+    if (!valid_) v_->reportFault(kFaultNoInstance);
     inL_.assign(static_cast<size_t>(maxBlock), 0.0f);
     inR_.assign(static_cast<size_t>(maxBlock), 0.0f);
-    faulted_ = false;
+    faulted_.store(false, std::memory_order_relaxed);
 }
 
 void FaustEffect::reset() {
@@ -333,8 +337,8 @@ void FaustEffect::processBody() noexcept {
 }
 
 void FaustEffect::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
-    if (!valid_ || faulted_ || instances_.empty()) {
-        if (faulted_) io.clear(); // muted
+    if (!valid_ || faulted() || instances_.empty()) {
+        if (faulted()) io.clear(); // muted
         return;                   // invalid: passthrough
     }
     cur_ = &io;

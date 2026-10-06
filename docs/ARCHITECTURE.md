@@ -273,7 +273,8 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
   max). Factories are cached as machine code in `plugins/.build/cache/<name>-<key>.fmc`, key = hash of libfaust
   version, LLVM target, options and every `.dsp/.lib` in the plugin dir. Only libfaust's **C API** is used, loaded
   at runtime from `<KS_FAUST_DIR>/lib/faust.dll` (function table, no import lib): faust.dll uses the dynamic CRT,
-  keysynth the static one, so no C++ objects may cross. Factory create/read/write/delete hold one mutex; instance
+  keysynth the static one, so no C++ objects may cross. Factory create/read/write/delete hold one mutex (a factory released
+  while a compile runs is queued and deleted later, so the control thread never waits for a compile); instance
   create/delete run on the control thread, compute/clear on the audio thread.
   - Instruments (0 inputs, 1–2 outputs): keysynth's own polyphony (not Faust's `mydsp_poly`, which is C++ API and
     path-string based): N instances (`polyphony` from plugin.json or `[nvoices:N]`, ≤ 32), core `VoiceAllocator`
@@ -294,7 +295,8 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
   copy). `set_param` is called on the audio thread at block start only when the value changed (all values once
   after `prepare`). `scripts/build_plugin.ps1 <name>` compiles with MSVC (/MT, /O2) into
   `plugins/.build/<name>-<hash>.dll` (temp name + rename). The host loads the newest `<name>-*.dll` through a copy
-  `%TEMP%/keysynth-plugins/<pid>/<name>-<hash>-<n>.dll` (so builds can overwrite/delete), validates the
+  `%TEMP%/keysynth-plugins/<pid>/<name>-<hash>-<n>.dll` (so builds can overwrite/delete; only directories of dead
+  pids are swept at startup), validates the
   descriptor (sizes, ids, ranges, required functions) and copies all strings.
 - **PluginHost** (control thread API; one loader `std::thread`): scans `plugins/` every 500 ms from the 30 Hz
   pump (signature = names/sizes/mtimes of `.dsp/.lib/plugin.json`, or the newest DLL); a change queues a job
@@ -316,7 +318,8 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
   `platform::guardedCall` (SEH `__try`, `_resetstkoflw` on stack overflow) with MXCSR saved/restored (FTZ/DAZ
   re-asserted, §4.5). A fault mutes that instance for good (until a reload creates new ones) and is reported via
   an atomic counter on the version → `plugin_status` `faulted` + `log` error (polled on the control thread).
-  NaN/Inf output zeroes the block and clears the instance state (also reported). This is not a sandbox: plugins
+  NaN/Inf output zeroes the block and resets/clears the instance (a DLL instance is muted after 8 consecutive bad
+  blocks); reports are edge-triggered, repeated at most every 5 s. This is not a sandbox: plugins
   are trusted local code (Faust `ffunction` can call C functions); only `plugins/` under the repo root is scanned.
 
 ## 11. Control protocol & security

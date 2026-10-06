@@ -52,6 +52,17 @@ std::mutex& compilerMutex() {
     return m;
 }
 
+// Factories released while a compile holds compilerMutex are deleted later (by the next compile or
+// faust::collectGarbage) instead of blocking the control thread for the length of a compile.
+std::mutex& deferredMutex() {
+    static std::mutex m;
+    return m;
+}
+std::vector<void*>& deferredFactories() {
+    static std::vector<void*> v;
+    return v;
+}
+
 template <typename F>
 bool resolve(Api& a, F& fn, const char* name) {
     fn = reinterpret_cast<F>(platform::findSymbol(a.lib, name));
@@ -84,7 +95,8 @@ Api& api() {
             }
         }
         if (!r.lib) {
-            r.lib = platform::openLibrary("faust.dll", err);
+            // Next to the executable only (never the CWD / PATH search order).
+            r.lib = platform::openLibrary(platform::executableDir() / "faust.dll", err);
             if (r.lib && !faustRootCandidates().empty()) r.root = faustRootCandidates().front();
         }
         if (!r.lib) {
@@ -304,11 +316,29 @@ void describe(void* factory, FaustCompileResult& r) {
 
 } // namespace
 
+#if defined(KS_HAS_FAUST)
+namespace {
+void drainDeferredLocked() { // caller holds compilerMutex
+    std::vector<void*> d;
+    {
+        std::lock_guard<std::mutex> lk(deferredMutex());
+        d.swap(deferredFactories());
+    }
+    for (void* f : d) api().deleteCDSPFactory(f);
+}
+} // namespace
+#endif
+
 FaustFactory::~FaustFactory() {
 #if defined(KS_HAS_FAUST)
-    if (raw_ && api().lib) {
-        std::lock_guard<std::mutex> lk(compilerMutex());
+    if (!raw_ || !api().lib) return;
+    std::unique_lock<std::mutex> lk(compilerMutex(), std::try_to_lock);
+    if (lk.owns_lock()) {
+        drainDeferredLocked();
         api().deleteCDSPFactory(raw_);
+    } else {
+        std::lock_guard<std::mutex> dl(deferredMutex());
+        deferredFactories().push_back(raw_);
     }
 #endif
 }
@@ -347,6 +377,7 @@ FaustCompileResult compile(const FaustCompileRequest& req) {
     }
 
     std::lock_guard<std::mutex> lk(compilerMutex());
+    drainDeferredLocked();
     char err[4096] = {0};
     void* factory = nullptr;
     if (!cacheFile.empty() && fs::is_regular_file(cacheFile, ec)) {
@@ -386,11 +417,22 @@ FaustCompileResult compile(const FaustCompileRequest& req) {
             }
         }
     }
-    r.factory = std::make_shared<FaustFactory>(factory);
     describe(factory, r);
-    if (!r.error.empty()) r.factory.reset();
+    if (!r.error.empty()) {
+        // Never via ~FaustFactory here: it would try to take compilerMutex again.
+        a.deleteCDSPFactory(factory);
+        if (r.cached) fs::remove(cacheFile, ec);
+        return r;
+    }
+    r.factory = std::make_shared<FaustFactory>(factory);
     r.milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     return r;
+}
+
+void collectGarbage() {
+    if (!available()) return;
+    std::unique_lock<std::mutex> lk(compilerMutex(), std::try_to_lock);
+    if (lk.owns_lock()) drainDeferredLocked();
 }
 
 std::string irText(const FaustFactory& f) {
@@ -432,6 +474,7 @@ FaustCompileResult compile(const FaustCompileRequest&) {
     r.error = unavailableReason();
     return r;
 }
+void collectGarbage() {}
 std::string irText(const FaustFactory&) { return {}; }
 void* createInstance(const FaustFactory&) { return nullptr; }
 void deleteInstance(void*) {}

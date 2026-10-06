@@ -94,6 +94,41 @@ std::shared_ptr<PluginLibrary> PluginLibrary::load(const fs::path& dll, const fs
         error = "ks_get_plugin returned null";
         return nullptr;
     }
+    // Touch every byte the host will read (sizes, strings, param/choice arrays) inside the guard first: a bad
+    // pointer in an untrusted descriptor must fail the load, not kill the loader thread.
+    struct Probe {
+        const ks_plugin_descriptor* d;
+    } probe{ctx.d};
+    if (!platform::guardedCall(
+            [](void* p) {
+                const ks_plugin_descriptor* d = static_cast<Probe*>(p)->d;
+                volatile size_t sink = d->struct_size + d->abi_version;
+                if (d->struct_size < kMinDescriptorSize) return;
+                auto touch = [&](const char* str) {
+                    if (!str) return;
+                    for (size_t n = 0; n < 256 && str[n]; ++n) sink = sink + static_cast<unsigned char>(str[n]);
+                };
+                touch(d->id);
+                touch(d->name);
+                touch(d->category);
+                if (!d->params || d->num_params > kMaxParams) return;
+                for (uint32_t i = 0; i < d->num_params; ++i) {
+                    const ks_param_spec& s = d->params[i];
+                    sink = sink + s.struct_size;
+                    if (s.struct_size < kMinParamSpecSize) return;
+                    touch(s.id);
+                    touch(s.name);
+                    touch(s.group);
+                    touch(s.unit);
+                    if (s.choices && s.num_choices <= kMaxChoices)
+                        for (uint32_t c = 0; c < s.num_choices; ++c) touch(s.choices[c]);
+                }
+                (void)sink;
+            },
+            &probe, &code)) {
+        error = "invalid descriptor memory (exception while reading it)";
+        return nullptr;
+    }
     if (ctx.d->struct_size < kMinDescriptorSize) {
         error = "descriptor too small (struct_size " + std::to_string(ctx.d->struct_size) + ")";
         return nullptr;
@@ -175,18 +210,24 @@ std::shared_ptr<DllPluginVersion> DllPluginVersion::create(const std::string& na
         if (p.name.empty()) p.name = p.id;
         p.group = cstr(s.group, 64);
         p.unit = cstr(s.unit, 16);
-        if (!std::isfinite(s.min) || !std::isfinite(s.max) || !std::isfinite(s.def) || !(s.max > s.min)) {
-            error = "param '" + p.id + "': invalid range";
-            return nullptr;
-        }
-        p.min = s.min;
-        p.max = s.max;
-        p.def = std::clamp(s.def, s.min, s.max);
         if (s.scale > KS_SCALE_BOOL) {
             error = "param '" + p.id + "': invalid scale";
             return nullptr;
         }
         p.scale = static_cast<ParamScale>(s.scale);
+        const bool discrete = p.scale == ParamScale::Enum || p.scale == ParamScale::Bool;
+        if (!std::isfinite(s.min) || !std::isfinite(s.max) || !std::isfinite(s.def) || (!discrete && !(s.max > s.min))) {
+            error = "param '" + p.id + "': invalid range";
+            return nullptr;
+        }
+        p.min = s.min;
+        p.max = s.max;
+        p.def = discrete ? s.def : std::clamp(s.def, s.min, s.max);
+        if (p.scale == ParamScale::Bool) {
+            p.min = 0.0f;
+            p.max = 1.0f;
+            p.def = p.def >= 0.5f ? 1.0f : 0.0f;
+        }
         if (p.scale == ParamScale::Log && p.min <= 0.0f) p.scale = ParamScale::Linear;
         p.skewCentre = std::isfinite(s.skew_centre) ? s.skew_centre : 0.0f;
         p.flags = s.flags & (ParamFlags::ReadOnly | ParamFlags::Hidden | ParamFlags::NonAutomatable);
@@ -230,6 +271,7 @@ DllModule::DllModule(std::shared_ptr<const DllPluginVersion> v)
     }
     inst_ = c.inst;
     lastSent_.assign(static_cast<size_t>(params().size()), std::numeric_limits<float>::quiet_NaN());
+    // (enum `def` is an index: clamped to the choices in DllPluginVersion::create)
 }
 
 DllModule::~DllModule() {
@@ -245,12 +287,12 @@ DllModule::~DllModule() {
 }
 
 void DllModule::fault(uint32_t code) noexcept {
-    faulted_ = true;
+    faulted_.store(true, std::memory_order_relaxed);
     v_->reportFault(code);
 }
 
 void DllModule::prepare(double sampleRate, int maxBlock) {
-    if (!inst_ || faulted_) return;
+    if (!inst_ || faulted()) return;
     struct Ctx {
         DllModule* m;
         double sr;
@@ -281,7 +323,7 @@ void DllModule::prepare(double sampleRate, int maxBlock) {
 }
 
 void DllModule::reset() {
-    if (!inst_ || faulted_) return;
+    if (!inst_ || faulted()) return;
     struct Ctx {
         const ks_plugin_descriptor* d;
         ks_instance inst;
@@ -317,7 +359,7 @@ void DllModule::guardedProcess(void* self) {
 }
 
 void DllModule::process(AudioBlock& stereo, MidiEventSpan events, const ProcessContext&) {
-    if (!inst_ || faulted_) {
+    if (!inst_ || faulted()) {
         stereo.clear(); // muted (instrument buffers are already clear; effects go silent, not passthrough)
         return;
     }
@@ -331,17 +373,25 @@ void DllModule::process(AudioBlock& stereo, MidiEventSpan events, const ProcessC
         stereo.clear();
         return;
     }
-    // NaN/Inf guard (cheap): zero the block, keep running.
+    // NaN/Inf guard (cheap): zero the block and reset the instance (a NaN-latched filter stays NaN otherwise);
+    // mute after kMaxNonFiniteBlocks consecutive bad blocks.
     float acc = 0.0f;
     for (int i = 0; i < stereo.numSamples; ++i) acc += (stereo.left[i] + stereo.right[i]) * 0.0f;
     if (acc != 0.0f) {
         stereo.clear();
+        if (++nonFiniteBlocks_ >= kMaxNonFiniteBlocks) {
+            fault(kFaultNonFinite);
+            return;
+        }
         v_->reportFault(kFaultNonFinite);
+        reset();
+    } else {
+        nonFiniteBlocks_ = 0;
     }
 }
 
 nlohmann::json DllModule::saveState() const {
-    if (!inst_ || faulted_ || !d_->save_state) return nullptr;
+    if (!inst_ || faulted() || !d_->save_state) return nullptr;
     struct Ctx {
         const ks_plugin_descriptor* d;
         ks_instance inst;
@@ -367,7 +417,7 @@ nlohmann::json DllModule::saveState() const {
 }
 
 void DllModule::loadState(const nlohmann::json& state) {
-    if (!inst_ || faulted_ || !d_->load_state || !state.is_object()) return;
+    if (!inst_ || faulted() || !d_->load_state || !state.is_object()) return;
     auto it = state.find("blob");
     if (it == state.end() || !it->is_string()) return;
     std::vector<unsigned char> data;

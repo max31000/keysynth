@@ -16,6 +16,8 @@ enum class PluginSource { Faust, Dll };
 
 // Fault code used when a plugin produced NaN/Inf (the block is zeroed and the instance cleared, not muted).
 inline constexpr uint32_t kFaultNonFinite = 0xE0000001u;
+// Fault code used when an instance could not be created/prepared (module stays silent).
+inline constexpr uint32_t kFaultNoInstance = 0xE0000002u;
 
 class PluginVersion : public std::enable_shared_from_this<PluginVersion> {
 public:

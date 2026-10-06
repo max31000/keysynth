@@ -119,6 +119,17 @@ int main(int argc, char** argv) {
                                  st.cached ? ", cached" : "");
             };
             plugins->start(listModules ? std::set<std::string>{} : used);
+            // A referenced plugin that did not load would render silence: fail loudly (agents/CI rely on it).
+            bool missing = false;
+            for (const auto& name : used) {
+                const auto st = plugins->status(name);
+                if (!st || st->state != "ok") {
+                    std::fprintf(stderr, "error: plugin '%s' %s\n", name.c_str(),
+                                 st ? ("is in state " + st->state).c_str() : "not found in plugins/");
+                    missing = true;
+                }
+            }
+            if (missing && !listModules) return 1;
         }
     }
     if (listModules) {

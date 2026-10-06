@@ -3,8 +3,11 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <malloc.h> // _resetstkoflw
+
+#include <iterator>
 #else
 #include <dlfcn.h>
+#include <signal.h>
 #include <unistd.h>
 #endif
 
@@ -27,10 +30,10 @@ void closeLibrary(void* lib) noexcept {
     if (lib) ::FreeLibrary(reinterpret_cast<HMODULE>(lib));
 }
 
-bool libraryAvailable(const char* name) noexcept { return ::LoadLibraryA(name) != nullptr; }
 
 namespace {
 int filter(unsigned long code, uint32_t* out) noexcept {
+    if (code == EXCEPTION_BREAKPOINT || code == 0x4000001Fu /* WOW64 breakpoint */) return EXCEPTION_CONTINUE_SEARCH;
     if (out) *out = static_cast<uint32_t>(code);
     // C++ exceptions (0xE06D7363) thrown by a plugin are also caught: they must not cross the C ABI.
     return EXCEPTION_EXECUTE_HANDLER;
@@ -39,17 +42,37 @@ int filter(unsigned long code, uint32_t* out) noexcept {
 
 bool guardedCall(GuardedFn fn, void* ctx, uint32_t* code) noexcept {
     uint32_t c = 0;
+    bool ok = true;
     __try {
         fn(ctx);
     } __except (filter(GetExceptionCode(), &c)) {
+        ok = false;
+    }
+    if (!ok) {
+        // Restore the stack guard page outside the handler (MSDN: _resetstkoflw may fail inside __except).
         if (c == static_cast<uint32_t>(EXCEPTION_STACK_OVERFLOW)) _resetstkoflw();
         if (code) *code = c;
-        return false;
     }
-    return true;
+    return ok;
 }
 
 uint32_t currentProcessId() noexcept { return static_cast<uint32_t>(::GetCurrentProcessId()); }
+
+bool processAlive(uint32_t pid) noexcept {
+    HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return ::GetLastError() == ERROR_ACCESS_DENIED; // exists but not ours to open
+    DWORD exitCode = 0;
+    const bool alive = ::GetExitCodeProcess(h, &exitCode) && exitCode == STILL_ACTIVE;
+    ::CloseHandle(h);
+    return alive;
+}
+
+std::filesystem::path executableDir() {
+    wchar_t buf[32768];
+    const DWORD n = ::GetModuleFileNameW(nullptr, buf, static_cast<DWORD>(std::size(buf)));
+    if (n == 0 || n >= std::size(buf)) return {};
+    return std::filesystem::path(std::wstring(buf, n)).parent_path();
+}
 
 #else
 
@@ -62,12 +85,16 @@ void* findSymbol(void* lib, const char* name) noexcept { return lib ? ::dlsym(li
 void closeLibrary(void* lib) noexcept {
     if (lib) ::dlclose(lib);
 }
-bool libraryAvailable(const char* name) noexcept { return ::dlopen(name, RTLD_NOW) != nullptr; }
 bool guardedCall(GuardedFn fn, void* ctx, uint32_t*) noexcept {
     fn(ctx);
     return true;
 }
 uint32_t currentProcessId() noexcept { return static_cast<uint32_t>(::getpid()); }
+bool processAlive(uint32_t pid) noexcept { return ::kill(static_cast<pid_t>(pid), 0) == 0; }
+std::filesystem::path executableDir() {
+    std::error_code ec;
+    return std::filesystem::read_symlink("/proc/self/exe", ec).parent_path();
+}
 
 #endif
 

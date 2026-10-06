@@ -125,6 +125,7 @@ private:
     std::map<std::string, PluginStatus> status_;
     std::map<std::string, std::shared_ptr<PluginVersion>> current_;
     std::map<std::string, uint32_t> faultsSeen_;
+    std::map<std::string, std::chrono::steady_clock::time_point> lastFaultReport_;
     uint64_t nextGeneration_ = 1;
     std::chrono::steady_clock::time_point lastScan_{};
 

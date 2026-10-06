@@ -4,8 +4,12 @@
 // faust.dll is loaded at runtime and only its *C* API is used (llvm-dsp-c.h): the DLL uses the dynamic MSVC
 // runtime while keysynth links the static one, so no C++ objects (std::string, ...) may cross the boundary.
 // Factory create/read/write/delete are serialized by one mutex (libfaust's compiler is not reentrant; it is
-// also put in multi-thread mode). Instance compute/clear are plain JIT calls (RT-safe: Faust's generated
-// compute never allocates; the test suite checks the LLVM IR for allocator calls).
+// also put in multi-thread mode via startMTDSPFactories). A factory released while a compile runs is deleted
+// later (never blocks the control thread). Instance create/delete run on the control thread concurrently with a
+// compile on the loader thread: they only touch the (already built) factory's JIT code and the instance memory,
+// which libfaust's MT mode permits; the test suite exercises it (async loader test).
+// Instance compute/clear are plain JIT calls (RT-safe: Faust's generated compute never allocates; the test
+// suite checks the LLVM IR for allocator calls).
 
 #include "plugins/FaustParamMap.h"
 
@@ -62,6 +66,9 @@ std::filesystem::path libraryDir();
 // Control/loader thread. Uses the machine-code cache when the key (source files + options + target +
 // libfaust version) matches.
 FaustCompileResult compile(const FaustCompileRequest& req);
+
+// Control thread (poll): delete factories whose release was deferred while a compile ran. Non-blocking.
+void collectGarbage();
 
 // LLVM IR text of a factory (tests: no allocator calls in compute).
 std::string irText(const FaustFactory& f);

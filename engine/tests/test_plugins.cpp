@@ -528,6 +528,11 @@ process = *(gain * trim), *(gain * trim);
     t.host->rescan();
     CHECK(t.registry.find("plugin:hr_fx") == nullptr);
     CHECK_FALSE(t.host->status("hr_fx").has_value());
+    // The patch keeps the slot (type + params) so it loads again when the plugin comes back.
+    REQUIRE(session.model().patch().layers[0].fx.size() == 1);
+    CHECK(session.model().patch().layers[0].fx[0].type == "plugin:hr_fx");
+    CHECK(session.model().patch().layers[0].fx[0].params.at("gain") == Approx(0.25f));
+    CHECK(engine.latestGraph()->findModule(fxNode) == nullptr); // unavailable -> passthrough
     engine.collectGarbage();
 }
 
@@ -568,6 +573,33 @@ TEST_CASE("Faust compile errors are reported, previous version keeps working", "
     CHECK_FALSE(t.host->reload("nope", err));
     CHECK(err.find("unknown") != std::string::npos);
     CHECK(t.host->reload("bad_fx", err));
+}
+
+TEST_CASE("Faust effect producing NaN/Inf: block zeroed, reported once (rate-limited)", "[plugins][faust]") {
+    requireFaust();
+    TestHost t("nan");
+    writeFile(t.plugins / "nan_fx" / "nan_fx.dsp",
+              "k = hslider(\"k\", 0, 0, 1, 0.01);\nprocess = /(k), /(k);\n"); // x/0 = Inf
+    t.start();
+    REQUIRE(t.st("nan_fx").state == "ok");
+    auto m = t.registry.create("plugin:nan_fx");
+    REQUIRE(m);
+    m->prepare(48000.0, 64);
+    std::vector<float> l(64, 1.0f), r(64, 1.0f);
+    AudioBlock b{l.data(), r.data(), 64};
+    for (int i = 0; i < 20; ++i) {
+        std::fill(l.begin(), l.end(), 1.0f);
+        m->process(b, {}, {});
+    }
+    CHECK(l[0] == 0.0f);
+    CHECK(allFinite(l));
+    const size_t before = t.events.size();
+    t.host->poll();
+    t.host->poll();
+    size_t faulted = 0;
+    for (size_t i = before; i < t.events.size(); ++i) faulted += t.events[i].state == "faulted";
+    CHECK(faulted == 1);
+    CHECK(t.st("nan_fx").message.find("NaN") != std::string::npos);
 }
 
 TEST_CASE("Faust async loader thread", "[plugins][faust]") {

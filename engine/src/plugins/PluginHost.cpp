@@ -38,7 +38,7 @@ std::string hexCode(uint32_t c) {
 // White-listed Faust compiler options (anything touching files, FAUSTFLOAT or the backend is refused).
 bool checkFaustOptions(const std::vector<std::string>& opts, std::string& error) {
     static const std::set<std::string> flags = {"-vec", "-scal", "-dfs", "-fun", "-exp10", "-mapp"};
-    static const std::set<std::string> withInt = {"-vs", "-lv", "-mcd", "-ftz", "-fm"};
+    static const std::set<std::string> withInt = {"-vs", "-lv", "-mcd", "-ftz"};
     for (size_t i = 0; i < opts.size(); ++i) {
         if (flags.count(opts[i])) continue;
         if (withInt.count(opts[i]) && i + 1 < opts.size() && !opts[i + 1].empty() &&
@@ -47,7 +47,7 @@ bool checkFaustOptions(const std::vector<std::string>& opts, std::string& error)
             continue;
         }
         error = "faust_options: '" + opts[i] + "' is not allowed (allowed: -vec -scal -dfs -fun -exp10 -mapp, "
-                "-vs/-lv/-mcd/-ftz/-fm N)";
+                "-vs/-lv/-mcd/-ftz N)";
         return false;
     }
     return true;
@@ -116,6 +116,22 @@ bool readManifest(const fs::path& dir, const std::string& name, Manifest& m, std
     return true;
 }
 
+// Non-throwing directory listing (a range-for over directory_iterator throws from operator++, e.g. while the
+// user deletes a plugin directory). False if the listing failed or was cut short.
+bool listDir(const fs::path& dir, std::vector<fs::directory_entry>& out) {
+    out.clear();
+    std::error_code ec;
+    fs::directory_iterator it(dir, ec);
+    if (ec) return false;
+    const fs::directory_iterator end;
+    while (it != end) {
+        out.push_back(*it);
+        it.increment(ec);
+        if (ec) return false;
+    }
+    return true;
+}
+
 std::string fileSig(const fs::path& p) {
     std::error_code ec;
     const auto sz = fs::file_size(p, ec);
@@ -134,7 +150,9 @@ fs::path newestDll(const fs::path& buildDir, const std::string& name) {
     fs::path best;
     fs::file_time_type bestT{};
     std::error_code ec;
-    for (const auto& e : fs::directory_iterator(buildDir, ec)) {
+    std::vector<fs::directory_entry> entries;
+    listDir(buildDir, entries);
+    for (const auto& e : entries) {
         if (!e.is_regular_file(ec) || e.path().extension() != ".dll") continue;
         const std::string stem = pathToUtf8(e.path().stem());
         if (stem.size() <= name.size() + 1 || stem.compare(0, name.size() + 1, name + "-") != 0) continue;
@@ -185,8 +203,15 @@ PluginHost::PluginHost(ModuleRegistry& registry, Options opt) : registry_(regist
     std::error_code ec;
     const fs::path tempRoot = fs::temp_directory_path(ec) / "keysynth-plugins";
     if (opt_.tempDir.empty()) {
-        // Leftovers of crashed runs: remove what is not locked by a live process.
-        for (const auto& e : fs::directory_iterator(tempRoot, ec)) fs::remove_all(e.path(), ec);
+        // Leftovers of crashed runs: only <pid> directories whose process is gone (never another live host's).
+        std::vector<fs::directory_entry> entries;
+        listDir(tempRoot, entries);
+        for (const auto& e : entries) {
+            const std::string n = pathToUtf8(e.path().filename());
+            if (n.empty() || n.size() > 9 || n.find_first_not_of("0123456789") != std::string::npos) continue;
+            const auto pid = static_cast<uint32_t>(std::stoul(n));
+            if (pid != platform::currentProcessId() && !platform::processAlive(pid)) fs::remove_all(e.path(), ec);
+        }
         opt_.tempDir = tempRoot / std::to_string(platform::currentProcessId());
     }
     if (opt_.async) worker_ = std::thread([this] { workerLoop(); });
@@ -215,13 +240,19 @@ void PluginHost::start(const std::set<std::string>& only) {
 }
 
 void PluginHost::poll() {
-    drain();
-    const auto now = std::chrono::steady_clock::now();
-    if (now - lastScan_ >= std::chrono::milliseconds(opt_.scanIntervalMs)) {
-        scan(false);
-        if (!opt_.async) drain();
+    // Runs from a timer on the message thread: never let a filesystem/JSON error escape.
+    try {
+        drain();
+        const auto now = std::chrono::steady_clock::now();
+        if (now - lastScan_ >= std::chrono::milliseconds(opt_.scanIntervalMs)) {
+            scan(false);
+            if (!opt_.async) drain();
+        }
+        checkFaults();
+        faust::collectGarbage();
+    } catch (const std::exception&) {
+        lastScan_ = std::chrono::steady_clock::now(); // retry on the next interval
     }
-    checkFaults();
 }
 
 void PluginHost::rescan() {
@@ -247,11 +278,16 @@ bool PluginHost::reload(const std::string& name, std::string& error) {
         error = "invalid plugin name";
         return false;
     }
+    const uint64_t before = watched_.count(name) ? watched_[name].requested : 0;
     scan(false);
     auto it = watched_.find(name);
     if (it == watched_.end()) {
         error = "unknown plugin '" + name + "'";
         return false;
+    }
+    if (it->second.requested != before) { // the scan already queued a (re)load
+        if (!opt_.async) drain();
+        return true;
     }
     if (it->second.artifact.empty()) {
         error = "plugin '" + name + "' has nothing to load" +
@@ -289,8 +325,11 @@ void PluginHost::scan(bool force) {
     lastScan_ = std::chrono::steady_clock::now();
     std::set<std::string> seen;
     std::error_code ec;
-    if (fs::is_directory(opt_.pluginsDir, ec)) {
-        for (const auto& e : fs::directory_iterator(opt_.pluginsDir, ec)) {
+    std::vector<fs::directory_entry> dirs;
+    const bool listed = fs::is_directory(opt_.pluginsDir, ec) && listDir(opt_.pluginsDir, dirs);
+    if (!listed && fs::exists(opt_.pluginsDir, ec)) return; // transient error: keep everything as is
+    {
+        for (const auto& e : dirs) {
             if (!e.is_directory(ec) || e.is_symlink(ec)) continue;
             const std::string name = pathToUtf8(e.path().filename());
             if (!isValidName(name)) continue; // also skips .build
@@ -304,7 +343,12 @@ void PluginHost::scan(bool force) {
                 w.artifact = dsp;
                 // Signature over every Faust source (local imports) + the manifest.
                 std::vector<fs::path> files;
-                for (const auto& f : fs::directory_iterator(e.path(), ec)) {
+                std::vector<fs::directory_entry> entries;
+                if (!listDir(e.path(), entries)) {
+                    if (watched_.count(name)) seen.insert(name); // being edited/deleted: decide next scan
+                    continue;
+                }
+                for (const auto& f : entries) {
                     const auto ext = f.path().extension();
                     if (f.is_regular_file(ec) && (ext == ".dsp" || ext == ".lib" || f.path().filename() == "plugin.json"))
                         files.push_back(f.path());
@@ -367,6 +411,8 @@ void PluginHost::scan(bool force) {
         s.message = {};
         setStatus(s);
         status_.erase(name);
+        faultsSeen_.erase(name);
+        lastFaultReport_.erase(name);
     }
     if (!changed.empty() && onModulesChanged) onModulesChanged(changed);
 }
@@ -541,7 +587,7 @@ void PluginHost::apply(Result r, std::vector<std::string>& changed) {
     const std::string& name = r.job.name;
     auto w = watched_.find(name);
     // Superseded (a newer job is queued) or removed meanwhile: drop; the version is released here.
-    if (w == watched_.end() || w->second.requested != r.job.generation) return;
+    if (w == watched_.end() || w->second.requested != r.job.generation || w->second.artifact != r.job.artifact) return;
     PluginStatus s = status_.count(name) ? status_[name] : PluginStatus{};
     s.name = name;
     s.typeId = "plugin:" + name;
@@ -569,17 +615,27 @@ void PluginHost::apply(Result r, std::vector<std::string>& changed) {
 }
 
 void PluginHost::checkFaults() {
+    const auto now = std::chrono::steady_clock::now();
     for (const auto& [name, v] : current_) {
         const uint32_t n = v->faults.load(std::memory_order_acquire);
         uint32_t& seen = faultsSeen_[name];
         if (n == seen) continue;
+        // Edge-triggered with a 5 s repeat limit: a plugin that keeps producing NaN must not flood the clients.
+        auto last = lastFaultReport_.find(name);
+        if (status_[name].state == "faulted" && last != lastFaultReport_.end() &&
+            now - last->second < std::chrono::seconds(5))
+            continue;
         seen = n;
+        lastFaultReport_[name] = now;
         PluginStatus s = status_[name];
         const uint32_t code = v->faultCode.load(std::memory_order_relaxed);
         s.state = "faulted";
-        s.message = code == kFaultNonFinite
-                        ? "produced NaN/Inf output (block zeroed, state cleared)"
-                        : "crashed (exception " + hexCode(code) + "); instance muted until the plugin is reloaded";
+        if (code == kFaultNonFinite)
+            s.message = "produced NaN/Inf output (block zeroed, instance reset; muted if it persists)";
+        else if (code == kFaultNoInstance)
+            s.message = "could not create an instance (module is silent)";
+        else
+            s.message = "crashed (exception " + hexCode(code) + "); instance muted until the plugin is reloaded";
         setStatus(s);
     }
 }

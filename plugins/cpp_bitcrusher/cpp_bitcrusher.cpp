@@ -7,6 +7,7 @@
 #include <keysynth/plugin_abi.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -36,16 +37,17 @@ struct Crusher {
     float p[NumParams] = {8.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
     float held[2] = {0.0f, 0.0f};
     int counter = 0;
-    uint32_t seed = 0x12345678u; // non-param state (save/load_state demo)
+    // Non-param state (save/load_state demo). Atomic: save_state may read it while process runs.
+    std::atomic<uint32_t> seed{0x12345678u};
     float mixSmooth = 1.0f, gainSmooth = 1.0f;
-
-    float rnd() noexcept { // xorshift32 -> [-0.5, 0.5)
-        seed ^= seed << 13;
-        seed ^= seed >> 17;
-        seed ^= seed << 5;
-        return static_cast<float>(seed) * (1.0f / 4294967296.0f) - 0.5f;
-    }
 };
+
+float rnd(uint32_t& s) noexcept { // xorshift32 -> [-0.5, 0.5)
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    return static_cast<float>(s) * (1.0f / 4294967296.0f) - 0.5f;
+}
 
 ks_instance create() { return new (std::nothrow) Crusher(); }
 void destroy(ks_instance i) { delete static_cast<Crusher*>(i); }
@@ -68,13 +70,14 @@ void process(ks_instance inst, float** stereo, int32_t n, const ks_event*, int32
     const float mixT = std::clamp(c->p[Mix], 0.0f, 1.0f);
     const float gainT = std::pow(10.0f, c->p[OutputDb] / 20.0f);
     int clipped = 0;
+    uint32_t seed = c->seed.load(std::memory_order_relaxed);
     for (int32_t s = 0; s < n; ++s) {
         c->mixSmooth += (mixT - c->mixSmooth) * 0.002f;
         c->gainSmooth += (gainT - c->gainSmooth) * 0.002f;
         if (c->counter == 0) {
             for (int ch = 0; ch < 2; ++ch) {
                 float x = stereo[ch][s];
-                if (dither) x += (c->rnd() + c->rnd()) / levels;
+                if (dither) x += (rnd(seed) + rnd(seed)) / levels;
                 if (x > 1.0f || x < -1.0f) ++clipped;
                 x = std::clamp(x, -1.0f, 1.0f);
                 c->held[ch] = std::round(x * levels) / levels;
@@ -86,20 +89,22 @@ void process(ks_instance inst, float** stereo, int32_t n, const ks_event*, int32
             stereo[ch][s] = (dry + (c->held[ch] - dry) * c->mixSmooth) * c->gainSmooth;
         }
     }
+    c->seed.store(seed, std::memory_order_relaxed);
     c->p[Clip] = n > 0 ? static_cast<float>(clipped) / static_cast<float>(2 * n) : 0.0f;
 }
 
 int32_t saveState(ks_instance i, void* buf, int32_t cap) {
     const auto* c = static_cast<const Crusher*>(i);
-    if (buf && cap >= static_cast<int32_t>(sizeof c->seed)) std::memcpy(buf, &c->seed, sizeof c->seed);
-    return static_cast<int32_t>(sizeof c->seed);
+    const uint32_t seed = c->seed.load(std::memory_order_relaxed);
+    if (buf && cap >= static_cast<int32_t>(sizeof seed)) std::memcpy(buf, &seed, sizeof seed);
+    return static_cast<int32_t>(sizeof seed);
 }
 
 int32_t loadState(ks_instance i, const void* data, int32_t size) {
     if (!data || size != static_cast<int32_t>(sizeof(uint32_t))) return 1;
-    auto* c = static_cast<Crusher*>(i);
-    std::memcpy(&c->seed, data, sizeof c->seed);
-    if (c->seed == 0) c->seed = 1; // xorshift must not be 0
+    uint32_t seed = 0;
+    std::memcpy(&seed, data, sizeof seed);
+    static_cast<Crusher*>(i)->seed.store(seed == 0 ? 1u : seed, std::memory_order_relaxed); // xorshift: never 0
     return 0;
 }
 

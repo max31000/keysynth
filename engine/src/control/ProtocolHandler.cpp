@@ -253,7 +253,10 @@ const std::map<std::string, Handler>& handlers() {
              json arr = json::array();
              if (c.s.plugins())
                  for (const auto& st : c.s.plugins()->list()) arr.push_back(plugins::toJson(st));
-             c.reply({{"type", "list_plugins_ok"}, {"plugins", arr}, {"faust", plugins::PluginHost::faustInfo()}});
+             // Without a host (--no-plugins) do not load libfaust just to describe it.
+             const json faust = c.s.plugins() ? plugins::PluginHost::faustInfo()
+                                              : json{{"available", false}, {"version", ""}, {"reason", "plugins disabled"}};
+             c.reply({{"type", "list_plugins_ok"}, {"plugins", arr}, {"faust", faust}});
          }},
         {"reload_plugin",
          [](Ctx& c) {

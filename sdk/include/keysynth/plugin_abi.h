@@ -4,13 +4,18 @@
  *
  *     KS_PLUGIN_EXPORT const ks_plugin_descriptor* ks_get_plugin(void);
  *
- * returning a pointer to a static descriptor. No C++ types cross the boundary; every struct starts with
- * `struct_size` so the host can accept older/newer plugins (fields beyond struct_size are treated as absent).
+ * returning a pointer to a static descriptor. No C++ types cross the boundary. Every struct starts with
+ * `struct_size` (= sizeof of the struct the plugin was compiled against) so the ABI can grow by appending
+ * fields; ABI v1 hosts require the full v1 structs and reject smaller ones.
  *
  * Threads:
- *   control thread : ks_get_plugin, create, destroy, prepare, reset (while not live), save_state, load_state
- *   audio thread   : process, set_param (block start, only when the value changed), get_param, reset (panic),
- *                    tail_samples, latency_samples
+ *   loader thread  : ks_get_plugin (once per load; the descriptor must stay valid while the DLL is loaded)
+ *   control thread : create, destroy, prepare, reset (while not live), load_state (before prepare), save_state
+ *   audio thread   : process, set_param (block start, only when the value changed), get_param, reset (panic,
+ *                    NaN recovery), tail_samples
+ * save_state may be called on the control thread WHILE process runs on the audio thread for the same instance
+ * (hot reload carries state over): only read state that is safe to read concurrently (atomics, or a snapshot
+ * the audio thread publishes). Never block the audio thread for it.
  * Real-time rules for audio-thread functions: no allocation, locks, IO, logging or exceptions; bounded cost.
  * The host calls every function inside an SEH guard: a fault mutes the instance for good (until reloaded).
  *

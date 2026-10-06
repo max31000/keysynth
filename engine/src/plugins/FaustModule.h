@@ -12,6 +12,7 @@
 #include "plugins/PluginVersion.h"
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -47,7 +48,7 @@ public:
     explicit FaustModuleBase(std::shared_ptr<const FaustPluginVersion> v);
     ~FaustModuleBase() override;
     bool valid() const noexcept { return valid_; }
-    bool faulted() const noexcept { return faulted_; }
+    bool faulted() const noexcept { return faulted_.load(std::memory_order_relaxed); }
 
 protected:
     bool makeInstance(FaustInstance& inst);
@@ -62,7 +63,7 @@ protected:
     double sampleRate_ = 48000.0;
     int maxBlock_ = 0;
     bool valid_ = true;
-    bool faulted_ = false;
+    std::atomic<bool> faulted_{false}; // audio thread writes, control thread reads
 };
 
 class FaustInstrument final : public FaustModuleBase {
@@ -96,6 +97,7 @@ public:
     struct Shared {
         float bendSemis = 0.0f;
         int64_t maxReleaseSamples = 0;
+        const PluginVersion* version = nullptr; // NaN reports
         bool stereo = false;
         std::vector<float> l, r; // per-voice scratch (maxBlock)
     };

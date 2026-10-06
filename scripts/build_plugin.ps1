@@ -35,12 +35,15 @@ $sdkInclude = Join-Path $repo "sdk\include"
 $abiHeader = Join-Path $sdkInclude "keysynth\plugin_abi.h"
 
 # --- content hash (sources + local headers + ABI header + flags) ---------------------------------------------
-$files = @(Get-ChildItem -LiteralPath $srcDir -File | Where-Object { $_.Extension -in ".cpp", ".h", ".hpp", ".inl" } |
-           Sort-Object Name)
+# .cpp files at the top level are compiled; headers anywhere below the plugin dir are hashed.
+$files = @(Get-ChildItem -LiteralPath $srcDir -File | Where-Object { $_.Extension -eq ".cpp" } | Sort-Object Name)
+$headers = @(Get-ChildItem -LiteralPath $srcDir -File -Recurse | Where-Object { $_.Extension -in ".h", ".hpp", ".inl" } |
+             Sort-Object FullName)
 $sha = [System.Security.Cryptography.SHA256]::Create()
 $ms = New-Object System.IO.MemoryStream
-foreach ($f in $files + @(Get-Item -LiteralPath $abiHeader)) {
-    $nameBytes = [System.Text.Encoding]::UTF8.GetBytes($f.Name + "`n")
+foreach ($f in $files + $headers + @(Get-Item -LiteralPath $abiHeader)) {
+    $rel = if ($f.FullName.StartsWith($srcDir)) { $f.FullName.Substring($srcDir.Length) } else { $f.Name }
+    $nameBytes = [System.Text.Encoding]::UTF8.GetBytes($rel + "`n")
     $ms.Write($nameBytes, 0, $nameBytes.Length)
     $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
     $ms.Write($bytes, 0, $bytes.Length)
@@ -81,13 +84,18 @@ if (-not $vcvars -or -not (Test-Path -LiteralPath $vcvars)) { Write-Host "error:
 $objDir = Join-Path $OutDir "obj\$Name"
 New-Item -ItemType Directory -Force $objDir | Out-Null
 $tmpDll = Join-Path $objDir "$Name-$hash.dll"
-$opt = if ($Config -eq "Release") { "/O2 /DNDEBUG /MT" } else { "/Od /Zi /MTd" }
-$srcs = ($files | Where-Object { $_.Extension -eq ".cpp" } | ForEach-Object { "`"$($_.FullName)`"" }) -join " "
-$flags = "/nologo /LD /std:c++20 /EHsc /W4 /permissive- /utf-8 /fp:precise $opt " + ($ExtraFlags -join " ")
-$cl = "cl $flags /I`"$sdkInclude`" /I`"$srcDir`" $srcs /Fo`"$objDir\\`" /Fd`"$objDir\\`" /Fe`"$tmpDll`" " +
-      "/link /NOLOGO /NOIMPLIB /NOEXP /INCREMENTAL:NO"
+$opt = if ($Config -eq "Release") { @("/O2", "/DNDEBUG", "/MT") } else { @("/Od", "/Zi", "/MTd") }
+# All compiler/linker arguments go through a response file, so paths and -ExtraFlags are never parsed by cmd.exe
+# (no injection through & | % ^). Directory arguments end in "\\" so the closing quote is not escaped.
+function Quote([string]$v) { '"' + $v.Replace('"', '') + '"' }
+$clArgs = @("/nologo", "/LD", "/std:c++20", "/EHsc", "/W4", "/permissive-", "/utf-8", "/fp:precise") + $opt +
+    $ExtraFlags + @("/I" + (Quote $sdkInclude), "/I" + (Quote $srcDir)) + @($files | ForEach-Object { Quote $_.FullName }) +
+    @("/Fo" + (Quote "$objDir\\"), "/Fd" + (Quote "$objDir\\"), "/Fe" + (Quote $tmpDll),
+      "/link", "/NOLOGO", "/NOIMPLIB", "/NOEXP", "/INCREMENTAL:NO")
+$rsp = Join-Path $objDir "cl.rsp"
+[System.IO.File]::WriteAllLines($rsp, [string[]]$clArgs)
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
-$out = cmd /c "call `"$vcvars`" >nul 2>&1 && $cl 2>&1"
+$out = cmd /c "call `"$vcvars`" >nul 2>&1 && cl @`"$rsp`" 2>&1"
 $code = $LASTEXITCODE
 $sw.Stop()
 if ($code -ne 0 -or -not (Test-Path -LiteralPath $tmpDll)) {

@@ -126,7 +126,8 @@ Header: `sdk/include/keysynth/plugin_abi.h` (documented in place; read it first)
 - `save_state` may run on the control thread while `process` runs: make it thread-safe (copy atomically).
 
 Build: `scripts/build_plugin.ps1 my_fx` (`-Config Debug`, `-ExtraFlags '/arch:AVX2'`) → `plugins/.build/my_fx-<hash>.dll`
-(~1–2 s; exit 3 = MSVC not found, 1 = compile error with the compiler output). The running engine loads the newest
+(~1–2 s; exit 3 = MSVC not found, 1 = compile error with the compiler output; arguments go through a response
+file, never through `cmd.exe`). The running engine loads the newest
 build within ~0.5 s. Static CRT (`/MT`), `/W4`; only the C ABI crosses the boundary — no C++ types, no exceptions
 out of the DLL.
 
@@ -135,7 +136,8 @@ out of the DLL.
 ARCHITECTURE §4 applies to everything that runs per block: no allocation, locks, file/console IO, exceptions, or
 unbounded loops in `process`/`set_param`/Faust `compute`. Allocate in `prepare`. Faust code is RT-safe by
 construction (no allocation in `compute`; `ks-tests` checks the LLVM IR of the examples); avoid `ffunction` calls
-into non-RT C functions. Never produce NaN/Inf: the host zeroes such blocks and reports `faulted`.
+into non-RT C functions. Never produce NaN/Inf: the host zeroes such blocks, resets the instance (a C++ instance is muted after 8
+consecutive bad blocks) and reports `faulted`.
 
 Isolation is *lite*: a crash (access violation, stack overflow, ...) inside plugin code is caught (SEH), that
 instance is muted and `plugin_status: faulted` is sent; fix the code and save/rebuild to get a fresh instance. A
@@ -153,7 +155,7 @@ build/bin/Release/ks-tests.exe "[plugins]"                                # host
 ```
 
 `ks-render` loads only the plugins the patch references (all for `--list-modules`); errors are printed as
-`plugin <name>: error: ...`. Check: no NaN/Inf, peak ≤ 0 dBFS, not silent, tails decay (the same criteria as the
+`plugin <name>: error: ...` and ks-render exits 1 if a referenced plugin did not load. Check: no NaN/Inf, peak ≤ 0 dBFS, not silent, tails decay (the same criteria as the
 factory render suite, `docs/TESTING.md`). Live: run `keysynth-engine --no-audio` (or with audio), open the UI, add
 `plugin:<name>`, edit and save the source — the toast shows `compiling…` → `loaded vN` or the error.
 Over the protocol: `{"type":"reload_plugin","name":"faust_pluck"}` forces a recompile; `list_plugins` lists states.
