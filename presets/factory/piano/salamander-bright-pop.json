@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Bright Pop Piano",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "grand",
+      "pop",
+      "bright",
+      "sampled"
+    ],
+    "description": "Salamander grand with a soft velocity curve so the brighter forte layers speak early, plus a little more level. Pop / rock ballad piano.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Bright Pop Piano",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 5,
+          "velocity_curve": -0.6,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

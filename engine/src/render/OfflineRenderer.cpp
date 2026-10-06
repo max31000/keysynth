@@ -6,11 +6,13 @@
 #include "core/PatchModel.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 namespace ks {
 
@@ -28,6 +30,22 @@ RenderResult OfflineRenderer::render(const Patch& patch, std::vector<TimedEvent>
     engine->transport().setTempo(model.patch().tempo);
     BuildResult b = GraphBuilder::build(model.patch(), registry, nullptr, opt.sampleRate, block);
     r.warnings.insert(r.warnings.end(), b.warnings.begin(), b.warnings.end());
+    // Offline: modules may block on IO in process(); wait until asynchronous loads (samples) have finished.
+    if (b.graph) {
+        const auto nodes = b.graph->allModuleNodes();
+        for (ModuleNode* n : nodes)
+            if (n->module) n->module->setOfflineMode(true);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(opt.readyTimeoutSeconds);
+        for (ModuleNode* n : nodes) {
+            while (n->module && !n->module->isReady()) {
+                if (std::chrono::steady_clock::now() > deadline) {
+                    r.warnings.push_back("module '" + n->type + "' not ready after timeout; rendering anyway");
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        }
+    }
     engine->publish(std::move(b.graph));
 
     std::stable_sort(events.begin(), events.end(), [](const TimedEvent& a, const TimedEvent& b2) { return a.time < b2.time; });

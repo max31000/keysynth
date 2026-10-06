@@ -7,6 +7,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 #include <filesystem>
 #include <set>
 
@@ -164,6 +166,11 @@ TEST_CASE("PresetStore lists and loads factory presets", "[preset]") {
         ++factory;
         std::vector<std::string> w;
         Patch p = store.load(i.path, &w);
+#if !defined(KS_HAS_SFIZZ)
+        // Built without sfizz (KS_WITH_SFIZZ=OFF): `sampler` presets reference an unregistered module.
+        if (std::any_of(p.layers.begin(), p.layers.end(), [](const Layer& l) { return l.instrument.type == "sampler"; }))
+            continue;
+#endif
         PatchModel m(defaultRegistry());
         auto w2 = m.setPatch(p);
         INFO(i.path);

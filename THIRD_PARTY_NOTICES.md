@@ -30,3 +30,13 @@ Attribution text for CC BY libraries:
 
 Local fixes applied after download (see `patches` in `assets/samples.json`): Linnoleum `d22` hi-hat sample paths and
 SSO `Concert Harp.sfz` root-absolute paths. These change only the SFZ mapping text, not the samples.
+
+## sfizz (sampler engine)
+
+The `sampler` module links **sfizz 1.2.3** (github.com/sfztools/sfizz), BSD-2-Clause, Copyright (c) sfizz
+contributors. It is fetched by CMake (`cmake/Dependencies.cmake`, which applies one local one-line fix to
+`src/sfizz/ADSREnvelope.cpp`, documented there). Bundled sfizz components compiled in, with their licences (texts in
+the sfizz source tree under `external/` and `src/external/`): Abseil (Apache-2.0), SIMDe (MIT), ghc::filesystem (MIT),
+atomic_queue (MIT), jsl (BSL-1.0), cephes (BSD-3-Clause style), st_audiofile (BSD-2-Clause), dr_libs and stb_vorbis
+(public domain / MIT-0), libaiff (MIT-style), WavPack (BSD-3-Clause), KISS FFT (BSD-3-Clause), pugixml (MIT),
+cpuid (BSD-3-Clause), spline (BSD-3-Clause), tunings (MIT), hiir (WTFPL).

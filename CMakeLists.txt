@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(keysynth VERSION 0.1.0 LANGUAGES C CXX)
 
 option(KS_BUILD_TESTS "Build Catch2 tests (ks-tests)" ON)
-option(KS_WITH_SFIZZ "Build the sfizz-based sampler (Phase 2, placeholder)" OFF)
+option(KS_WITH_SFIZZ "Build the sfizz-based SFZ sampler module (`sampler`)" ON)
 # Real-time checks (RtScope + operator new/delete hook + ks::Mutex assert). Cost: one thread_local read per
 # allocation. ON by default in every config so the Release test run also exercises them (ARCHITECTURE §4.8).
 option(KS_RT_CHECKS "Enable audio-thread real-time violation checks" ON)

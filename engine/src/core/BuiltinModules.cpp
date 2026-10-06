@@ -4,12 +4,16 @@
 #include "effects/gain/GainFx.h"
 #include "effects/limiter/LimiterFx.h"
 #include "instruments/basic/BasicSynth.h"
+#include "instruments/sampler/SamplerModule.h"
 
 namespace ks {
 
 void registerBuiltinModules(ModuleRegistry& r) {
     // Instruments
     r.add<BasicSynth>();
+#if defined(KS_HAS_SFIZZ)
+    r.add<SamplerModule>();
+#endif
     // Effects
     r.add<GainFx>();
     r.add<LimiterFx>();
