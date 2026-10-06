@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "name": "Pop-Funk Groove (Billie Jean-ish)",
+  "description": "Tight, dry LinnDrum groove: kick on 1 and 3, snare 2 and 4, steady 8th hats. Reference: Michael Jackson — Billie Jean.",
+  "tempo": 117,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 1,
+  "swing": 0,
+  "kit": "linn",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... .... x... ...."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... x... .... x..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "x.x. x.x. x.x. x.x."
+    },
+    {
+      "name": "Shaker",
+      "note": 70,
+      "steps": "3434 3434 3434 3434"
+    }
+  ]
+}

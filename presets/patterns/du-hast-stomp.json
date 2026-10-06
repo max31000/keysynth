@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "name": "Industrial Stomp (Du Hast-ish)",
+  "description": "Distorted tight kick 8ths with 16th pickups, huge gated snare. Reference: Rammstein — Du Hast.",
+  "tempo": 125,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 2,
+  "swing": 0,
+  "kit": "industrial",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x.xx x.x. x.xx x.x. | x.xx x.x. x.xx x..."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... X... .... X... | .... X... .... X..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "x.x. x.x. x.x. x.x. | x.x. x.x. x.x. ...."
+    },
+    {
+      "name": "Crash",
+      "note": 49,
+      "steps": "x... .... .... .... | .... .... .... ...."
+    },
+    {
+      "name": "High Tom",
+      "note": 50,
+      "steps": ".... .... .... .... | .... .... .... x..."
+    },
+    {
+      "name": "Mid Tom",
+      "note": 47,
+      "steps": ".... .... .... .... | .... .... .... .x.."
+    },
+    {
+      "name": "Low Tom",
+      "note": 45,
+      "steps": ".... .... .... .... | .... .... .... ..xx"
+    }
+  ],
+  "accent": "x... x... x... x... | x... x... x... x..."
+}

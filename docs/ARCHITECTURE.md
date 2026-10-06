@@ -197,6 +197,11 @@ Patch (data)                              RackGraph (live, audio thread)
   across swaps and are applied once to the mixed output of both graphs during a transition.
 - The Engine's maxBlock = device buffer size (offline: `--block`); larger callbacks are split.
 - `Transport` (tempo, play state, position) lives in the Engine, outside the graph.
+- **RhythmNode** = a `drums` ModuleNode (stable `nodeId` from `patch.rhythm.node`, addressable by `set_param`, reused
+  across rebuilds like any module, render-once shared in transitions). The Engine's DrumSequencer generates its
+  note events per block (`RenderArgs.rhythmEvents`, sample offsets inside the block); the graph renders it into its
+  own buffer, applies the per-block `drums_volume` gain ramp and sums it with the layers *before* master FX. During
+  a transition the old graph's RhythmNode gets no sequencer events (only the AllNotesOff).
 
 ### 5.4 Structural changes (GraphBuilder + GraphSwapper)
 
@@ -252,7 +257,7 @@ Patch (data)                              RackGraph (live, audio thread)
 | `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
 | `sampler` | SFZ via sfizz 1.2.3 (isolated static target, `KS_WITH_SFIZZ`). State `{"sfz": path}`; per-instance loader thread (loads serialized across instances; also does non-RT voice reallocation via a lock-free pause handshake), silence + `loading`=1 until ready; sample pool per instance (no cross-instance cache yet); params volume/pan/transpose/tune/polyphony (non-automatable: cuts notes)/velocity curve; the `.sfz` path must resolve inside the §11 roots, or below `$KS_ASSETS_DIR` / the main checkout's `assets/` (`instruments/sampler/SamplePaths.h`); paths *inside* the SFZ (`sample=`, `#include`, `default_path`) are followed by sfizz unchecked | Salamander grand, Rhodes/Wurli/CP80, Mellotron, SSO/VPO choir, strings, brass, harpsichord, organ, clavinet, drum kits |
-| `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
+| `drums` | Synth kit, 13 voices (kick, snare, clap, closed/open hat w/ choke, crash, ride, 3 toms, rim, cowbell, tambourine), each with model 808/909/Linn/Industrial (`kit` default or per-voice `<v>_model`) + level/tune/decay/tone/pan; GM key map, other octaves fold onto 36–47; keys-playable; used by the RhythmNode | 80s beats, Rammstein stomp |
 
 Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string-machine 3-phase), `phaser`
 (4/6/8/12 stages), `flanger` (BBD, optional through-zero), `delay` (stereo/ping-pong/tape, tempo sync), `reverb`
@@ -271,9 +276,19 @@ primitives live in `dsp/` (Bbd, InterpDelay, HalfbandIir, ...).
 
 ## 8. Transport
 
-Engine-owned: tempo, time signature, play/stop, ppq position.
-- `Metronome`: synthesized click, downbeat accent, volume; mixed after master FX, before limiter.
-- `DrumSequencer`: 16-step × N tracks, patterns in `presets/patterns/*.json`, drives the RhythmNode's `drums`.
+Engine-owned: tempo, time signature, play/stop, ppq position, count-in, swing, drums on/volume (atomics written by
+the control thread, read once per block).
+- `Transport`: position = anchor ppq + samples since anchor × tempo (re-anchored on tempo change), so step times do not
+  drift with block size.
+- `Metronome`: synthesized click on every denominator beat, downbeat accent, volume; forced on during the count-in
+  bar; mixed after master FX, before limiter.
+- `DrumSequencer`: up to 16 tracks × 256 steps (`bars × num × steps_per_beat`), per-step velocity, accent row, track
+  mute, swing; patterns in `presets/patterns/*.json` (schema PRESETS.md). Control → audio via a preallocated
+  **triple buffer** of fixed-size `RtPattern` PODs (no allocation, no locks; the audio thread picks the newest at block
+  start, so a pattern swap while playing is seamless and keeps the position modulo the new length; a different step
+  length re-anchors at the next step). Step k fires at the first sample ≥ its exact ppq time (ε = 1e-4 samples),
+  computed per block from the block-start ppq — sample-accurate for any block size. Note-ons only (drum voices are
+  one-shots), channel 10.
 - `Looper`: later (not v1).
 
 ## 9. Presets

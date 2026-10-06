@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Industrial Kit",
+    "category": "Drums",
+    "tags": ["drums", "industrial", "rammstein", "metal"],
+    "description": "Distorted tight kick, big gated snare, metallic hats on the keys. Reference: Rammstein — Du Hast / Sonne.",
+    "author": "factory"
+  },
+  "tempo": 125,
+  "layers": [
+    {
+      "name": "Industrial Kit",
+      "zone": { "key_lo": 0, "key_hi": 127, "vel_lo": 1, "vel_hi": 127, "transpose": 0,
+                "channel": 0, "volume_db": 0, "pan": 0, "mute": false, "solo": false, "sustain": false },
+      "instrument": { "type": "drums", "params": { "kit": 3, "volume_db": -3 }, "state": {} },
+      "fx": []
+    }
+  ],
+  "master": { "volume_db": -3, "fx": [] },
+  "rhythm": { "kit": { "kit": 3 }, "pattern": "presets/patterns/du-hast-stomp.json" }
+}

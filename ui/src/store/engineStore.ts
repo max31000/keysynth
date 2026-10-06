@@ -13,11 +13,16 @@ import {
   type ModuleInfo,
   type NodeId,
   type Patch,
+  type Pattern,
+  type PatternEntry,
+  type PatternSnapshot,
   type PluginStatus,
   type PresetEntry,
+  type TransportRequest,
   type TransportState,
   type Zone,
 } from '../protocol/types';
+import { normalizePattern, setTimeSig } from '../lib/stepGrid';
 import { applyBypass, applyMoveFx, applyParam, applyZone, findLayer, findModule } from './patchOps';
 import { clearNotes, pushMidi, pushTelemetry } from './liveBus';
 
@@ -43,6 +48,9 @@ export interface EngineState {
   selectedModule: NodeId | null;
   logs: LogEvent[];
   lastError: string | null;
+  /** current drum pattern (engine snapshot + optimistic step edits) */
+  pattern: PatternSnapshot | null;
+  patterns: PatternEntry[];
   /** Hot-reloaded plugins by name (docs/PLUGINS.md). */
   plugins: Record<string, PluginStatus>;
   /** Latest plugin status change, shown as a toast until dismissed (ok/removed auto-hide). */
@@ -58,7 +66,14 @@ export interface EngineState {
   connectionChanged(status: ConnectionStatus): void;
   selectLayer(layer: NodeId): void;
   selectModule(node: NodeId, layer?: NodeId): void;
-  setTransport(t: Partial<TransportState>): void;
+  setTransport(t: TransportRequest): void;
+  /** Load a pattern file as the current pattern (transport `pattern`). */
+  loadPattern(path: string): void;
+  refreshPatterns(): Promise<void>;
+  fetchPattern(): Promise<void>;
+  /** Optimistic pattern edit; coalesced into one `set_pattern` per flush. */
+  editPattern(fn: (p: Pattern) => Pattern): void;
+  savePattern(name: string, overwrite?: boolean): Promise<string | null>;
   loadPreset(path: string): Promise<void>;
   savePreset(name: string, category?: string, overwrite?: boolean): Promise<string | null>;
   refreshPresets(): Promise<void>;
@@ -113,14 +128,18 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
   const pendingParams = new Map<string, { node: NodeId; param: string; value: number; type?: string }>();
   const pendingZones = new Map<NodeId, Partial<Zone>>();
   const pendingBypass = new Map<NodeId, { bypass: boolean; type?: string }>();
-  let pendingTransport: Partial<TransportState> | null = null;
+  let pendingTransport: TransportRequest | null = null;
+  let pendingPattern: Pattern | null = null;
+  /** set_pattern requests not yet acknowledged (snapshots older than them are ignored) */
+  let patternInFlight = 0;
+  let patternFetch: Promise<void> | null = null;
   let flushScheduled = false;
   /** true once a `state` arrived on the current connection */
   let synced = false;
   let lastStatsAt = -Infinity;
 
   const hasPending = () =>
-    pendingParams.size > 0 || pendingZones.size > 0 || pendingBypass.size > 0 || pendingTransport !== null;
+    pendingParams.size > 0 || pendingZones.size > 0 || pendingBypass.size > 0 || pendingTransport !== null || pendingPattern !== null;
 
   /** Drop pending edits whose target vanished or changed module type in this snapshot. */
   const prunePending = (patch: Patch) => {
@@ -193,6 +212,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       selectedModule: null,
       logs: [],
       lastError: null,
+      pattern: null,
+      patterns: [],
       plugins: {},
       pluginNotice: null,
 
@@ -211,8 +232,28 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
             });
             synced = true;
             if (hasPending()) scheduleFlush();
+            // The engine changed the current pattern (load, meter, preset) → fetch it.
+            const tp = msg.transport.pattern;
+            const cur = get().pattern;
+            const ts = msg.transport.time_sig;
+            if (
+              tp !== undefined &&
+              !pendingPattern &&
+              (!cur || cur.path !== tp || cur.edited !== !!msg.transport.pattern_edited ||
+                (ts && (cur.pattern.time_sig[0] !== ts[0] || cur.pattern.time_sig[1] !== ts[1])))
+            ) {
+              void get().fetchPattern();
+            }
             break;
           }
+          case 'pattern':
+          case 'get_pattern_ok':
+            if (!pendingPattern && patternInFlight === 0)
+              set({ pattern: { path: msg.path, edited: msg.edited, pattern: normalizePattern(msg.pattern) } });
+            break;
+          case 'list_patterns_ok':
+            set({ patterns: msg.patterns });
+            break;
           case 'param': {
             const { patch } = get();
             if (patch) set({ patch: applyParam(patch, msg.node, msg.param, msg.value), dirty: true });
@@ -309,6 +350,15 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
           if (!client.send({ type: 'transport', ...pendingTransport })) return;
           pendingTransport = null;
         }
+        if (pendingPattern) {
+          if (client.status !== 'open') return;
+          patternInFlight++;
+          void client
+            .request({ type: 'set_pattern', pattern: pendingPattern }, { expect: 'set_pattern_ok' })
+            .catch(reportError)
+            .finally(() => patternInFlight--);
+          pendingPattern = null;
+        }
       },
 
       connectionChanged(status) {
@@ -333,9 +383,74 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       },
 
       setTransport(t) {
-        set({ transport: { ...get().transport, ...t } });
+        const upd: Partial<EngineState> = { transport: { ...get().transport, ...t } };
+        // Meter changes resize the current pattern on the engine side; mirror that optimistically.
+        // Swing lives in the pattern too; keep both in sync so a later set_pattern does not revert them.
+        const cur = get().pattern;
+        const apply = (p: Pattern): Pattern => {
+          let q = p;
+          if (t.time_sig) q = setTimeSig(q, t.time_sig[0], t.time_sig[1]);
+          if (t.swing !== undefined) q = { ...q, swing: t.swing };
+          return q;
+        };
+        if (cur && (t.time_sig || t.swing !== undefined)) {
+          upd.pattern = { ...cur, edited: cur.edited || !!t.time_sig, pattern: apply(cur.pattern) };
+          if (pendingPattern) pendingPattern = apply(pendingPattern);
+        }
+        set(upd);
         pendingTransport = { ...pendingTransport, ...t };
         scheduleFlush();
+      },
+
+      loadPattern(path) {
+        pendingPattern = null; // unsent edits belonged to the previous pattern
+        get().setTransport({ pattern: path });
+        set({ pattern: null }); // no edits on the old pattern until the new one arrives
+      },
+
+      async refreshPatterns() {
+        await structural(() => client.request({ type: 'list_patterns' }, { expect: 'list_patterns_ok' }));
+      },
+
+      fetchPattern() {
+        if (patternFetch) return patternFetch;
+        patternFetch = (async () => {
+          try {
+            await client.request({ type: 'get_pattern' }, { expect: 'get_pattern_ok' });
+          } catch (e) {
+            reportError(e);
+          } finally {
+            patternFetch = null;
+          }
+        })();
+        return patternFetch;
+      },
+
+      editPattern(fn) {
+        const cur = get().pattern;
+        if (!cur) return;
+        const next = fn(cur.pattern);
+        if (next === cur.pattern) return;
+        set({ pattern: { ...cur, edited: true, pattern: next } });
+        pendingPattern = next;
+        scheduleFlush();
+      },
+
+      async savePattern(name, overwrite) {
+        try {
+          get().flush();
+          const r = await client.request(
+            overwrite ? { type: 'save_pattern', name, overwrite: true } : { type: 'save_pattern', name },
+            { expect: 'save_pattern_ok' },
+          );
+          const cur = get().pattern;
+          if (cur) set({ pattern: { ...cur, path: r.path, edited: false, pattern: { ...cur.pattern, name } } });
+          await get().refreshPatterns();
+          return r.path;
+        } catch (e) {
+          reportError(e);
+          return null;
+        }
       },
 
       async loadPreset(path) {
@@ -446,6 +561,7 @@ async function bootstrap(client: EngineClient): Promise<void> {
     client.request({ type: 'get_catalog' }, { expect: 'catalog_ok' }),
     client.request({ type: 'list_presets' }, { expect: 'list_presets_ok' }),
     client.request({ type: 'list_devices' }, { expect: 'devices' }),
+    client.request({ type: 'list_patterns' }, { expect: 'list_patterns_ok' }).catch(() => undefined),
     // Optional: engines started with --no-plugins (or older mocks) may not answer.
     client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' }).catch(() => undefined),
   ]);

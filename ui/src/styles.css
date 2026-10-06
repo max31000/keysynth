@@ -31,6 +31,7 @@
   --browser-w: 264px;
   --master-w: 176px;
   --kbd-h: 132px;
+  --rhythm-h: clamp(210px, 36vh, 320px);
 
   color-scheme: dark;
 }
@@ -96,10 +97,11 @@ code {
   height: 100vh;
   min-width: 900px;
   grid-template-columns: var(--browser-w) minmax(0, 1fr) var(--master-w);
-  grid-template-rows: 48px minmax(0, 1fr) var(--kbd-h);
+  grid-template-rows: 48px minmax(0, 1fr) auto var(--kbd-h);
   grid-template-areas:
     'top top top'
     'browser rack master'
+    'browser rhythm rhythm' /* browser keeps its height when the Rhythm panel opens */
     'kbd kbd kbd';
   gap: 6px;
   padding: 0 6px 6px;
@@ -706,6 +708,7 @@ code {
 }
 .cats {
   display: grid;
+  grid-auto-rows: max-content; /* rows never collapse when the column is short */
   grid-template-columns: 1fr 1fr;
   padding: 4px 6px;
   gap: 1px 2px;
@@ -1954,7 +1957,424 @@ code {
   }
 }
 
+/* ───────── rhythm (drum machine) ───────── */
+
+.rhythm {
+  grid-area: rhythm;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.rhythm.open {
+  height: var(--rhythm-h);
+}
+.rhythm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  flex: none;
+}
+.rhythm.open .rhythm-head {
+  border-bottom: 1px solid var(--line-soft);
+}
+.rh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  background: none;
+  border: 0;
+  color: var(--text);
+  font: 600 12px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.rh-toggle .chev {
+  display: inline-block;
+  color: var(--accent);
+  transition: transform 0.15s;
+}
+.rh-toggle[aria-expanded='true'] .chev {
+  transform: rotate(90deg);
+}
+.rhythm-head > * {
+  flex: none;
+}
+.rhythm-head > .rh-name,
+.rhythm-head > .rh-steps {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.rhythm-head > .spacer {
+  flex: 1 1 0;
+}
+.rh-name {
+  font: 600 14px/1 var(--font-label);
+  color: var(--accent-hi);
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rh-edited {
+  color: var(--accent);
+  font-size: 9px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+.rh-steps {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  margin-left: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.rh-steps i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: #23272c;
+  flex: none;
+}
+.rh-steps i.beat {
+  background: #343941;
+}
+.rh-steps i.now {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+.rh-kit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rh-kit .ctl-label {
+  margin: 0;
+}
+.rh-kit .select {
+  height: 26px;
+}
+
+.rhythm-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+}
+.rh-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px;
+  border-right: 1px solid var(--line-soft);
+}
+.pattern-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.pl-label {
+  font: 600 9.5px/1 var(--font-label);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 6px 4px 4px;
+}
+.pl-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--text-2, var(--text));
+  text-align: left;
+  cursor: pointer;
+}
+.pl-item:hover {
+  background: #1d2125;
+}
+.pl-item.on {
+  background: rgba(242, 160, 61, 0.12);
+  color: var(--accent-hi);
+}
+.pl-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.pl-meta {
+  flex: none;
+  font-size: 10px;
+  color: var(--muted);
+}
+.pl-save {
+  display: flex;
+  gap: 4px;
+}
+.pl-save .input {
+  flex: 1;
+  min-width: 0;
+}
+.pl-new {
+  width: 100%;
+}
+
+.rh-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.rh-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+}
+.rh-controls .knob {
+  flex: none;
+}
+.rh-meter {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.rh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rh-field .select {
+  height: 26px;
+}
+.rh-ts {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.rh-slash {
+  color: var(--muted);
+}
+.rh-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--line-soft);
+}
+.rh-hits {
+  font-size: 11px;
+}
+.rh-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.rh-view .module {
+  border: 0;
+  background: none;
+  min-height: 0;
+}
+
+/* step grid */
+.step-grid {
+  --cell: 22px;
+  --head: 168px;
+  padding: 8px 10px 10px;
+  width: max-content;
+  min-width: 100%;
+}
+.sg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  user-select: none;
+  touch-action: none;
+}
+.sg-row {
+  display: grid;
+  grid-template-columns: var(--head) repeat(var(--steps), var(--cell));
+  gap: 2px;
+  align-items: center;
+}
+.sg-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  height: 100%;
+}
+.sg-note {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  background: #0f1113;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 0 4px;
+}
+.sg-mute,
+.sg-del {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: #1b1e22;
+  color: var(--muted);
+  font: 600 10px/1 var(--font-label);
+  cursor: pointer;
+  padding: 0;
+}
+.sg-mute.on {
+  color: #111;
+  background: var(--warn);
+  border-color: var(--warn);
+}
+.sg-del:hover {
+  color: var(--hot);
+}
+.sg-row.muted .sg-cell.on i {
+  opacity: 0.35;
+}
+.sg-num {
+  font: 500 9.5px/1 var(--font-mono);
+  color: var(--faint);
+  text-align: left;
+  height: 12px;
+  padding-left: 2px;
+}
+.sg-num.bar-start {
+  color: var(--accent-dim);
+}
+.sg-num.now {
+  color: var(--accent);
+}
+.sg-cell {
+  position: relative;
+  height: 24px;
+  border-radius: 3px;
+  background: #1a1d21;
+  border: 1px solid #23272c;
+  cursor: pointer;
+  overflow: hidden;
+  outline: none;
+}
+.sg-cell.beat-odd {
+  background: #16181b;
+}
+.sg-cell.bar-start {
+  box-shadow: inset 2px 0 0 #3a3f46;
+}
+.sg-cell:hover {
+  border-color: #3a3f46;
+}
+.sg-cell:focus-visible {
+  border-color: var(--accent);
+}
+.sg-cell i {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  height: 0;
+  border-radius: 2px;
+}
+.sg-cell.on i {
+  height: calc((100% - 4px) * var(--vel, 0.8));
+  min-height: 3px;
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+.sg-cell.on.acc i {
+  background: linear-gradient(180deg, #fff1d6, var(--accent-hi));
+}
+.sg-cell.now {
+  border-color: rgba(242, 160, 61, 0.55);
+}
+.sg-cell.now:not(.on) {
+  background: #24221d;
+}
+.sg-accent .sg-cell {
+  height: 14px;
+}
+.sg-accent .sg-cell.on i {
+  height: calc(100% - 4px);
+  background: var(--hot);
+  box-shadow: none;
+}
+.sg-accent-label {
+  font: 600 9.5px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-left: 26px;
+}
+.sg-add {
+  margin-top: 8px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 3px;
+  border: 1px dashed var(--line);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  position: sticky;
+  left: 10px;
+}
+.sg-add:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
 /* ───────── responsive (kept last so it overrides) ───────── */
+
+/* Short windows with the Rhythm panel open: keep the preset browser usable. */
+@media (max-height: 820px) {
+  :root {
+    --rhythm-h: clamp(200px, 31vh, 320px);
+  }
+  .tags {
+    max-height: 54px;
+    overflow: auto;
+    flex: none;
+  }
+}
+
+@media (max-width: 1279px) {
+  .rh-steps,
+  .rh-hits,
+  .rh-chip {
+    display: none;
+  }
+  .rhythm-body {
+    grid-template-columns: 184px minmax(0, 1fr);
+  }
+  .rh-name {
+    max-width: 180px;
+  }
+}
 
 @media (max-width: 1279px) {
   :root {

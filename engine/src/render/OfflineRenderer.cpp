@@ -27,7 +27,21 @@ RenderResult OfflineRenderer::render(const Patch& patch, std::vector<TimedEvent>
 
     auto engine = std::make_unique<Engine>();
     engine->prepare(opt.sampleRate, block);
+    double patternSeconds = 0.0;
+    if (opt.pattern) {
+        if (opt.pattern->tempo > 0) model.setTempo(opt.pattern->tempo);
+        if (opt.tempo > 0) model.setTempo(opt.tempo);
+        if (opt.pattern->kit >= 0 && model.patch().rhythm.drums.node != 0)
+            model.setParam(model.patch().rhythm.drums.node, "kit", static_cast<float>(opt.pattern->kit));
+        engine->sequencer().setPattern(toRt(*opt.pattern));
+        engine->transport().setTimeSignature(opt.pattern->numerator, opt.pattern->denominator);
+        engine->rhythm().swing.store(opt.pattern->swing);
+        patternSeconds = std::max(1, opt.patternBars) * opt.pattern->barPpq() * 60.0 / model.patch().tempo;
+    } else if (opt.tempo > 0) {
+        model.setTempo(opt.tempo);
+    }
     engine->transport().setTempo(model.patch().tempo);
+    if (opt.pattern) engine->transport().setPlaying(true);
     BuildResult b = GraphBuilder::build(model.patch(), registry, nullptr, opt.sampleRate, block);
     r.warnings.insert(r.warnings.end(), b.warnings.begin(), b.warnings.end());
     // Offline: modules may block on IO in process(); wait until asynchronous loads (samples) have finished.
@@ -51,6 +65,8 @@ RenderResult OfflineRenderer::render(const Patch& patch, std::vector<TimedEvent>
     std::stable_sort(events.begin(), events.end(), [](const TimedEvent& a, const TimedEvent& b2) { return a.time < b2.time; });
     double lastTime = 0.0;
     for (const auto& e : events) lastTime = std::max(lastTime, e.time);
+    lastTime = std::max(lastTime, patternSeconds);
+    const int64_t stopAt = static_cast<int64_t>(std::llround(patternSeconds * opt.sampleRate));
     const int64_t total = static_cast<int64_t>(std::ceil((lastTime + std::max(0.0, opt.tailSeconds)) * opt.sampleRate));
     r.left.assign(static_cast<size_t>(total), 0.0f);
     r.right.assign(static_cast<size_t>(total), 0.0f);
@@ -59,8 +75,11 @@ RenderResult OfflineRenderer::render(const Patch& patch, std::vector<TimedEvent>
     std::vector<MidiEvent> blockEvents;
     blockEvents.reserve(kMaxEventsPerBlock);
     size_t ei = 0;
-    for (int64_t pos = 0; pos < total; pos += block) {
-        const int n = static_cast<int>(std::min<int64_t>(block, total - pos));
+    int64_t blockIndex = 0;
+    for (int64_t pos = 0; pos < total; ++blockIndex) {
+        int n = static_cast<int>(std::min<int64_t>(block, total - pos));
+        if (opt.pattern && pos < stopAt) n = static_cast<int>(std::min<int64_t>(n, stopAt - pos)); // stop exactly
+        if (opt.pattern && pos == stopAt) engine->transport().setPlaying(false);
         blockEvents.clear();
         while (ei < events.size()) {
             const int64_t at = static_cast<int64_t>(std::llround(events[ei].time * opt.sampleRate));
@@ -74,7 +93,8 @@ RenderResult OfflineRenderer::render(const Patch& patch, std::vector<TimedEvent>
         engine->processBlock(ab, MidiEventSpan(blockEvents.data(), blockEvents.size()));
         std::memcpy(r.left.data() + pos, l.data(), sizeof(float) * static_cast<size_t>(n));
         std::memcpy(r.right.data() + pos, rr.data(), sizeof(float) * static_cast<size_t>(n));
-        if ((pos / block) % 64 == 0) engine->collectGarbage();
+        if (blockIndex % 64 == 0) engine->collectGarbage();
+        pos += n;
     }
     engine->collectGarbage();
     return r;

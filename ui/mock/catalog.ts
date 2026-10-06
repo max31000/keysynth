@@ -208,7 +208,47 @@ const effects: ModuleInfo[] = [
   ]),
 ];
 
-export const CATALOG: ModuleInfo[] = [va, organ, combo, epiano, ...effects];
+// Mirrors engine/src/instruments/drums/DrumKit.cpp (ids, ranges, defaults, groups).
+const DRUM_VOICES: [string, string, number, number][] = [
+  ['kick', 'Kick', 0, 0],
+  ['snare', 'Snare', -1, 0],
+  ['clap', 'Clap', -2, 0.05],
+  ['chh', 'Closed Hat', -4, 0.25],
+  ['ohh', 'Open Hat', -5, 0.25],
+  ['crash', 'Crash', -6, -0.3],
+  ['ride', 'Ride', -7, 0.35],
+  ['tom_lo', 'Low Tom', -2, -0.35],
+  ['tom_mid', 'Mid Tom', -2, 0],
+  ['tom_hi', 'High Tom', -2, 0.35],
+  ['rim', 'Rim', -4, -0.1],
+  ['cowbell', 'Cowbell', -6, 0.15],
+  ['tamb', 'Tambourine', -6, -0.2],
+];
+const drums: ModuleInfo = {
+  typeId: 'drums',
+  name: 'Drum Machine',
+  kind: 'instrument',
+  category: 'Drums',
+  uiHints: {
+    groupOrder: ['Kit', ...DRUM_VOICES.map((v) => v[1])],
+    front: ['kit', 'volume_db', 'kick_level', 'snare_level', 'chh_level', 'kick_tune', 'kick_decay'],
+  },
+  params: [
+    p('kit', 'Kit', 'Kit', { choices: ['TR-808', 'TR-909', 'Linn', 'Industrial'] }),
+    p('volume_db', 'Volume', 'Kit', { min: -40, max: 6, def: 0, unit: 'dB' }),
+    p('velocity', 'Velocity Sens', 'Kit', { def: 0.8 }),
+    ...DRUM_VOICES.flatMap(([id, g, level, pan]) => [
+      p(`${id}_model`, 'Model', g, { choices: ['Kit', '808', '909', 'Linn', 'Industrial'] }),
+      p(`${id}_level`, 'Level', g, { min: -40, max: 6, def: level, unit: 'dB' }),
+      p(`${id}_tune`, 'Tune', g, { min: -12, max: 12, def: 0, unit: 'st' }),
+      p(`${id}_decay`, 'Decay', g, { def: 0.5 }),
+      p(`${id}_tone`, 'Tone', g, { def: 0.5 }),
+      p(`${id}_pan`, 'Pan', g, { min: -1, max: 1, def: pan }),
+    ]),
+  ],
+};
+
+export const CATALOG: ModuleInfo[] = [va, organ, combo, epiano, drums, ...effects];
 export const catalogMap: Record<string, ModuleInfo> = Object.fromEntries(CATALOG.map((m) => [m.typeId, m]));
 
 export function defaultParams(typeId: string): Record<string, number> {

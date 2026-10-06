@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "name": "Seven Four (Money-ish)",
+  "description": "Laid-back groove in 7/4. Reference: Pink Floyd — Money.",
+  "tempo": 123,
+  "time_sig": [
+    7,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 1,
+  "swing": 0.1,
+  "kit": "linn",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... .... .... x... ..x. .... ...."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... .... x... .... .... x... ..3."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "x.5. x.5. x.5. x.5. x.5. x.5. x.5."
+    },
+    {
+      "name": "Open Hat",
+      "note": 46,
+      "steps": ".... .... .... .... .... .... ..x."
+    }
+  ],
+  "accent": "x... .... .... .... .... .... ...."
+}

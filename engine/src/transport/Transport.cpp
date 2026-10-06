@@ -14,11 +14,22 @@ void Transport::setTimeSignature(int num, int den) noexcept {
     den_.store(den == 2 || den == 4 || den == 8 || den == 16 ? den : 4, std::memory_order_relaxed);
 }
 
-TransportInfo Transport::beginBlock(bool& started) noexcept {
+void Transport::resetPosition() noexcept {
+    ppq_ = anchorPpq_ = 0.0;
+    sinceAnchor_ = 0;
+}
+
+TransportInfo Transport::beginBlock(bool& started, bool& stopped) noexcept {
     blockPlaying_ = playing_.load(std::memory_order_relaxed);
     blockTempo_ = tempo_.load(std::memory_order_relaxed);
     started = blockPlaying_ && !wasPlaying_;
-    if (started) ppq_ = 0.0;
+    stopped = !blockPlaying_ && wasPlaying_;
+    if (started) resetPosition();
+    if (blockTempo_ != anchorTempo_) {
+        anchorPpq_ = ppq_;
+        sinceAnchor_ = 0;
+        anchorTempo_ = blockTempo_;
+    }
     wasPlaying_ = blockPlaying_;
     TransportInfo t;
     t.tempo = blockTempo_;
@@ -30,7 +41,10 @@ TransportInfo Transport::beginBlock(bool& started) noexcept {
 }
 
 void Transport::endBlock(int numSamples, double sampleRate) noexcept {
-    if (blockPlaying_) ppq_ += static_cast<double>(numSamples) * blockTempo_ / (60.0 * sampleRate);
+    if (blockPlaying_ && sampleRate > 0) {
+        sinceAnchor_ += numSamples;
+        ppq_ = anchorPpq_ + static_cast<double>(sinceAnchor_) * anchorTempo_ / (60.0 * sampleRate);
+    }
     ppqShared_.store(ppq_, std::memory_order_relaxed);
 }
 

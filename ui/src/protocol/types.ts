@@ -109,7 +109,46 @@ export interface Patch {
   tempo?: number;
   layers: Layer[];
   master: { volume_db: number; fx: FxSlot[] };
-  rhythm?: { kit?: ParamValues; pattern?: string };
+  /** Drum-sequencer kit (the `drums` module of the RhythmNode, addressed by `node`) + pattern path. */
+  rhythm?: { node?: NodeId; kit?: ParamValues; pattern?: string };
+}
+
+// ───────────────────────────── Patterns (PRESETS.md "Patterns") ─────────────────────────────
+
+export interface PatternTrack {
+  name: string;
+  /** MIDI note sent to the kit (GM drum map) */
+  note: number;
+  mute: boolean;
+  /** velocity per step, 0 = off (the engine always sends arrays; files may use strings) */
+  steps: number[];
+}
+
+export interface Pattern {
+  format: number;
+  name: string;
+  description?: string;
+  tempo?: number;
+  /** [numerator, denominator] */
+  time_sig: [number, number];
+  steps_per_beat: number;
+  bars: number;
+  swing: number;
+  accent_amount: number;
+  /** drums `kit` index (0 808, 1 909, 2 Linn, 3 Industrial) */
+  kit?: number;
+  tracks: PatternTrack[];
+  /** 0/1 per step */
+  accent: number[];
+}
+
+export interface PatternEntry {
+  path: string;
+  name: string;
+  time_sig: [number, number];
+  bars: number;
+  tempo: number;
+  factory: boolean;
 }
 
 // ───────────────────────────── Shared status types ─────────────────────────────
@@ -124,15 +163,27 @@ export interface AudioStatus {
   running: boolean;
 }
 
-/** Transport state, same keys as the `transport` request. */
+/** Transport state, same keys as the `transport` request (+ `pattern_edited`). */
 export interface TransportState {
   playing: boolean;
   tempo: number;
   metronome: boolean;
   metronome_volume: number;
+  /** current pattern path ("" = none / unsaved empty) */
   pattern?: string;
+  pattern_edited?: boolean;
+  /** drum sequencer output on/off */
   drums?: boolean;
+  /** 0..1 linear */
+  drums_volume?: number;
+  /** 0..1 */
+  swing?: number;
+  time_sig?: [number, number];
+  count_in?: boolean;
 }
+
+/** Transport fields a client may send (`pattern_edited` is engine-owned). */
+export type TransportRequest = Partial<Omit<TransportState, 'pattern_edited'>>;
 
 export interface PresetEntry {
   path: string;
@@ -163,7 +214,11 @@ export interface SetFxBypassMsg { type: 'set_fx_bypass'; id?: number; node: Node
 export interface RescanMidiMsg { type: 'rescan_midi'; id?: number }
 export interface NoteMsg { type: 'note'; id?: number; on: boolean; note: number; velocity: number; channel?: number }
 export interface CcMsg { type: 'cc'; id?: number; cc: number; value: number; channel?: number }
-export interface TransportMsg { type: 'transport'; id?: number; playing?: boolean; tempo?: number; metronome?: boolean; metronome_volume?: number; pattern?: string; drums?: boolean }
+export interface TransportMsg extends TransportRequest { type: 'transport'; id?: number }
+export interface ListPatternsMsg { type: 'list_patterns'; id?: number }
+export interface GetPatternMsg { type: 'get_pattern'; id?: number; path?: string }
+export interface SetPatternMsg { type: 'set_pattern'; id?: number; pattern: Pattern }
+export interface SavePatternMsg { type: 'save_pattern'; id?: number; name: string; overwrite?: boolean }
 export interface ListDevicesMsg { type: 'list_devices'; id?: number }
 export interface PanicMsg { type: 'panic'; id?: number }
 export interface ListPluginsMsg { type: 'list_plugins'; id?: number }
@@ -184,7 +239,8 @@ export type ClientMsg =
   | HelloMsg | GetCatalogMsg | SetParamMsg | LoadPresetMsg | SavePresetMsg | ListPresetsMsg | GetPatchMsg
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
-  | SetAudioDeviceMsg | PanicMsg | ListPluginsMsg | ReloadPluginMsg;
+  | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
+   | ListPluginsMsg | ReloadPluginMsg;
 
 export type ClientMsgType = ClientMsg['type'];
 
@@ -208,6 +264,8 @@ export interface TelemetryEvent {
   voices: number;
   meters: { master: StereoPeak; layers: Record<string, StereoPeak> };
   readouts: Record<string, Record<string, number>>;
+  /** step = last played pattern step (-1 stopped / count-in), bar = its bar */
+  transport?: { ppq: number; playing: boolean; step: number; bar: number };
 }
 export interface MidiNote { note: number; on: boolean; velocity: number }
 export interface MidiEvent { type: 'midi'; notes: MidiNote[] }
@@ -251,10 +309,20 @@ export interface CatalogOk { type: 'catalog_ok'; id?: number; modules: ModuleInf
 export interface LoadPresetOk { type: 'load_preset_ok'; id?: number }
 export interface SavePresetOk { type: 'save_preset_ok'; id?: number; path: string }
 export interface ListPresetsOk { type: 'list_presets_ok'; id?: number; presets: PresetEntry[] }
+/** Current pattern snapshot (also the `get_pattern_ok` payload). */
+export interface PatternSnapshot { path: string; edited: boolean; pattern: Pattern }
+/** Another client changed the current pattern. */
+export interface PatternEvent extends PatternSnapshot { type: 'pattern' }
+export interface ListPatternsOk { type: 'list_patterns_ok'; id?: number; patterns: PatternEntry[] }
+export interface GetPatternOk extends PatternSnapshot { type: 'get_pattern_ok'; id?: number }
+export interface SetPatternOk { type: 'set_pattern_ok'; id?: number; warnings?: string[] }
+export interface SavePatternOk { type: 'save_pattern_ok'; id?: number; path: string }
 
 export type EngineMsg =
   | StateEvent | ParamEvent | TelemetryEvent | MidiEvent | DevicesEvent | LogEvent | ErrorReply
-  | CatalogOk | LoadPresetOk | SavePresetOk | ListPresetsOk | PluginStatusEvent | ListPluginsOk | ReloadPluginOk;
+  | CatalogOk | LoadPresetOk | SavePresetOk | ListPresetsOk
+  | PatternEvent | ListPatternsOk | GetPatternOk | SetPatternOk | SavePatternOk
+  | PluginStatusEvent | ListPluginsOk | ReloadPluginOk;
 
 export type EngineMsgType = EngineMsg['type'];
 export type EngineMsgOf<T extends EngineMsgType> = Extract<EngineMsg, { type: T }>;

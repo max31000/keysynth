@@ -29,7 +29,7 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport] [sampler] [plugins] [faust] [dll]`. `[faust]` tests SKIP when libfaust is missing; `[dll]` tests build plugins with
+[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll]`. `[faust]` tests SKIP when libfaust is missing; `[dll]` tests build plugins with
 `scripts/build_plugin.ps1` (≈ 4 s, SKIP when MSVC is missing). Run the full tier before merging anything that touches DSP or presets.
 
 ### Sample-based presets (`sampler`)
@@ -67,10 +67,15 @@ build/bin/Release/ks-render.exe --preset presets/factory/splits-layers/basic-bas
 build/bin/Release/ks-render.exe --patch-json '@my_patch.json' --midi song.mid --sr 96000 --block 32 --out renders/song.wav
 build/bin/Release/ks-render.exe --list-modules          # catalog JSON (ModuleInfo[], incl. plugins)
 build/bin/Release/ks-render.exe --patch-json '@plugins/faust_pluck/demo.json' --test-pattern --out renders/pluck.wav
+build/bin/Release/ks-render.exe --play-pattern presets/patterns/money-7-4.json --bars 2 --tail 1.5 --out renders/money.wav
 ```
 
 Patches using `plugin:<name>` modules make ks-render compile/load those plugins from `plugins/` first (synchronously,
 Faust machine-code cache in `plugins/.build/cache`); `--no-plugins` skips that, `--root DIR` picks another repo root.
+
+`--play-pattern FILE --bars N [--tempo BPM]` plays a drum pattern through the patch's rhythm kit (pattern tempo, kit,
+swing and meter applied; transport stops exactly after N bars, then `--tail`). Combine with `--notes`/`--midi` to
+layer played notes on top.
 
 `--notes "NOTE:start:dur[:vel],..."` — note name (`C4` = 60, `F#3`, `Bb2`) or number, times in seconds, velocity
 1–127 (default 100). Without `--notes/--midi/--test-pattern` a single C4 is rendered; without `--preset/--patch-json`

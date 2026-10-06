@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "name": "Rainy Shuffle (Riders-ish)",
+  "description": "Soft shuffled ride with cross-stick backbeat (8th-note swing). Reference: The Doors — Riders on the Storm.",
+  "tempo": 106,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 2,
+  "bars": 2,
+  "swing": 0.33,
+  "kit": "linn",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... x..x | x... x..."
+    },
+    {
+      "name": "Rim",
+      "note": 37,
+      "steps": "..x. ..x. | ..x. ..x."
+    },
+    {
+      "name": "Ride",
+      "note": 51,
+      "steps": "x6x6 x6x6 | x6x6 x6x6"
+    },
+    {
+      "name": "Pedal Hat",
+      "note": 44,
+      "steps": "..x. ..x. | ..x. ..x."
+    }
+  ]
+}

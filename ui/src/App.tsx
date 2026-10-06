@@ -6,6 +6,7 @@ import { Rack } from './components/Rack';
 import { MasterSection } from './components/MasterSection';
 import { Keyboard } from './components/Keyboard';
 import { AudioSettings } from './components/AudioSettings';
+import { RhythmPanel } from './components/RhythmPanel';
 import { PluginToast } from './components/PluginToast';
 
 function Toast() {
@@ -44,6 +45,7 @@ export function App() {
       <PresetBrowser />
       <Rack />
       <MasterSection />
+      <RhythmPanel />
       <Keyboard />
       <OfflineBanner />
       <Toast />

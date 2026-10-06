@@ -36,12 +36,16 @@ float Metronome::nextSample() noexcept {
     return s;
 }
 
-void Metronome::process(const AudioBlock& out, const TransportInfo& t, bool started, double sampleRate) noexcept {
-    const bool on = enabled_.load(std::memory_order_relaxed) && t.playing;
+void Metronome::process(const AudioBlock& out, const TransportInfo& t, bool started, double sampleRate,
+                        double forceUntilPpq) noexcept {
+    const bool enabled = enabled_.load(std::memory_order_relaxed);
     const int n = out.numSamples;
+    const double beatPpq = 4.0 / static_cast<double>(t.denominator > 0 ? t.denominator : 4);
+    const bool forcing = t.playing && t.ppqPosition < forceUntilPpq;
+    const bool on = t.playing && (enabled || forcing);
     if (!on && remaining_ <= 0) return;
-    const double beatsPerSample = t.tempo / (60.0 * sampleRate);
-    const double b0 = t.ppqPosition;
+    const double beatsPerSample = t.tempo / (60.0 * sampleRate * beatPpq);
+    const double b0 = t.ppqPosition / beatPpq;
     // Next beat index at or after the block start.
     double nextBeat = started ? 0.0 : std::ceil(b0 - 1e-9);
     int i = 0;
@@ -58,7 +62,7 @@ void Metronome::process(const AudioBlock& out, const TransportInfo& t, bool star
         }
         if (clickAt < n) {
             const int beat = static_cast<int>(std::llround(nextBeat));
-            trigger(t.numerator > 0 && beat % t.numerator == 0);
+            if (enabled || nextBeat * beatPpq < forceUntilPpq - 1e-9) trigger(t.numerator > 0 && beat % t.numerator == 0);
             nextBeat += 1.0;
         }
     }

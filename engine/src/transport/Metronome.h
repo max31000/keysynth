@@ -20,8 +20,10 @@ public:
     void prepare(double sampleRate) noexcept;
     void reset() noexcept { remaining_ = 0; }
 
-    // audio thread: adds clicks for beats that fall inside this block. `started` = transport just started.
-    void process(const AudioBlock& out, const TransportInfo& t, bool started, double sampleRate) noexcept;
+    // audio thread: adds clicks for beats (denominator notes) that fall inside this block. `started` = transport
+    // just started. Beats before `forceUntilPpq` click even when disabled (count-in).
+    void process(const AudioBlock& out, const TransportInfo& t, bool started, double sampleRate,
+                 double forceUntilPpq = -1.0) noexcept;
 
 private:
     void trigger(bool accent) noexcept;

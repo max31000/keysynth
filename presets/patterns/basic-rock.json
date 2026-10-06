@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "name": "Basic Rock",
+  "description": "Straight 8th-note rock beat.",
+  "tempo": 120,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 1,
+  "swing": 0,
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... .... x.x. ...."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... x... .... x..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "x.6. x.6. x.6. x.6."
+    }
+  ],
+  "accent": "x... .... .... ...."
+}

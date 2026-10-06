@@ -98,6 +98,7 @@ std::vector<std::string> PatchModel::setPatch(Patch p) {
         for (auto& f : l.fx) claim(f.node);
     }
     for (auto& f : p.master.fx) claim(f.node);
+    claim(p.rhythm.drums.node);
     nextId_ = maxId + 1;
     auto assign = [&](NodeId& id) {
         if (id == 0) id = allocId();
@@ -122,6 +123,10 @@ std::vector<std::string> PatchModel::setPatch(Patch p) {
         assign(f.node);
         normalizeSlot(f, ModuleKind::Effect, &warnings, "master fx");
     }
+    assign(p.rhythm.drums.node);
+    p.rhythm.drums.type = "drums";
+    p.rhythm.drums.bypass = false;
+    normalizeSlot(p.rhythm.drums, ModuleKind::Instrument, &warnings, "rhythm kit");
     if (!std::isfinite(p.master.volumeDb)) p.master.volumeDb = 0.0f;
     p.master.volumeDb = std::clamp(p.master.volumeDb, -96.0f, 12.0f);
     if (!std::isfinite(p.tempo) || p.tempo <= 0) p.tempo = 120.0;
@@ -148,6 +153,7 @@ ModuleSlot* PatchModel::slotMut(NodeId node) {
     }
     for (auto& f : patch_.master.fx)
         if (f.node == node) return &f;
+    if (patch_.rhythm.drums.node == node) return &patch_.rhythm.drums;
     return nullptr;
 }
 
@@ -275,6 +281,11 @@ void PatchModel::setMasterVolume(float db) {
 void PatchModel::setTempo(double bpm) {
     if (std::isfinite(bpm)) patch_.tempo = std::clamp(bpm, 20.0, 400.0);
     dirty_ = true;
+}
+
+void PatchModel::setRhythmPattern(const std::string& path) {
+    if (patch_.rhythm.pattern != path) dirty_ = true;
+    patch_.rhythm.pattern = path;
 }
 
 void PatchModel::setMeta(const PatchMeta& meta) {

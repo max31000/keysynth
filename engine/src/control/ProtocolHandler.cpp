@@ -2,10 +2,13 @@
 
 #include "plugins/PluginHost.h"
 #include "preset/PatchJson.h"
+#include "transport/Pattern.h"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <map>
+#include <optional>
 
 namespace ks {
 
@@ -221,17 +224,98 @@ const std::map<std::string, Handler>& handlers() {
         {"transport",
          [](Ctx& c) {
              const json& m = c.msg;
-             if (m.contains("pattern") || m.contains("drums"))
-                 throw PatchError("not_implemented", "drum sequencer is not implemented yet");
-             bool any = false;
-             if (m.contains("tempo")) { c.s.setTempo(numField(m, "tempo")); any = true; }
-             if (m.contains("playing")) { c.s.engine().transport().setPlaying(boolField(m, "playing")); any = true; }
-             if (m.contains("metronome")) { c.s.engine().metronome().setEnabled(boolField(m, "metronome")); any = true; }
-             if (m.contains("metronome_volume")) {
-                 c.s.engine().metronome().setVolume(static_cast<float>(numField(m, "metronome_volume")));
-                 any = true;
+             auto has = [&](const char* k) { return m.contains(k) && !m[k].is_null(); };
+             // Validate everything first so a bad field changes nothing.
+             std::string pattern;
+             if (has("pattern")) pattern = strField(m, "pattern");
+             int num = 0, den = 0;
+             if (has("time_sig")) {
+                 const json& ts = m["time_sig"];
+                 if (!ts.is_array() || ts.size() != 2 || !ts[0].is_number() || !ts[1].is_number())
+                     throw PatchError("bad_request", "time_sig must be [num, den]");
+                 const double dn = ts[0].get<double>(), dd = ts[1].get<double>();
+                 if (!(dn >= 1 && dn <= 16) || !(dd == 2 || dd == 4 || dd == 8 || dd == 16) || dn != std::floor(dn))
+                     throw PatchError("bad_request", "time_sig: num 1..16, den 2/4/8/16");
+                 num = static_cast<int>(dn);
+                 den = static_cast<int>(dd);
              }
-             if (any) c.others(c.s.stateJson()); // keep other clients' transport view in sync
+             std::optional<bool> drums, countIn, playing, metronome;
+             std::optional<double> drumsVolume, swing, tempo, metronomeVolume;
+             if (has("drums")) drums = boolField(m, "drums");
+             if (has("count_in")) countIn = boolField(m, "count_in");
+             if (has("playing")) playing = boolField(m, "playing");
+             if (has("metronome")) metronome = boolField(m, "metronome");
+             if (has("drums_volume")) drumsVolume = numField(m, "drums_volume");
+             if (has("swing")) swing = numField(m, "swing");
+             if (has("tempo")) tempo = numField(m, "tempo");
+             if (has("metronome_volume")) metronomeVolume = numField(m, "metronome_volume");
+             bool any = false, all = false;
+             if (has("pattern")) {
+                 c.s.loadPattern(pattern, true); // throws bad_path / not_found / parse_error (nothing applied yet)
+                 any = all = true;
+             }
+             if (has("time_sig")) {
+                 c.s.setTimeSignature(num, den);
+                 any = all = true;
+             }
+             if (drums) c.s.engine().rhythm().drumsEnabled.store(*drums);
+             if (drumsVolume) c.s.engine().rhythm().drumsVolume.store(static_cast<float>(std::clamp(*drumsVolume, 0.0, 1.0)));
+             if (swing) c.s.setSwing(static_cast<float>(*swing));
+             if (countIn) c.s.engine().rhythm().countIn.store(*countIn);
+             if (tempo) c.s.setTempo(*tempo);
+             if (playing) c.s.engine().transport().setPlaying(*playing);
+             if (metronome) c.s.engine().metronome().setEnabled(*metronome);
+             if (metronomeVolume) c.s.engine().metronome().setVolume(static_cast<float>(*metronomeVolume));
+             any = any || drums || drumsVolume || swing || countIn || tempo || playing || metronome || metronomeVolume;
+             if (all) c.broadcast(c.s.stateJson()); // pattern/meter may change tempo, kit, swing
+             else if (any) c.others(c.s.stateJson()); // keep other clients' transport view in sync
+         }},
+        {"list_patterns",
+         [](Ctx& c) {
+             json arr = json::array();
+             for (const auto& p : c.s.listPatterns())
+                 arr.push_back({{"path", p.path},
+                                {"name", p.name},
+                                {"time_sig", {p.numerator, p.denominator}},
+                                {"bars", p.bars},
+                                {"tempo", p.tempo},
+                                {"factory", p.factory}});
+             c.reply({{"type", "list_patterns_ok"}, {"patterns", arr}});
+         }},
+        {"get_pattern",
+         [](Ctx& c) {
+             json r;
+             if (auto it = c.msg.find("path"); it != c.msg.end() && it->is_string() && !it->get<std::string>().empty() &&
+                                               it->get<std::string>() != c.s.patternPath()) {
+                 const std::string path = it->get<std::string>();
+                 r = {{"path", path}, {"edited", false}, {"pattern", patternToJson(c.s.readPatternFile(path))}};
+             } else {
+                 r = c.s.patternJson();
+             }
+             r["type"] = "get_pattern_ok";
+             c.reply(std::move(r));
+         }},
+        {"set_pattern",
+         [](Ctx& c) {
+             const json& pj = field(c.msg, "pattern");
+             if (!pj.is_object()) throw PatchError("bad_request", "pattern must be an object");
+             std::vector<std::string> w;
+             Pattern p = patternFromJson(pj, &w);
+             const int oldNum = c.s.pattern().numerator, oldDen = c.s.pattern().denominator;
+             c.s.setPattern(std::move(p));
+             c.reply({{"type", "set_pattern_ok"}, {"warnings", w}});
+             json ev = c.s.patternJson();
+             ev["type"] = "pattern";
+             c.others(std::move(ev));
+             if (c.s.pattern().numerator != oldNum || c.s.pattern().denominator != oldDen) c.broadcast(c.s.stateJson());
+         }},
+        {"save_pattern",
+         [](Ctx& c) {
+             bool overwrite = false;
+             if (auto it = c.msg.find("overwrite"); it != c.msg.end() && it->is_boolean()) overwrite = it->get<bool>();
+             const std::string path = c.s.savePattern(strField(c.msg, "name"), overwrite);
+             c.reply({{"type", "save_pattern_ok"}, {"path", path}});
+             c.broadcast(c.s.stateJson());
          }},
         {"list_devices", [](Ctx& c) { c.reply(c.s.devicesJson()); }},
         {"set_audio_device",

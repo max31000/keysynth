@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "LinnDrum 80s Kit",
+    "category": "Drums",
+    "tags": ["drums", "linn", "80s", "pop"],
+    "description": "Punchy synthesized approximation of an 80s LinnDrum kit on the keys. Reference: Michael Jackson — Billie Jean.",
+    "author": "factory"
+  },
+  "tempo": 117,
+  "layers": [
+    {
+      "name": "Linn Kit",
+      "zone": { "key_lo": 0, "key_hi": 127, "vel_lo": 1, "vel_hi": 127, "transpose": 0,
+                "channel": 0, "volume_db": 0, "pan": 0, "mute": false, "solo": false, "sustain": false },
+      "instrument": { "type": "drums", "params": { "kit": 2, "volume_db": -2 }, "state": {} },
+      "fx": []
+    }
+  ],
+  "master": { "volume_db": -3, "fx": [] },
+  "rhythm": { "kit": { "kit": 2 }, "pattern": "presets/patterns/billie-jean-groove.json" }
+}

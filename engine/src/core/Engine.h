@@ -11,6 +11,7 @@
 #include "core/SpscQueue.h"
 #include "core/Telemetry.h"
 #include "dsp/Limiter.h"
+#include "transport/DrumSequencer.h"
 #include "transport/Metronome.h"
 #include "transport/Transport.h"
 
@@ -53,6 +54,19 @@ public:
 
     Transport& transport() noexcept { return transport_; }
     Metronome& metronome() noexcept { return metronome_; }
+    DrumSequencer& sequencer() noexcept { return sequencer_; }
+
+    // Rhythm controls (ARCHITECTURE §8). Control thread writes, audio thread reads once per block.
+    struct RhythmControls {
+        std::atomic<bool> drumsEnabled{true};
+        std::atomic<float> drumsVolume{0.8f}; // linear 0..1
+        std::atomic<float> swing{0.0f};       // 0..1
+        std::atomic<bool> countIn{false};
+    };
+    RhythmControls& rhythm() noexcept { return rhythm_; }
+    const RhythmControls& rhythm() const noexcept { return rhythm_; }
+    // Sequencer step / bar for telemetry (-1 = stopped or counting in).
+    int currentStep() const noexcept { return sequencer_.currentStep(); }
     Telemetry& telemetry() noexcept { return telemetry_; }
     int64_t sampleTime() const noexcept { return sampleTimeShared_.load(std::memory_order_relaxed); }
 
@@ -79,6 +93,12 @@ private:
     std::array<ChannelState, 17> channels_{};
     Transport transport_;
     Metronome metronome_;
+    DrumSequencer sequencer_;
+    RhythmControls rhythm_;
+    static constexpr int kMaxRhythmEvents = 256;
+    std::array<MidiEvent, kMaxRhythmEvents> rhythmEvents_{};
+    double countInEndPpq_ = -1.0;
+    bool panicBlock_ = false; // audio thread: panic seen in this block
     dsp::SafetyLimiter limiter_;
     Telemetry telemetry_;
 

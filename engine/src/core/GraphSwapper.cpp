@@ -95,6 +95,7 @@ void GraphSwapper::begin(RackGraph* next) noexcept {
         }
         for (auto& of : old_->masterFx)
             if (tryNode(*of)) return;
+        tryNode(old_->rhythm.drums);
     };
     auto track = [&](ModuleNode& nn) {
         matchIn(nn);
@@ -107,7 +108,12 @@ void GraphSwapper::begin(RackGraph* next) noexcept {
         for (auto& nf : nl->fx) track(*nf);
         allShared = allShared && upstreamShared;
     }
-    upstreamShared = allShared;
+    // Rhythm node: independent source (no upstream). Master FX caches are valid only if it is shared too.
+    upstreamShared = true;
+    matchIn(current_->rhythm.drums);
+    const bool rhythmShared = (current_->rhythm.drums.module == nullptr && old_->rhythm.drums.module == nullptr) ||
+                              current_->rhythm.drums.cacheSlot >= 0;
+    upstreamShared = allShared && rhythmShared;
     for (auto& nf : current_->masterFx) track(*nf);
 
     mode_ = shared ? Mode::Crossfade : Mode::TailOut;
@@ -176,6 +182,7 @@ void GraphSwapper::render(const AudioBlock& out, MidiEventSpan events, const Ren
     const MidiEvent off = MidiEvent::allNotesOff();
     MidiEventSpan oldEvents = sendAllNotesOff_ ? MidiEventSpan(&off, 1) : MidiEventSpan();
     sendAllNotesOff_ = false;
+    oa.rhythmEvents = oldEvents; // sequencer events go to the current graph only
     old_->render(ob, oldEvents, oa);
 
     bool done = false;

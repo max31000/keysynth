@@ -54,10 +54,12 @@ public:
     void setMasterVolume(float db);
     void setTempo(double bpm);
     void setMeta(const PatchMeta& meta);
+    // Rhythm section: pattern path stored with the patch (kit params go through setParam).
+    void setRhythmPattern(const std::string& path);
 
     // --- queries ---
     const Layer* findLayer(NodeId layer) const;
-    const ModuleSlot* findSlot(NodeId node) const; // instrument or fx (any chain)
+    const ModuleSlot* findSlot(NodeId node) const; // instrument, fx (any chain) or the rhythm kit
     // Chain owning an fx node: layer node id, or kMasterNode. nullopt if not an fx.
     std::optional<NodeId> chainOf(NodeId fx) const;
 

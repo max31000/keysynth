@@ -81,13 +81,19 @@ struct LayerNode {
     void filterEvents(MidiEventSpan in, std::vector<MidiEvent>& out) noexcept;
 };
 
-struct RhythmNode { // placeholder (drums module for the DrumSequencer; Phase 3)
-    std::shared_ptr<Module> drums;
+// RhythmNode (ARCHITECTURE §5.3): the `drums` module played by the Engine's DrumSequencer. Rendered into its own
+// buffer, gain-ramped by the per-block drums volume and summed with the layers before master FX.
+struct RhythmNode {
+    ModuleNode drums;
+    std::vector<float> bufL, bufR;
+    float lastGain = -1.0f; // audio thread; < 0 = snap on the first block
 };
 
 struct RenderArgs {
     ProcessContext ctx;                  // numSamples, sampleRate, sampleTime, transport; channel ignored
     const ChannelState* channels = nullptr; // 17 states (0 = omni)
+    MidiEventSpan rhythmEvents;          // DrumSequencer output for the RhythmNode (sorted, in-block offsets)
+    float rhythmGain = 1.0f;             // linear drums volume
     RenderCache* cache = nullptr;
     bool writeCache = false; // new graph during a transition
     bool readCache = false;  // old graph during a transition

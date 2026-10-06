@@ -1,6 +1,8 @@
 #pragma once
 // Engine-owned transport clock (ARCHITECTURE §8): tempo, time signature, play/stop, ppq position.
 // Control thread writes the atomics; the audio thread advances the position once per block.
+// Position = anchorPpq + samplesSinceAnchor * tempo / (60 * sr), re-anchored when the tempo changes, so
+// accumulated rounding does not depend on the block size (sample-accurate sequencer steps).
 
 #include "core/ProcessContext.h"
 
@@ -19,13 +21,20 @@ public:
     bool playing() const noexcept { return playing_.load(std::memory_order_relaxed); }
     double ppqApprox() const noexcept { return ppqShared_.load(std::memory_order_relaxed); }
     int numerator() const noexcept { return num_.load(std::memory_order_relaxed); }
+    int denominator() const noexcept { return den_.load(std::memory_order_relaxed); }
 
     // --- audio thread ---
     // Returns the transport state at the start of the block. `started` is true when play just began
-    // (position reset to 0).
-    TransportInfo beginBlock(bool& started) noexcept;
+    // (position reset to 0), `stopped` when it just ended.
+    TransportInfo beginBlock(bool& started, bool& stopped) noexcept;
+    TransportInfo beginBlock(bool& started) noexcept {
+        bool stopped = false;
+        return beginBlock(started, stopped);
+    }
     void endBlock(int numSamples, double sampleRate) noexcept;
-    void resetPosition() noexcept { ppq_ = 0.0; }
+    void resetPosition() noexcept;
+    // After Engine::prepare (device restart): the next playing block counts as a start again.
+    void resetPlayState() noexcept { wasPlaying_ = false; }
 
 private:
     std::atomic<double> tempo_{120.0};
@@ -34,6 +43,9 @@ private:
     std::atomic<double> ppqShared_{0.0};
     // audio thread
     double ppq_ = 0.0;
+    double anchorPpq_ = 0.0;
+    int64_t sinceAnchor_ = 0;
+    double anchorTempo_ = 120.0;
     bool wasPlaying_ = false;
     double blockTempo_ = 120.0;
     bool blockPlaying_ = false;

@@ -27,6 +27,9 @@ void Engine::prepare(double sampleRate, int maxBlock) {
     limiter_.setRelease(60.0f);
     limiter_.prepare(sampleRate_);
     metronome_.prepare(sampleRate_);
+    sequencer_.stop();
+    transport_.resetPlayState(); // still playing -> restarts (position 0, sequencer) on the next block
+    countInEndPpq_ = -1.0;
     channels_ = {};
 }
 
@@ -42,6 +45,7 @@ void Engine::gatherEvents(MidiEventSpan extra) noexcept {
     const uint32_t p = panicRequests_.load(std::memory_order_relaxed);
     if (p != panicSeen_) {
         panicSeen_ = p;
+        panicBlock_ = true;
         events_.push_back(MidiEvent::allSoundOff());
         channels_ = {};
         limiter_.reset();
@@ -85,8 +89,24 @@ void Engine::processBlock(const AudioBlock& out, MidiEventSpan extra) noexcept {
 
     gatherEvents(extra);
 
-    bool started = false;
-    const TransportInfo t = transport_.beginBlock(started);
+    bool started = false, stopped = false;
+    const TransportInfo t = transport_.beginBlock(started, stopped);
+
+    // Drum sequencer (sample-accurate note-ons for the RhythmNode).
+    if (started) {
+        const double barPpq = 4.0 * t.numerator / static_cast<double>(t.denominator > 0 ? t.denominator : 4);
+        countInEndPpq_ = rhythm_.countIn.load(std::memory_order_relaxed) ? barPpq : -1.0;
+        sequencer_.start(countInEndPpq_ > 0.0 ? countInEndPpq_ : 0.0);
+    } else if (stopped) {
+        sequencer_.stop();
+        countInEndPpq_ = -1.0;
+    }
+    int nRhythm = 0;
+    if (panicBlock_) rhythmEvents_[static_cast<size_t>(nRhythm++)] = MidiEvent::allSoundOff();
+    panicBlock_ = false;
+    nRhythm += sequencer_.generate(t, n, sampleRate_, rhythm_.swing.load(std::memory_order_relaxed),
+                                   rhythm_.drumsEnabled.load(std::memory_order_relaxed), rhythmEvents_.data() + nRhythm,
+                                   kMaxRhythmEvents - nRhythm);
 
     RenderArgs args;
     args.ctx.sampleRate = sampleRate_;
@@ -94,9 +114,11 @@ void Engine::processBlock(const AudioBlock& out, MidiEventSpan extra) noexcept {
     args.ctx.sampleTime = sampleTime_;
     args.ctx.transport = t;
     args.channels = channels_.data();
+    args.rhythmEvents = MidiEventSpan(rhythmEvents_.data(), static_cast<size_t>(nRhythm));
+    args.rhythmGain = rhythm_.drumsVolume.load(std::memory_order_relaxed);
     swapper_.render(o, MidiEventSpan(events_.data(), events_.size()), args);
 
-    metronome_.process(o, t, started, sampleRate_);
+    metronome_.process(o, t, started, sampleRate_, countInEndPpq_);
     limiter_.process(o.left, o.right, n);
 
     // Telemetry

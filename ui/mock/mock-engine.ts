@@ -16,6 +16,8 @@ import type {
   MidiNote,
   ModuleSlot,
   Patch,
+  Pattern,
+  PatternSnapshot,
   PluginStatus,
   PresetEntry,
   TransportState,
@@ -23,6 +25,8 @@ import type {
 } from '../src/protocol/types';
 import { CATALOG, catalogMap, defaultParams } from './catalog';
 import { INIT_PATCH, factoryPresets, makeFx, makeLayer, type MockPreset } from './presets';
+import { factoryPatterns, parsePatternJson, type MockPattern } from './patterns';
+import { emptyPattern, numSteps, setTimeSig } from '../src/lib/stepGrid';
 
 export interface MockOptions {
   port?: number;
@@ -56,6 +60,26 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   };
 
   // ─────────────── model ───────────────
+  // rhythm (drum sequencer) model
+  const patterns: MockPattern[] = factoryPatterns();
+  const defaultPattern = patterns.find((p) => p.entry.path.endsWith('/basic-rock.json'));
+  const current: PatternSnapshot = defaultPattern
+    ? { path: defaultPattern.entry.path, edited: false, pattern: structuredClone(defaultPattern.pattern) }
+    : { path: '', edited: false, pattern: emptyPattern() };
+  const transport: TransportState = {
+    playing: false,
+    tempo: 120,
+    metronome: false,
+    metronome_volume: 0.5,
+    pattern: current.path,
+    pattern_edited: false,
+    drums: true,
+    drums_volume: 0.8,
+    swing: current.pattern.swing,
+    time_sig: [...current.pattern.time_sig],
+    count_in: false,
+  };
+  let playStartedAt = 0;
   let nextNode = 1;
   const presets: MockPreset[] = factoryPresets();
   let patch: Patch = assignNodes(INIT_PATCH());
@@ -89,7 +113,6 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     'broken_fx',
     mockPlugin('broken_fx', '', 'error', 'broken_fx.dsp:3 : ERROR : syntax error, unexpected ENDDEF'),
   );
-  const transport: TransportState = { playing: false, tempo: 120, metronome: false, metronome_volume: 0.5, drums: false };
 
   // live sim state
   const held = new Map<number, number>(); // note → velocity
@@ -109,6 +132,8 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       l.fx = l.fx.map((f) => slot(f));
     }
     copy.master.fx = copy.master.fx.map((f) => slot(f));
+    const r = copy.rhythm ?? {};
+    copy.rhythm = { node: r.node ?? nextNode++, kit: { ...defaultParams('drums'), ...r.kit }, pattern: r.pattern ?? transport.pattern ?? '' };
     return copy;
   }
   function stripNodes(p: Patch): Patch {
@@ -119,11 +144,13 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       for (const f of l.fx) delete f.node;
     }
     for (const f of c.master.fx) delete f.node;
+    if (c.rhythm) delete c.rhythm.node;
     return c;
   }
   const allSlots = (): ModuleSlot[] => [
     ...patch.layers.flatMap((l) => [l.instrument, ...l.fx]),
     ...patch.master.fx,
+    ...(patch.rhythm?.node !== undefined ? [{ node: patch.rhythm.node, type: 'drums', params: (patch.rhythm.kit ??= {}) }] : []),
   ];
   const findSlot = (node: number) => allSlots().find((s) => s.node === node);
   const findLayer = (node: number) => patch.layers.find((l) => l.node === node);
@@ -224,7 +251,8 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       case 'load_preset': {
         const p = presets.find((x) => x.path === m.path);
         if (!p) return err(ws, id, 'not_found', `preset not found: ${String(m.path)}`);
-        patch = assignNodes(p.patch);
+        const keepRhythm = !p.patch.rhythm ? patch.rhythm : undefined; // presets without rhythm keep the current one
+        patch = assignNodes(keepRhythm ? { ...p.patch, rhythm: keepRhythm } : p.patch);
         presetPath = p.path;
         dirty = false;
         if (patch.tempo) transport.tempo = patch.tempo;
@@ -339,11 +367,90 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       case 'cc':
         return;
       case 'transport': {
-        for (const k of ['playing', 'tempo', 'metronome', 'metronome_volume', 'pattern', 'drums'] as const) {
-          if (k in m) (transport as unknown as Record<string, unknown>)[k] = m[k];
+        let all = false;
+        if (m.time_sig !== undefined) {
+          const ts = m.time_sig as unknown;
+          if (!Array.isArray(ts) || ts.length !== 2 || !(ts[0] >= 1 && ts[0] <= 16) || ![2, 4, 8, 16].includes(ts[1] as number))
+            return err(ws, id, 'bad_request', 'time_sig: num 1..16, den 2/4/8/16');
         }
-        transport.tempo = Math.min(300, Math.max(20, transport.tempo));
-        broadcast(stateMsg(), ws);
+        if (typeof m.pattern === 'string') {
+          const path = m.pattern;
+          const found = path ? patterns.find((x) => x.entry.path === path) : undefined;
+          if (path && !found) return err(ws, id, 'not_found', `pattern not found: ${path}`);
+          current.path = path;
+          current.edited = false;
+          current.pattern = found ? structuredClone(found.pattern) : emptyPattern();
+          if (current.pattern.tempo) transport.tempo = current.pattern.tempo;
+          if (current.pattern.kit !== undefined && patch.rhythm?.kit) patch.rhythm.kit.kit = current.pattern.kit;
+          if (patch.rhythm) patch.rhythm.pattern = path;
+          transport.swing = current.pattern.swing;
+          transport.time_sig = [...current.pattern.time_sig];
+          all = true;
+        }
+        if (Array.isArray(m.time_sig) && m.time_sig.length === 2) {
+          const [num, den] = m.time_sig as [number, number];
+          if (!(num >= 1 && num <= 16) || ![2, 4, 8, 16].includes(den)) return err(ws, id, 'bad_request', 'time_sig: num 1..16, den 2/4/8/16');
+          current.pattern = setTimeSig(current.pattern, num, den);
+          current.edited = true;
+          transport.time_sig = [num, den];
+          all = true;
+        }
+        if (m.playing === true && !transport.playing) playStartedAt = Date.now();
+        for (const k of ['playing', 'tempo', 'metronome', 'metronome_volume', 'drums', 'drums_volume', 'swing', 'count_in'] as const) {
+          if (k in m && m[k] !== null && m[k] !== undefined) (transport as unknown as Record<string, unknown>)[k] = m[k];
+        }
+        if (typeof m.swing === 'number') current.pattern.swing = Math.min(1, Math.max(0, m.swing));
+        transport.tempo = Math.min(400, Math.max(20, transport.tempo));
+        transport.pattern = current.path;
+        transport.pattern_edited = current.edited;
+        if (all) broadcast(stateMsg());
+        else broadcast(stateMsg(), ws);
+        return;
+      }
+      case 'list_patterns':
+        send(ws, { type: 'list_patterns_ok', id, patterns: patterns.map((p) => p.entry) });
+        return;
+      case 'get_pattern': {
+        const want = typeof m.path === 'string' && m.path && m.path !== current.path ? patterns.find((p) => p.entry.path === m.path) : undefined;
+        if (typeof m.path === 'string' && m.path && m.path !== current.path && !want) return err(ws, id, 'not_found', 'no such pattern');
+        const snap = want ? { path: want.entry.path, edited: false, pattern: want.pattern } : current;
+        send(ws, { type: 'get_pattern_ok', id, ...snap });
+        return;
+      }
+      case 'set_pattern': {
+        if (!m.pattern || typeof m.pattern !== 'object' || Array.isArray(m.pattern)) return err(ws, id, 'bad_request', 'pattern must be an object');
+        const before = current.pattern.time_sig;
+        current.pattern = parsePatternJson(m.pattern as Record<string, unknown>);
+        current.edited = true;
+        transport.pattern_edited = true;
+        transport.swing = current.pattern.swing;
+        send(ws, { type: 'set_pattern_ok', id, warnings: [] });
+        broadcast({ type: 'pattern', ...current }, ws);
+        if (before[0] !== current.pattern.time_sig[0] || before[1] !== current.pattern.time_sig[1]) {
+          transport.time_sig = [...current.pattern.time_sig];
+          broadcast(stateMsg());
+        }
+        return;
+      }
+      case 'save_pattern': {
+        const name = typeof m.name === 'string' ? m.name.trim() : '';
+        if (!name) return err(ws, id, 'bad_request', 'name required');
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const p = `userdata/patterns/${slug}.json`;
+        const existing = patterns.findIndex((x) => x.entry.path === p);
+        if (existing >= 0 && !m.overwrite) return err(ws, id, 'exists', `pattern "${name}" already exists`);
+        const pattern: Pattern = { ...structuredClone(current.pattern), name };
+        const entry = { entry: { path: p, name, time_sig: pattern.time_sig, bars: pattern.bars, tempo: pattern.tempo ?? 0, factory: false }, pattern };
+        if (existing >= 0) patterns[existing] = entry;
+        else patterns.push(entry);
+        current.path = p;
+        current.edited = false;
+        current.pattern = structuredClone(pattern);
+        transport.pattern = p;
+        transport.pattern_edited = false;
+        if (patch.rhythm) patch.rhythm.pattern = p;
+        send(ws, { type: 'save_pattern_ok', id, path: p });
+        broadcast(stateMsg());
         return;
       }
       case 'list_devices':
@@ -465,6 +572,22 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     }
     const voices = held.size * Math.max(1, patch.layers.length);
     if (Math.random() < 0.0008) xruns++;
+    // sequencer position (count-in = one bar of clicks before step 0)
+    let step = -1;
+    let bar = -1;
+    let ppq = 0;
+    if (transport.playing) {
+      const pt = current.pattern;
+      ppq = ((Date.now() - playStartedAt) / 1000) * (transport.tempo / 60);
+      const stepPpq = 4 / (pt.time_sig[1] * pt.steps_per_beat);
+      const origin = transport.count_in ? (4 * pt.time_sig[0]) / pt.time_sig[1] : 0;
+      if (ppq >= origin) {
+        step = Math.floor((ppq - origin) / stepPpq) % numSteps(pt);
+        bar = Math.floor(step / (pt.time_sig[0] * pt.steps_per_beat));
+        const hits = transport.drums ? pt.tracks.filter((t) => !t.mute && (t.steps[step] ?? 0) > 0).length : 0;
+        masterLin += hits * 0.12 * (transport.drums_volume ?? 0.8);
+      }
+    }
     broadcast({
       type: 'telemetry',
       cpu: Math.min(1, 0.04 + voices * 0.012 + Math.random() * 0.02),
@@ -472,6 +595,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       voices,
       meters: { master: [toDb(masterLin * 0.98), toDb(masterLin)], layers },
       readouts,
+      transport: { ppq, playing: transport.playing, step, bar },
     } satisfies EngineMsg);
   }, 1000 / hz);
 

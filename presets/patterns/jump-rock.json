@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "name": "Arena Rock (Jump-ish)",
+  "description": "Big 80s rock beat with crash on the one. Reference: Van Halen — Jump.",
+  "tempo": 129,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 2,
+  "swing": 0,
+  "kit": "909",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... ..x. x... .... | x... ..x. x.x. ...."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... X... .... X... | .... X... .... X..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "..x. x.x. x.x. x.x. | x.x. x.x. x.x. x.x."
+    },
+    {
+      "name": "Crash",
+      "note": 49,
+      "steps": "x... .... .... .... | .... .... .... ...."
+    }
+  ],
+  "accent": "x... .... .... .... | .... .... .... ...."
+}

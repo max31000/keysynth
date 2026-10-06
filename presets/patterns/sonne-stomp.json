@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "name": "Industrial March (Sonne-ish)",
+  "description": "Slow, heavy stomp: quarter-note kick with double hits, clap-layered snare. Reference: Rammstein — Sonne.",
+  "tempo": 116,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 2,
+  "swing": 0,
+  "kit": "industrial",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x..x x... x..x x... | x..x x... x..x x.xx"
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... X... .... X... | .... X... .... X..."
+    },
+    {
+      "name": "Clap",
+      "note": 39,
+      "steps": ".... 8... .... 8... | .... 8... .... 8..."
+    },
+    {
+      "name": "Ride",
+      "note": 51,
+      "steps": "x.x. x.x. x.x. x.x. | x.x. x.x. x.x. x.x."
+    },
+    {
+      "name": "Crash",
+      "note": 49,
+      "steps": "x... .... .... .... | .... .... .... ...."
+    }
+  ],
+  "accent": "x... .... x... .... | x... .... x... ...."
+}
