@@ -236,15 +236,15 @@ Patch (data)                              RackGraph (live, audio thread)
 |---|---|---|
 | `va` | Virtual analog poly: 3 osc (saw/pulse+PWM/tri/sine/supersaw/noise), sub, sync/ring, ladder 24 dB + SVF 12 dB (LP/BP/HP), amp+filter ADSR, 2 LFO, fixed mod slots, unison/detune/spread, glide, mono/legato | Juno/Jupiter/OB-Xa/Prophet/Minimoog: Take On Me, Jump, Floyd leads, Rammstein pads/brass/supersaw |
 | `fm` | DX7-compatible 6-op FM via vendored MSFA; loads .syx banks | DX7 E.Piano, bells, basses |
-| `organ` | Tonewheel: 9 drawbars, percussion, key click, scanner vibrato/chorus, crosstalk; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
-| `combo` | Transistor combo organ: Vox Continental / Farfisa voicings, footages, vibrato, bass section | Doors: Light My Fire; early Floyd |
+| `organ` | Tonewheel wheel-bus: 91 wheels (B-3 gear ratios), 9 drawbars with manual foldback, single-trigger percussion, key click, scanner vibrato/chorus V1–C3, leakage, preamp drive; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
+| `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |
 | `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
 | `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
 
 Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
 (stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
-`rotary` (Leslie horn+drum, ramped slow/fast), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
+`rotary` (Leslie 122/147 horn+drum, Doppler/AM, ramped slow/fast/brake, mod-wheel speed), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
 safety, fixed).
 
 ## 8. Transport

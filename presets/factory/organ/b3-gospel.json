@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "B3 Gospel Full",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "gospel",
+      "church"
+    ],
+    "description": "Gospel/church 888800008: full lower footages plus 1' sparkle, C3 chorus, Leslie fast. Reference: gospel shout organ.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 8,
+          "db_8": 8,
+          "db_4": 8,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 8,
+          "perc": 0,
+          "vibrato": 6,
+          "click": 0.6,
+          "leakage": 0.35,
+          "drive": 0.25,
+          "volume_db": -2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 1,
+            "mod_wheel": true,
+            "sustain_toggle": false,
+            "drive": 0.3,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}

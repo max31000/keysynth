@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "B3 Full Rock",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "rock",
+      "overdrive"
+    ],
+    "description": "All drawbars out (888888888), no percussion, driven preamp and 122, Leslie fast. Reference: 70s hard-rock organ (Deep Purple / Jon Lord style).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 8,
+          "db_8": 8,
+          "db_4": 8,
+          "db_2_2_3": 8,
+          "db_2": 8,
+          "db_1_3_5": 8,
+          "db_1_1_3": 8,
+          "db_1": 8,
+          "perc": 0,
+          "vibrato": 0,
+          "click": 0.8,
+          "leakage": 0.4,
+          "drive": 0.4,
+          "volume_db": -3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 1,
+            "mod_wheel": true,
+            "sustain_toggle": false,
+            "drive": 0.35,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": []
+  }
+}
