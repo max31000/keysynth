@@ -50,26 +50,79 @@ function Update-UiDist {
 }
 
 function Get-EngineExe {
-    # <BuildDir>/bin/<Config>/keysynth-engine.exe; builds the target when the build dir is configured but the exe is
-    # missing.
-    param([string]$Repo, [string]$BuildDir, [string]$Config)
+    # <BuildDir>/bin/<Config>/keysynth-engine.exe. When the build dir is configured, keysynth-engine is always built
+    # incrementally first (a no-op when up to date) so a stale exe is never launched; -NoBuild skips that and uses
+    # the existing exe as-is.
+    param([string]$Repo, [string]$BuildDir, [string]$Config, [switch]$NoBuild)
     $buildPath = if ([System.IO.Path]::IsPathRooted($BuildDir)) { $BuildDir } else { Join-Path $Repo $BuildDir }
     $exe = Join-Path $buildPath "bin/$Config/keysynth-engine.exe"
-    if (Test-Path $exe) { return $exe }
+    if ($NoBuild) {
+        if (-not (Test-Path $exe)) { throw "$exe not found (drop -NoBuild to build it)" }
+        return $exe
+    }
     if (-not (Test-Path (Join-Path $buildPath "CMakeCache.txt"))) {
+        if (Test-Path $exe) { return $exe }
         throw "$exe not found and $buildPath is not configured: run scripts/configure.ps1 -BuildDir $BuildDir first"
     }
-    Write-Host "building keysynth-engine ($Config)..."
+    Write-Host "building keysynth-engine ($Config, incremental)..."
     Invoke-Native -File "cmake" -Arguments @("--build", $buildPath, "--config", $Config, "--target", "keysynth-engine",
         "--parallel") -WorkingDirectory $Repo
     if (-not (Test-Path $exe)) { throw "build finished but $exe is missing" }
     return $exe
 }
 
+function ConvertTo-ProcessArg {
+    # One argument quoted so CommandLineToArgvW / the MSVC CRT parse it back unchanged: wrap in quotes when it is
+    # empty or contains whitespace/quotes; double the backslashes before a quote (and before the closing quote),
+    # escape quotes as \".
+    param([string]$Arg)
+    if ($Arg.Length -gt 0 -and $Arg -notmatch '[\s"]') { return $Arg }
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append('"')
+    $slashes = 0
+    foreach ($ch in $Arg.ToCharArray()) {
+        if ($ch -eq '\') { $slashes++; continue }
+        if ($ch -eq '"') { [void]$sb.Append([char]92, 2 * $slashes + 1) } elseif ($slashes) { [void]$sb.Append([char]92, $slashes) }
+        $slashes = 0
+        [void]$sb.Append($ch)
+    }
+    if ($slashes) { [void]$sb.Append([char]92, 2 * $slashes) }
+    [void]$sb.Append('"')
+    return $sb.ToString()
+}
+
 function Join-ProcessArgs {
-    # Start-Process joins -ArgumentList with spaces: quote arguments that contain spaces.
+    # Start-Process joins -ArgumentList with spaces and passes it as one command line: escape each argument.
     param([string[]]$Arguments)
-    return ($Arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    return ($Arguments | ForEach-Object { ConvertTo-ProcessArg $_ }) -join ' '
+}
+
+function Assert-PortsFree {
+    # The launchers wait for "port accepts connections": if another process already holds a port they would attach
+    # to it. Fail early instead when a loopback port is accepting or cannot be bound.
+    param([int[]]$Ports)
+    foreach ($port in $Ports) {
+        if ($port -le 0) { continue }
+        $client = New-Object System.Net.Sockets.TcpClient
+        try {
+            $task = $client.ConnectAsync("127.0.0.1", $port)
+            $taken = $task.Wait(300) -and $client.Connected
+        } catch { $taken = $false } finally { $client.Dispose() }
+        if (-not $taken) {
+            $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $port)
+            $listener.ExclusiveAddressUse = $true
+            try { $listener.Start() } catch { $taken = $true } finally { try { $listener.Stop() } catch { } }
+        }
+        if ($taken) {
+            $owner = ""
+            try {
+                $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Stop | Select-Object -First 1
+                $p = Get-Process -Id $c.OwningProcess -ErrorAction Stop
+                $owner = " by $($p.ProcessName) (pid $($p.Id))"
+            } catch { }
+            throw "port $port on 127.0.0.1 is already in use$owner. Stop that process or pick other ports (-Port / -HttpPort)."
+        }
+    }
 }
 
 function Wait-TcpPort {

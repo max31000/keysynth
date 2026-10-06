@@ -51,6 +51,9 @@ const DEVICE_TYPES: { type: string; names: string[] }[] = [
   { type: 'Windows Audio', names: ['Speakers (Realtek(R) Audio)', 'Headphones (Scarlett 2i2)'] },
   { type: 'Windows Audio (Exclusive Mode)', names: ['Speakers (Realtek(R) Audio)'] },
 ];
+/** The mock ASIO driver only accepts these; another request falls back to its preferred size, like JUCE does. */
+const ASIO_BUFFER_SIZES = [64, 128, 256];
+const ASIO_PREFERRED_BUFFER = 256;
 
 export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   const host = opts.host ?? '127.0.0.1';
@@ -175,7 +178,12 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     ...(id !== undefined ? { id } : {}),
     types: DEVICE_TYPES.map((d) => d.type),
     current: audio,
-    available: DEVICE_TYPES,
+    // Like the engine: sizes/rates only for the open device's type (others are unknown until opened).
+    available: DEVICE_TYPES.map((d) =>
+      d.type === audio.type
+        ? { ...d, sampleRates: [44100, 48000, 96000], bufferSizes: d.type === 'ASIO' ? ASIO_BUFFER_SIZES : [128, 256, 512, 1024] }
+        : { ...d, sampleRates: [], bufferSizes: [] },
+    ),
     midiInputs,
   });
   const presetList = (): PresetEntry[] =>
@@ -462,8 +470,12 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         const name = typeof m.name === 'string' ? m.name : '';
         if (!t || !t.names.includes(name)) return err(ws, id, 'not_found', 'unknown device');
         const sr = num('sample_rate') ?? audio.sampleRate;
-        const bs = num('buffer_size') ?? audio.bufferSize;
         const isAsio = t.type === 'ASIO';
+        const requested = num('buffer_size');
+        if (audio.panelOpen) return err(ws, id, 'busy', "close the driver's control panel first");
+        let bs = requested ?? audio.bufferSize;
+        const rejected = isAsio && !ASIO_BUFFER_SIZES.includes(bs);
+        if (rejected) bs = ASIO_PREFERRED_BUFFER;
         audio = {
           type: t.type,
           name,
@@ -475,18 +487,36 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
           hasControlPanel: isAsio,
         };
         for (const c of wss.clients) send(c, c === ws ? devicesMsg(id) : devicesMsg());
+        if (rejected && requested !== undefined) {
+          send(ws, {
+            type: 'log',
+            level: 'warn',
+            notify: true,
+            message: `the driver did not accept a buffer of ${requested} samples (now ${bs}; offered: ${ASIO_BUFFER_SIZES.join(', ')}). Set the buffer size in the driver's control panel (Open ASIO panel).`,
+          });
+        }
         broadcastState();
         return;
       }
       case 'open_audio_panel': {
         if (!audio.hasControlPanel) return err(ws, id, 'not_available', 'this audio device has no control panel');
+        if (audio.panelOpen) return err(ws, id, 'busy', "the driver's control panel is already open");
         send(ws, { type: 'open_audio_panel_ok', ...(id !== undefined ? { id } : {}) });
-        // Simulates the user picking 128 samples in the driver panel: the device restarts, everyone is told.
+        // Simulates a modal driver panel: everyone sees panelOpen, then the user picks 128 samples, the panel closes
+        // and the device restarts.
+        audio = { ...audio, panelOpen: true };
+        for (const c of wss.clients) send(c, devicesMsg());
+        broadcastState();
         setTimeout(() => {
           const bs = 128;
-          audio = { ...audio, bufferSize: bs, outputLatencyMs: +((bs / audio.sampleRate) * 1000 + 0.9).toFixed(2) };
+          audio = { ...audio, panelOpen: false, bufferSize: bs, outputLatencyMs: +((bs / audio.sampleRate) * 1000 + 0.9).toFixed(2) };
           for (const c of wss.clients) send(c, devicesMsg());
           broadcastState();
+          broadcast({
+            type: 'log',
+            level: 'info',
+            message: `audio: ${audio.name}, ${audio.sampleRate} Hz, buffer ${bs} samples, output latency ${audio.outputLatencyMs.toFixed(1)} ms`,
+          });
         }, 300);
         return;
       }

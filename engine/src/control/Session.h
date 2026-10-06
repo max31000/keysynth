@@ -42,7 +42,8 @@ public:
     plugins::PluginHost* plugins() const noexcept { return plugins_; }
 
     // Optional log sink (ControlServer forwards to clients as `log` events, app prints).
-    std::function<void(const std::string& level, const std::string& msg)> log;
+    // notify: a problem the player must see (UI toast), e.g. a failed module load; plain warnings stay in the log.
+    std::function<void(const std::string& level, const std::string& msg, bool notify)> log;
 
     // Build a graph from the PatchModel and publish it. reuse=false after Engine::prepare (new sr/maxBlock).
     void rebuild(bool reuse = true);

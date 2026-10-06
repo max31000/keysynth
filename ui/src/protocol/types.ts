@@ -42,7 +42,7 @@ export interface UiHints {
   controls?: Record<string, 'knob' | 'slider' | 'drawbar'>;
   /**
    * Tabbed panel: groups bundled into named tabs (e.g. fm "Op 1".."Op 6"); unlisted groups get a tab each.
-   * Modules with many params are tabbed per group even without this (ModulePanel AUTO_TAB_THRESHOLD).
+   * Modules with many params are tabbed per group even without this (AUTO_TAB_THRESHOLD in lib/panelLayout.ts).
    */
   tabs?: { name: string; groups: string[] }[];
   [key: string]: unknown;
@@ -168,6 +168,8 @@ export interface AudioStatus {
   running: boolean;
   /** the driver has its own settings panel (ASIO): `open_audio_panel` */
   hasControlPanel?: boolean;
+  /** the driver's control panel is open right now (open_audio_panel / set_audio_device answer `busy`) */
+  panelOpen?: boolean;
 }
 
 /** Transport state, same keys as the `transport` request (+ `pattern_edited`). */
@@ -287,7 +289,13 @@ export interface DevicesEvent {
   available: { type: string; names: string[]; sampleRates?: number[]; bufferSizes?: number[] }[];
   midiInputs: string[];
 }
-export interface LogEvent { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error' | string; message: string }
+export interface LogEvent {
+  type: 'log';
+  level: 'debug' | 'info' | 'warn' | 'error' | string;
+  message: string;
+  /** a problem the player must see (failed module load, rejected buffer size, device reopen failure): toast it */
+  notify?: boolean;
+}
 export interface ErrorReply { type: 'error'; id?: number; code: string; message: string }
 
 /** Hot-reloaded DSP plugin (docs/PROTOCOL.md `PluginStatus`, docs/PLUGINS.md). */

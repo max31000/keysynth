@@ -321,6 +321,8 @@ const std::map<std::string, Handler>& handlers() {
         {"set_audio_device",
          [](Ctx& c) {
              if (!c.s.audio()) throw PatchError("not_available", "no audio host");
+             // A (modal) driver panel is on the message-thread stack: switching devices now could delete it.
+             if (c.s.audio()->status().panelOpen) throw PatchError("busy", "close the driver's control panel first");
              double sr = 0;
              int bs = 0;
              if (c.msg.contains("sample_rate")) sr = numField(c.msg, "sample_rate");
@@ -338,6 +340,7 @@ const std::map<std::string, Handler>& handlers() {
                          for (const auto& b : a["bufferSizes"]) sizes += (sizes.empty() ? "" : ", ") + std::to_string(b.get<int>());
                  warn = {{"type", "log"},
                          {"level", "warn"},
+                         {"notify", true},
                          {"message", "the driver did not accept a buffer of " + std::to_string(bs) + " samples (now " +
                                          std::to_string(got) + "; offered: " + (sizes.empty() ? "?" : sizes) +
                                          "). Set the buffer size in the driver's control panel (Open ASIO panel)."}};
@@ -346,10 +349,13 @@ const std::map<std::string, Handler>& handlers() {
              c.reply(std::move(d));
              // A plain event after the reply (no id: the client's pending request resolves with `devices`).
              if (!warn.is_null()) c.out.push_back({Outgoing::Target::Reply, std::move(warn)});
+             // state.audio changed too; the host's own async re-report of this restart is suppressed (no duplicates).
+             c.broadcast(c.s.stateJson());
          }},
         {"open_audio_panel",
          [](Ctx& c) {
              if (!c.s.audio()) throw PatchError("not_available", "no audio host");
+             if (c.s.audio()->status().panelOpen) throw PatchError("busy", "the driver's control panel is already open");
              const std::string err = c.s.audio()->openControlPanel();
              if (!err.empty()) throw PatchError("not_available", err);
              c.reply({{"type", "open_audio_panel_ok"}});

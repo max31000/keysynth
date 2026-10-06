@@ -3,9 +3,9 @@
   Start keysynth for playing: engine with real audio (ASIO) + the web UI in the default browser.
 .DESCRIPTION
   1. Builds ui/dist (npm ci if needed, npm run build) when it is missing or older than the UI sources.
-  2. Starts <BuildDir>/bin/<Config>/keysynth-engine.exe (building it first if the build dir is configured but the
-     exe is missing), which serves ui/dist on http://127.0.0.1:<HttpPort> and the protocol on ws://127.0.0.1:<Port>.
-  3. Waits until the HTTP port accepts connections, then opens the browser.
+  2. Starts <BuildDir>/bin/<Config>/keysynth-engine.exe (incrementally built first when the build dir is configured;
+     -NoBuild skips that), which serves ui/dist on http://127.0.0.1:<HttpPort> and the protocol on ws://127.0.0.1:<Port>.
+  3. Waits until the HTTP port accepts connections, then opens the browser. Fails at once if a port is already taken.
   Ctrl+C stops the engine (it shares this console and quits cleanly; it is killed if it does not exit in 3 s).
 .EXAMPLE
   scripts/start.ps1
@@ -21,6 +21,7 @@ param(
     [switch]$NoBrowser,
     [switch]$NoAudio,
     [switch]$SkipUiBuild,
+    [switch]$NoBuild,
     [int]$StartTimeoutSeconds = 60
 )
 $ErrorActionPreference = "Stop"
@@ -28,7 +29,8 @@ $ErrorActionPreference = "Stop"
 
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $SkipUiBuild) { Update-UiDist -Repo $repo }
-$exe = Get-EngineExe -Repo $repo -BuildDir $BuildDir -Config $Config
+$exe = Get-EngineExe -Repo $repo -BuildDir $BuildDir -Config $Config -NoBuild:$NoBuild
+Assert-PortsFree -Ports @($Port, $HttpPort)
 
 $cmdArgs = @("--port", "$Port", "--http-port", "$HttpPort")
 if ($NoAudio) { $cmdArgs += @("--no-audio", "--no-midi") } # smoke tests / no interface attached

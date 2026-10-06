@@ -17,7 +17,8 @@ nlohmann::json toJson(const AudioStatus& s) {
             {"inputLatencyMs", s.inputLatencyMs},
             {"outputLatencyMs", s.outputLatencyMs},
             {"running", s.running},
-            {"hasControlPanel", s.hasControlPanel}};
+            {"hasControlPanel", s.hasControlPanel},
+            {"panelOpen", s.panelOpen}};
 }
 
 namespace {
@@ -137,10 +138,12 @@ AudioStatus AudioHost::status() const {
     }
     s.running = running_.load() && dev->isPlaying();
     s.hasControlPanel = dev->hasControlPanel();
+    s.panelOpen = panelOpen_.load();
     return s;
 }
 
 std::string AudioHost::openControlPanel() {
+    if (panelOpen_.load()) return "the driver's control panel is already open";
     auto* dev = dm_.getCurrentAudioDevice();
     if (dev == nullptr) return "no audio device is open";
     if (!dev->hasControlPanel()) return "the " + str(dev->getTypeName()) + " device has no control panel";
@@ -151,20 +154,36 @@ std::string AudioHost::openControlPanel() {
 }
 
 void AudioHost::showControlPanelNow() {
+    if (panelOpen_.load()) return;
     auto* dev = dm_.getCurrentAudioDevice();
     if (dev == nullptr || !dev->hasControlPanel()) return;
+    // A modal panel runs a nested message loop: protocol requests keep being handled meanwhile. panelOpen_ makes
+    // openControlPanel/setDevice refuse (setDevice could delete `dev` while its showControlPanel is on the stack)
+    // and listDevices skip the rescan; clients see status().panelOpen and disable the controls.
+    struct Reset {
+        std::atomic<bool>& f;
+        ~Reset() { f.store(false); }
+    } reset{panelOpen_};
+    panelOpen_.store(true);
+    if (onChanged) onChanged();
     // JUCE ASIO: true when the panel was modal (> 300 ms) — settings may have changed, reopen with the driver's
     // (new) preferred buffer size: bufferSize 0 = device default. Non-modal panels (the Yamaha Steinberg driver
     // opens a separate settings app) return at once; a later buffer change there makes the driver send a reset
     // request, JUCE reopens the device and audioDeviceAboutToStart re-reports it.
-    if (dev->showControlPanel()) {
+    const bool modal = dev->showControlPanel();
+    // Only reopen the device the panel belonged to (a driver reset may have replaced it meanwhile).
+    if (modal && dm_.getCurrentAudioDevice() == dev) {
         auto setup = dm_.getAudioDeviceSetup();
         setup.bufferSize = 0;
         dm_.closeAudioDevice();
         const juce::String err = dm_.setAudioDeviceSetup(setup, true);
-        if (err.isNotEmpty()) std::fprintf(stderr, "audio: reopening after the control panel failed: %s\n", err.toRawUTF8());
+        if (err.isNotEmpty()) {
+            const std::string msg = "reopening the device after the control panel failed: " + str(err);
+            if (onError) onError(msg);
+            else std::fprintf(stderr, "audio: %s\n", msg.c_str());
+        }
     }
-    changed_.store(true);
+    changed_.store(true); // re-reported (panelOpen false again) by handleAsyncUpdate after this returns
 }
 
 void AudioHost::handleAsyncUpdate() {
@@ -179,7 +198,7 @@ AudioDeviceList AudioHost::listDevices() {
     AudioDeviceList l;
     for (auto* t : dm_.getAvailableDeviceTypes()) {
         l.types.push_back(str(t->getTypeName()));
-        t->scanForDevices();
+        if (!panelOpen_.load()) t->scanForDevices(); // no driver probing under an open (modal) driver panel
         AudioDeviceList::TypeDevices td;
         td.type = str(t->getTypeName());
         for (const auto& n : t->getDeviceNames(false)) td.names.push_back(str(n));
@@ -193,6 +212,7 @@ AudioDeviceList AudioHost::listDevices() {
 }
 
 std::string AudioHost::setDevice(const std::string& type, const std::string& name, double sampleRate, int bufferSize) {
+    if (panelOpen_.load()) return "close the driver's control panel first";
     bool typeOk = false;
     for (auto* t : dm_.getAvailableDeviceTypes()) typeOk = typeOk || str(t->getTypeName()) == type;
     if (!typeOk) return "unknown device type '" + type + "'";
@@ -207,6 +227,9 @@ std::string AudioHost::setDevice(const std::string& type, const std::string& nam
     if (bufferSize > 0) setup.bufferSize = bufferSize;
     const juce::String err = dm_.setAudioDeviceSetup(setup, true);
     if (err.isEmpty()) saveSettings();
+    // The synchronous restart flagged an async re-report; set_audio_device reports the change itself (`devices`
+    // to all + `state`), so drop it instead of sending everything twice.
+    changed_.store(false);
     return str(err);
 }
 

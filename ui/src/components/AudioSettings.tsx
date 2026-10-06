@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { actions, useEngine } from '../store';
-import { LATENCY_HINT, LATENCY_WARN_MS, bufferMs, latencyTooHigh } from '../lib/latency';
+import { LATENCY_WARN_MS, bufferMs, latencyHint, latencyTooHigh } from '../lib/latency';
 
 const SAMPLE_RATES = [44100, 48000, 88200, 96000];
 const BUFFER_SIZES = [16, 32, 48, 64, 96, 128, 192, 256, 512, 1024];
@@ -35,11 +35,14 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
 
   const avail = devices?.available.find((a) => a.type === type);
   const names = avail?.names ?? [];
-  // Sizes the open device offers (ASIO drivers may offer only their control-panel value); generic list otherwise.
-  const offered = audio && type === audio.type && avail?.bufferSizes?.length ? avail.bufferSizes : null;
-  const bufferChoices = [...new Set([...(offered ?? BUFFER_SIZES), ...(audio && type === audio.type ? [audio.bufferSize] : [])])].sort(
+  // Sizes the open device offers (ASIO drivers may offer only their control-panel value); generic list for any
+  // other device (its sizes are unknown until it is opened).
+  const openDevice = !!audio && type === audio.type && name === audio.name;
+  const offered = openDevice && avail?.bufferSizes?.length ? avail.bufferSizes : null;
+  const bufferChoices = [...new Set([...(offered ?? BUFFER_SIZES), ...(audio && openDevice ? [audio.bufferSize] : [])])].sort(
     (a, b) => a - b,
   );
+  const panelOpen = !!audio?.panelOpen;
   const slow = latencyTooHigh(audio);
   const types = devices?.types ?? (audio ? [audio.type] : []);
   const latencyMs = (bs / sr) * 1000;
@@ -127,12 +130,12 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
           )}
           {slow && audio && (
             <div className="latency-warn" role="alert">
-              <b>Output latency {audio.outputLatencyMs.toFixed(1)} ms</b> (above {LATENCY_WARN_MS} ms) — {LATENCY_HINT}.
+              <b>Output latency {audio.outputLatencyMs.toFixed(1)} ms</b> (above {LATENCY_WARN_MS} ms) — {latencyHint(audio)}.
               {offered && offered.length <= 1 && (
                 <> This driver only offers {offered[0]} samples here; its own panel sets the size.</>
               )}
               {audio.hasControlPanel && (
-                <button type="button" className="btn primary small" onClick={() => void actions().openAudioPanel()}>
+                <button type="button" className="btn primary small" onClick={() => void actions().openAudioPanel()} disabled={panelOpen}>
                   Open ASIO panel
                 </button>
               )}
@@ -143,14 +146,14 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
             {audio && <span className="muted"> · device in/out {audio.inputLatencyMs.toFixed(1)} / {audio.outputLatencyMs.toFixed(1)} ms</span>}
           </div>
           <div className="row gap">
-            <button type="button" className="btn primary" disabled={!changed || busy || !name} onClick={() => void apply()}>
+            <button type="button" className="btn primary" disabled={!changed || busy || !name || panelOpen} onClick={() => void apply()}>
               {busy ? 'Applying…' : 'Apply'}
             </button>
             <button type="button" className="btn" onClick={() => void actions().listDevices()}>
               Rescan devices
             </button>
             {audio?.hasControlPanel && !slow && (
-              <button type="button" className="btn" onClick={() => void actions().openAudioPanel()}>
+              <button type="button" className="btn" onClick={() => void actions().openAudioPanel()} disabled={panelOpen}>
                 Open ASIO panel
               </button>
             )}

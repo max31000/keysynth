@@ -303,7 +303,16 @@ TEST_CASE("protocol: note, cc, transport, panic, devices", "[protocol]") {
     REQUIRE(replies[0]["id"] == 11);
     REQUIRE(replies[1]["type"] == "log");
     REQUIRE(replies[1]["level"] == "warn");
+    REQUIRE(replies[1]["notify"] == true); // user-facing: the UI toasts it
     REQUIRE(!replies[1].contains("id"));
+    // Exactly one `devices` to the others and one `state` broadcast (the host's async re-report is suppressed).
+    int othersDevices = 0, states = 0;
+    for (auto& o : setOut) {
+        if (o.target == Outgoing::Target::Others && o.message["type"] == "devices") ++othersDevices;
+        if (o.target == Outgoing::Target::Broadcast && o.message["type"] == "state") ++states;
+    }
+    REQUIRE(othersDevices == 1);
+    REQUIRE(states == 1);
     REQUIRE(replies[1]["message"].get<std::string>().find("offered: 64, 128") != std::string::npos);
     REQUIRE(f.reply({{"type", "set_audio_device"}, {"device_type", "Nope"}, {"name", "x"}})["code"] == "device_error");
 
@@ -316,6 +325,18 @@ TEST_CASE("protocol: note, cc, transport, panic, devices", "[protocol]") {
     REQUIRE(ok["type"] == "open_audio_panel_ok");
     REQUIRE(ok["id"] == 13);
     REQUIRE(f.audio.panelOpens == 1);
+
+    // While the (modal) panel is open, the message loop keeps serving requests: re-opening it or switching the
+    // device (which could delete the device whose panel is on the stack) is refused; the flag is reported.
+    f.audio.st.panelOpen = true;
+    REQUIRE(f.reply({{"type", "list_devices"}})["current"]["panelOpen"] == true);
+    REQUIRE(f.reply({{"type", "open_audio_panel"}, {"id", 14}})["code"] == "busy");
+    REQUIRE(f.audio.panelOpens == 1);
+    const json busy = f.reply({{"type", "set_audio_device"}, {"id", 15}, {"device_type", "FakeType"}, {"name", "Fake Device"}});
+    REQUIRE(busy["code"] == "busy");
+    REQUIRE(f.audio.lastName == "Other");
+    f.audio.st.panelOpen = false;
+    REQUIRE(f.reply({{"type", "open_audio_panel"}, {"id", 16}})["type"] == "open_audio_panel_ok");
 }
 
 TEST_CASE("protocol: rhythm (transport fields, patterns, kit node)", "[protocol][sequencer]") {

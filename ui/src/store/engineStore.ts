@@ -290,9 +290,9 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
             break;
           case 'log':
             set({ logs: [...get().logs.slice(-49), msg] });
-            // Problems the player must see (failed sample loads, rejected buffer size) also go to the toast.
-            // Plugin errors are duplicated as plugin_status events and shown by the plugin toast instead.
-            if ((msg.level === 'error' || msg.level === 'warn') && !msg.message.startsWith('plugin ')) set({ lastError: msg.message });
+            // Only problems the engine flags for the player (`notify`) become a toast; transient warnings (a
+            // plugin module unavailable while it compiles) and plugin errors (plugin toast) stay in the log.
+            if (msg.notify) set({ lastError: msg.message });
             break;
           case 'error':
             if (msg.id === undefined) set({ lastError: `${msg.code}: ${msg.message}` });

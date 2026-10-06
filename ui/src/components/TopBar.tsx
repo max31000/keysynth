@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { actions, useEngine } from '../store';
 import { live, onFrame } from '../store/liveBus';
 import type { ParamSpec } from '../protocol/types';
-import { LATENCY_HINT, LATENCY_WARN_MS, bufferMs, latencyTooHigh } from '../lib/latency';
+import { LATENCY_WARN_MS, bufferMs, latencyHint, latencyTooHigh } from '../lib/latency';
 import { Knob } from './Knob';
 
 const METRO_SPEC: ParamSpec = {
@@ -168,11 +168,11 @@ export function TopBar({ onAudioSettings }: { onAudioSettings: () => void }) {
       </button>
       {slow && audio && (
         <div className="latency-badge" role="status">
-          <span className="latency-badge-text" title={`Output latency above ${LATENCY_WARN_MS} ms: ${LATENCY_HINT}`}>
+          <span className="latency-badge-text" title={`Output latency above ${LATENCY_WARN_MS} ms: ${latencyHint(audio)}`}>
             ⚠ High latency
           </span>
           {audio.hasControlPanel && (
-            <button type="button" className="btn small" onClick={() => void actions().openAudioPanel()} title={LATENCY_HINT}>
+            <button type="button" className="btn small" onClick={() => void actions().openAudioPanel()} title={latencyHint(audio)} disabled={!!audio.panelOpen}>
               Open ASIO panel
             </button>
           )}

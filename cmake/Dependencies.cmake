@@ -44,8 +44,11 @@ foreach(_d juce nlohmann_json ixwebsocket catch2 sfizz)
     if(_at_pin)
         set(FETCHCONTENT_SOURCE_DIR_${_D} "${_src}")
     elseif(FETCHCONTENT_FULLY_DISCONNECTED)
-        message(WARNING "${_d}: shared source is not at ${KS_PIN_${_d}} but the configure is disconnected; "
-                        "using it as-is (re-run scripts/configure.ps1 -Online to update)")
+        # Typically a pin bump picked up by a ZERO_CHECK re-run of a build dir that scripts/configure.ps1 had
+        # configured disconnected (cached): building against the old source would silently mismatch the pin.
+        message(FATAL_ERROR "${_d}: shared source ${_src} is not at ${KS_PIN_${_d}} but the configure is disconnected. "
+                            "Re-run scripts/configure.ps1 (it configures online when a source is off its pin), or "
+                            "set FETCHCONTENT_SOURCE_DIR_${_D} to use that source deliberately.")
     else()
         message(STATUS "${_d}: shared source is not at ${KS_PIN_${_d}}; FetchContent will update it")
     endif()
