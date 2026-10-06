@@ -1,0 +1,143 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Sun Always Shines Strings & Brass",
+    "category": "Splits & Layers",
+    "tags": [
+      "80s",
+      "aha",
+      "layer",
+      "strings",
+      "brass",
+      "orchestral"
+    ],
+    "description": "Dramatic 80s orchestral-synth layer: sampled string section (VPO sustain) under a bright detuned-saw synth brass with velocity-sensitive filter swell, chorus and big hall. Reference: a-ha - The Sun Always Shines on T.V. (1985, string/brass synth stabs over orchestral strings).",
+    "author": "factory"
+  },
+  "tempo": 124,
+  "layers": [
+    {
+      "name": "Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 8.3,
+          "polyphony": 128
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SEC-sustain.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": true,
+            "hp_hz": 30
+          }
+        }
+      ]
+    },
+    {
+      "name": "Synth Brass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.9,
+          "osc1_fine": -5,
+          "osc2_fine": 6,
+          "filter_model": 0,
+          "cutoff": 1100,
+          "resonance": 0.12,
+          "key_track": 0.6,
+          "filter_env_amt": 2.6,
+          "filter_vel": 1.0,
+          "fenv_attack": 0.03,
+          "fenv_decay": 0.5,
+          "fenv_sustain": 0.55,
+          "fenv_release": 0.35,
+          "amp_attack": 0.01,
+          "amp_decay": 0.6,
+          "amp_sustain": 0.85,
+          "amp_release": 0.35,
+          "amp_vel": 0.4,
+          "hpf_cutoff": 120,
+          "drift": 0.3,
+          "pan_spread": 0.3,
+          "volume_db": -11.7
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "rate": 0.5,
+            "depth": 0.45,
+            "mix": 0.4,
+            "width": 1.0,
+            "hiss": 0.05
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.26,
+          "size": 0.75,
+          "decay": 2.4,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

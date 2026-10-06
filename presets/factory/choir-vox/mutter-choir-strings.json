@@ -1,0 +1,117 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Mutter Choir & Strings",
+    "category": "Choir & Vox",
+    "tags": [
+      "rammstein",
+      "flake",
+      "choir",
+      "strings",
+      "orchestral",
+      "layer"
+    ],
+    "description": "Solemn choir-led layer: SSO mixed choir in front, VPO string section behind it, warm hall with a little low-mid lift. Reference: Rammstein - Mutter (choir and string arrangement).",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 1.4,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 9.0
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Chorus - Mixed.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 5.4,
+          "polyphony": 128
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SEC-sustain.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": true,
+            "hp_hz": 30
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "ls_hz": 200,
+          "ls_db": 1.5
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.26,
+          "size": 0.8,
+          "decay": 2.5,
+          "predelay_ms": 30,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
