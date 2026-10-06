@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ui-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "ui", "run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "ui-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "ui", "run", "mock"],
+      "port": 7341
+    }
+  ]
+}
