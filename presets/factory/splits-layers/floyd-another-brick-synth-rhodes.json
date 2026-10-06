@@ -1,0 +1,143 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Another Brick Synth + Rhodes (Floyd)",
+    "category": "Splits & Layers",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "prophet-5",
+      "rhodes",
+      "layer",
+      "disco",
+      "70s"
+    ],
+    "description": "Funky Rhodes Mk I with bark layered with a short Prophet-5 poly stab (pulse + saw, snappy filter envelope, BBD chorus), small room: the clipped keyboard chords and synth line of the disco-rock groove. Reference: Pink Floyd - Another Brick in the Wall (Part 2) (The Wall, 1979).",
+    "author": "factory"
+  },
+  "tempo": 104,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 7.7,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 0,
+          "tone": 0.5,
+          "bark": 0.45,
+          "hammer_hardness": 0.55,
+          "velocity_curve": 0.1,
+          "dynamics": 30,
+          "decay": 1.0,
+          "release": 0.9,
+          "tine_mix": 0.45,
+          "strike_position": 0.5,
+          "pickup_position": 0.5,
+          "pickup_distance": 0.5,
+          "drive": 0.15,
+          "noise": 0.25,
+          "key_variation": 0.5,
+          "polyphony": 32,
+          "volume_db": -2
+        },
+        "state": {}
+      },
+      "fx": []
+    },
+    {
+      "name": "Prophet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 7.7,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.2,
+          "volume_db": -14,
+          "osc1_wave": 1,
+          "osc1_pw": 0.35,
+          "osc2_wave": 0,
+          "osc2_level": 0.7,
+          "osc2_fine": 6,
+          "filter_model": 1,
+          "cutoff": 1300,
+          "resonance": 0.2,
+          "key_track": 0.6,
+          "filter_env_amt": 2.2,
+          "fenv_attack": 0.002,
+          "fenv_decay": 0.35,
+          "fenv_sustain": 0.25,
+          "fenv_release": 0.25,
+          "amp_attack": 0.002,
+          "amp_decay": 0.8,
+          "amp_sustain": 0.55,
+          "amp_release": 0.22,
+          "amp_vel": 0.4
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.35,
+            "width": 1.0,
+            "hiss": 0.05
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 2,
+          "mix": 0.12,
+          "decay": 1.0,
+          "size": 0.4,
+          "predelay_ms": 10,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

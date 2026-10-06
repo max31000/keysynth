@@ -1,0 +1,136 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Great Gig Piano + Organ (Floyd)",
+    "category": "Splits & Layers",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "piano",
+      "hammond",
+      "layer",
+      "70s",
+      "ballad"
+    ],
+    "description": "Rick Wright's gospel-tinged grand piano (Salamander) with a quiet Hammond (8' + 4', C3, slow Leslie) swelling underneath, warm EQ and hall. Reference: Pink Floyd - The Great Gig in the Sky (The Dark Side of the Moon, 1973).",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Piano",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 9.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 2,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Hammond",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 9.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 4,
+          "db_5_1_3": 0,
+          "db_8": 8,
+          "db_4": 6,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "vibrato": 6,
+          "click": 0.05,
+          "leakage": 0.25,
+          "drive": 0.08,
+          "volume_db": -13
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.08,
+            "spread": 0.8,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "hs_hz": 9000,
+          "hs_db": -2,
+          "ls_hz": 120,
+          "ls_db": 1
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.22,
+          "decay": 2.0,
+          "size": 0.7,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

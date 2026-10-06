@@ -1,0 +1,112 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Welcome to the Machine Drone (Floyd)",
+    "category": "Synth Pad",
+    "tags": [
+      "pink floyd",
+      "vcs3",
+      "drone",
+      "dark",
+      "pad",
+      "70s"
+    ],
+    "description": "Dark VCS3-style machine drone: saws an octave apart plus sub into a resonant ladder filter slowly breathing with an LFO, soft saturation, slow 8-stage phaser and a dark hall. Hold low fifths. Reference: Pink Floyd - Welcome to the Machine (Wish You Were Here, 1975).",
+    "author": "factory"
+  },
+  "tempo": 88,
+  "layers": [
+    {
+      "name": "Drone",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 3.3,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.4,
+          "volume_db": -8,
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_octave": -1,
+          "osc2_level": 0.8,
+          "osc2_fine": 4,
+          "sub_level": 0.4,
+          "filter_model": 0,
+          "cutoff": 420,
+          "resonance": 0.5,
+          "filter_drive": 0.35,
+          "key_track": 0.4,
+          "filter_env_amt": 0.8,
+          "fenv_attack": 1.5,
+          "fenv_decay": 2.5,
+          "fenv_sustain": 0.6,
+          "fenv_release": 1.2,
+          "amp_attack": 1.0,
+          "amp_decay": 1.0,
+          "amp_sustain": 1.0,
+          "amp_release": 1.3,
+          "amp_vel": 0.1,
+          "lfo1_wave": 0,
+          "lfo1_rate": 0.09,
+          "lfo1_cutoff": 1.3,
+          "drive": 0.25,
+          "pan_spread": 0.3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 2,
+            "rate": 0.12,
+            "depth": 0.7,
+            "centre_hz": 600,
+            "feedback": 0.45,
+            "spread": 0.5,
+            "mix": 0.4
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.28,
+            "decay": 2.1,
+            "size": 0.8,
+            "predelay_ms": 30,
+            "damp_hf": 0.65,
+            "low_cut_hz": 120,
+            "high_cut_hz": 6000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,229 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Shine On Split (Floyd)",
+    "category": "Splits & Layers",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "solina",
+      "string ensemble",
+      "minimoog",
+      "hammond",
+      "split",
+      "70s"
+    ],
+    "description": "Rick Wright's Wish You Were Here stage split: ARP/Solina-style string ensemble (two detuned saws, 8' + 4', three-phase ensemble chorus) layered with a soft Hammond on slow Leslie in the left hand (to B3), and the gliding Minimoog lead with delayed vibrato, tape echo and hall in the right hand. Reference: Pink Floyd - Shine On You Crazy Diamond (Parts I-V, 1975).",
+    "author": "factory"
+  },
+  "tempo": 63,
+  "layers": [
+    {
+      "name": "Solina Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 59,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.5,
+        "pan": -0.1,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.2,
+          "volume_db": -12,
+          "osc1_wave": 0,
+          "osc1_fine": -5,
+          "osc2_wave": 0,
+          "osc2_level": 0.9,
+          "osc2_fine": 6,
+          "osc2_octave": 1,
+          "filter_model": 1,
+          "cutoff": 3600,
+          "resonance": 0.05,
+          "key_track": 0.6,
+          "hpf_cutoff": 220,
+          "amp_attack": 0.3,
+          "amp_decay": 1.0,
+          "amp_sustain": 1.0,
+          "amp_release": 1.0,
+          "amp_vel": 0.15,
+          "pan_spread": 0.3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "ensemble",
+          "bypass": false,
+          "params": {
+            "rate": 0.6,
+            "rate_fast": 6.0,
+            "depth": 0.65,
+            "depth_fast": 0.35,
+            "mix": 0.85,
+            "width": 1.0,
+            "tone": 0.55,
+            "hiss": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hammond",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 59,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.5,
+        "pan": -0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 6,
+          "db_5_1_3": 0,
+          "db_8": 8,
+          "db_4": 6,
+          "db_2_2_3": 0,
+          "db_2": 3,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "vibrato": 6,
+          "click": 0.1,
+          "leakage": 0.25,
+          "drive": 0.08,
+          "volume_db": -11
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.1,
+            "spread": 0.8,
+            "mix": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "Minimoog",
+      "zone": {
+        "key_lo": 60,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.5,
+        "pan": 0.1,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.3,
+          "volume_db": -6,
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.8,
+          "osc2_fine": 5,
+          "osc3_wave": 1,
+          "osc3_pw": 0.3,
+          "osc3_octave": -1,
+          "osc3_level": 0.35,
+          "filter_model": 0,
+          "cutoff": 520,
+          "resonance": 0.35,
+          "filter_drive": 0.2,
+          "key_track": 0.4,
+          "filter_env_amt": 1.6,
+          "fenv_attack": 0.03,
+          "fenv_decay": 0.9,
+          "fenv_sustain": 0.45,
+          "fenv_release": 0.4,
+          "amp_attack": 0.008,
+          "amp_decay": 0.5,
+          "amp_sustain": 1.0,
+          "amp_release": 0.35,
+          "amp_vel": 0.2,
+          "voice_mode": 2,
+          "glide": 0.09,
+          "glide_mode": 1,
+          "lfo1_wave": 1,
+          "lfo1_rate": 5.6,
+          "lfo1_delay": 0.9,
+          "lfo1_pitch": 0.22,
+          "mw_vibrato": 0.6
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 430,
+            "sync": 0,
+            "feedback": 0.25,
+            "mix": 0.16,
+            "low_cut_hz": 150,
+            "high_cut_hz": 4500,
+            "wow": 0.2,
+            "flutter": 0.15
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.22,
+          "decay": 2.0,
+          "size": 0.7,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

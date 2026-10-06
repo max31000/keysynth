@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "On the Run VCS3 (Floyd)",
+    "category": "Synth Lead",
+    "tags": [
+      "pink floyd",
+      "vcs3",
+      "synthi",
+      "sequence",
+      "70s",
+      "resonant"
+    ],
+    "description": "EMS VCS3 / Synthi AKS sequence timbre: saw + pulse into a squelchy, resonant filter with a short plucked envelope, the cutoff slowly swept by a triangle LFO (the hand-tweaked filter), light phasing and a 1/16 ping-pong echo at 165 BPM. Play fast repeated 16ths. Reference: Pink Floyd - On the Run (The Dark Side of the Moon, 1973).",
+    "author": "factory"
+  },
+  "tempo": 165,
+  "layers": [
+    {
+      "name": "VCS3",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 10.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "drift": 0.3,
+          "volume_db": -6.1,
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.4,
+          "osc2_level": 0.6,
+          "osc2_fine": -6,
+          "noise_level": 0.04,
+          "filter_model": 0,
+          "cutoff": 650,
+          "resonance": 0.6,
+          "filter_drive": 0.3,
+          "key_track": 0.6,
+          "filter_env_amt": 2.6,
+          "fenv_attack": 0.001,
+          "fenv_decay": 0.18,
+          "fenv_sustain": 0.1,
+          "fenv_release": 0.12,
+          "amp_attack": 0.001,
+          "amp_decay": 0.25,
+          "amp_sustain": 0.35,
+          "amp_release": 0.12,
+          "amp_vel": 0.3,
+          "lfo1_wave": 1,
+          "lfo1_rate": 0.12,
+          "lfo1_cutoff": 1.2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 1,
+            "rate": 0.2,
+            "depth": 0.6,
+            "centre_hz": 800,
+            "feedback": 0.3,
+            "spread": 0.5,
+            "mix": 0.3
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "time": 375,
+            "sync": 12,
+            "feedback": 0.3,
+            "mix": 0.2,
+            "low_cut_hz": 150,
+            "high_cut_hz": 5000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Light My Fire Solo (Doors)",
+    "category": "Splits & Layers",
+    "tags": [
+      "doors",
+      "manzarek",
+      "vox",
+      "continental",
+      "split",
+      "60s",
+      "solo"
+    ],
+    "description": "Ray Manzarek's live/studio rig: Fender Rhodes Piano Bass in the left hand (up to B2) under a Vox Continental (8' + 4' + 2' with the reed tab, a touch of flute, master-oscillator vibrato) for the long modal solo. The organ is pushed lightly into a tube amp and sits in a short, dry-ish echo chamber (Sunset Sound, 1966). Reference: The Doors - Light My Fire (1967), organ solo.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Piano Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 47,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 2.7,
+        "pan": -0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 4,
+          "tone": 0.35,
+          "bark": 0.35,
+          "hammer_hardness": 0.4,
+          "velocity_curve": 0.15,
+          "dynamics": 24,
+          "decay": 0.9,
+          "release": 0.6,
+          "tine_mix": 0.55,
+          "strike_position": 0.45,
+          "pickup_position": 0.55,
+          "pickup_distance": 0.45,
+          "drive": 0.15,
+          "noise": 0.35,
+          "key_variation": 0.4,
+          "polyphony": 8,
+          "volume_db": -1.0
+        },
+        "state": {}
+      },
+      "fx": []
+    },
+    {
+      "name": "Vox Continental",
+      "zone": {
+        "key_lo": 48,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 2.7,
+        "pan": 0.05,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 0,
+          "vox_8": 8,
+          "vox_4": 8,
+          "vox_2": 4,
+          "vox_iv": 0,
+          "vox_flute": 2,
+          "vox_reed": 8,
+          "vibrato": 1,
+          "vibrato_rate": 6.0,
+          "vibrato_depth": 0.45,
+          "bright": 1,
+          "leakage": 0.2,
+          "click": 0.12,
+          "velocity": 0,
+          "volume_db": -2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 6,
+            "asymmetry": 0.25,
+            "tone": 0.5,
+            "level_db": -2.5,
+            "mix": 0.5
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 90,
+            "p2_hz": 2600,
+            "p2_db": 1.5,
+            "p2_q": 0.8,
+            "hs_hz": 9000,
+            "hs_db": -3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.16,
+            "decay": 1.4,
+            "size": 0.45,
+            "predelay_ms": 15,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
