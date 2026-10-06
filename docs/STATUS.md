@@ -3,6 +3,14 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Consistency: one `sync` note-division enum (dsp/NoteDivision.h) for all tempo-synced modules, patch format 2 +
+  migrations; master volume before limiter; all 115 factory presets at −16 LUFS ±1, ≤ −1 dBTP
+  (`scripts/loudness.py --check`, docs/research/LOUDNESS.md); ks-render `--cc`/`--bend`.
+- Integration: ASIO panel button + latency warning UX (`open_audio_panel`), launchers (scripts/start.ps1,
+  start-dev.ps1), configure.ps1 lock/auto-disconnect, tabbed large module panels (`uiHints.tabs`), FM onset ≤ 8
+  samples (MSFA LG_N=3), FM .syx params adopted into patch, noteMap from live graph, sampler load errors → UI.
+  Per-engine note-on → first-sample latency all within one block (test `[latency]`).
+- Signature presets: Doors + Pink Floyd (22), 80s pop + Rammstein (28), each reviewed.
 - Phase 2 (merged, 166 Catch2 cases + 83 Vitest): `va` (reviewed twice, fixes merged), `fm` (MSFA, .syx),
   `organ`/`combo`/`rotary`, `epiano`/`tremolo`, `sampler` (sfizz 1.2.3, 16 sample presets), effects suite (9),
   `drums` + DrumSequencer + rhythm UI (12 patterns), plugin host (Faust JIT via faust.dll C API, C ABI DLLs,
@@ -23,18 +31,20 @@ Update when a chunk of work lands. Newest first inside each section.
 - Sample libraries (core set ~3.5 GB, assets/samples.json) and Faust 2.88 (.tools/faust).
 
 ## In progress
-- Signature presets (Doors + Pink Floyd; 80s pop + Rammstein) — two preset branches.
-- Integration: real UI ⇄ engine walkthrough, ASIO panel/latency UX, launcher scripts, configure.ps1 lock,
-  FM .syx param read-back, FM note-start jitter (MSFA 64-sample chunks), sampler load errors to UI.
+- Fixes from integration review (ASIO modal panel re-entrancy, launcher port checks, log→toast `notify`, …).
 
 ## Next
+- Test on real hardware: ASIO panel button with UR22C, play-feel per engine on the P-143.
+- Ideas from preset work: wah, Binson Echorec-style drum echo, step sequencer/arpeggiator, pitch-bend envelope for
+  leads, Leslie usable on combo organ presets, split zones shown on the on-screen keyboard, sampler panel shows
+  loaded SFZ.
 - Later: looper, recording, MIDI controller mapping, cross-instance sample cache, sandboxing paths inside SFZ files.
 
 ## Known issues / decisions log
 - Review #1 of Phase 1 (fresh-context subagent): fixed render-once cache sizing/pass-through, double processing of
   shared fx, metronome beat drop at block edges, stuck notes on zone-channel change / MIDI unplug, UNC path probing,
   node-id wrap, VoiceAllocator pedal/mono edge cases, set_patch reuse, transport validation, CC120/123 mapping.
-  Open (low): GraphBuilder copies noteMap from the latest (possibly never-live pending) graph.
+  (noteMap-from-pending-graph issue: fixed in integration.)
 - Deviations from ARCHITECTURE rev 2 are recorded inline there (RT checks ON in all configs; metronome + limiter in
   the Engine output stage; transition details; no module reuse across preset loads; Origin rules incl. port 7340).
 - Phase 1 gaps: `transport.pattern/drums` -> `not_implemented` (DrumSequencer is a stub); RhythmNode is a
