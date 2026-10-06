@@ -46,7 +46,7 @@ Threads:
 ## 3. Repository layout
 
 ```
-CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ, KS_RT_CHECKS (default ON in Debug)
+CMakeLists.txt            options KS_BUILD_TESTS, KS_WITH_SFIZZ, KS_RT_CHECKS (default ON in all configs, see §4.8)
 cmake/Dependencies.cmake  FetchContent, every dep pinned to a tag/commit: JUCE (>=8.0.11, bundles ASIO),
                           nlohmann_json, ixwebsocket (USE_TLS=OFF, no zlib), Catch2 v3, sfizz (isolated target,
                           warnings off). CMAKE_MSVC_RUNTIME_LIBRARY set globally.
@@ -99,6 +99,9 @@ All code is testable without an audio device.
 8. **Enforcement** (`KS_RT_CHECKS`, on in Debug/tests): `RtScope` sets a thread_local flag inside
    `Engine::process`; replaced global `operator new/delete` and the `ks::Mutex` wrapper assert when it is set.
    A swap stress test does 10k random publishes during offline render.
+   Violations are *counted* (`rt::violationCount()`, also in telemetry as `rtViolations`); tests assert 0;
+   `KS_RT_ABORT=1` aborts on the first one. KS_RT_CHECKS defaults ON in every config (cost: one thread_local read
+   per allocation) so the Release test run is checked too; turn it off for shipping builds.
 
 ## 5. Core model
 
@@ -147,7 +150,12 @@ class Module {
 
 - `ProcessContext`: sampleRate, numSamples, sampleTime, transport (tempo, ppq position, playing), and per-layer
   `ChannelState` {pitchBend (-1..1), modWheel, aftertouch, cc64 sustain, cc66 sostenuto, cc67 soft, expression}
-  maintained by the core (engines don't parse CCs, but still receive raw events).
+  maintained by the core (engines don't parse CCs, but still receive raw events). The Engine keeps 17 global
+  states (0 = omni merge, 1..16); each layer gets a copy for its zone channel with sustain/sostenuto masked when
+  `zone.sustain` is false.
+- Module helpers beyond the sketch above: the base constructor takes the module's static `ModuleInfo` (so the
+  ParamSet can be built), `info()` is virtual-with-default, `activeVoices()` feeds telemetry, and
+  `Module::liveInstances()` counts instances for leak tests.
 - `MidiEvent` POD: {sampleOffset, type, channel, note/cc, value7, valueF, noteId (int32, MPE/MIDI2-ready)}.
 - `ModuleRegistry`: typeId → {ModuleInfo, factory}. Built-ins via `BuiltinModules.cpp`; plugins at runtime
   (`plugin:<id>`). UI gets the catalog through the protocol.
@@ -173,6 +181,9 @@ Patch (data)                              RackGraph (live, audio thread)
 - Signal flow: MIDI (all inboxes merged per block) → ChannelState update → Transport/DrumSequencer → each LayerNode
   zone filter (key/vel range on physical key, then transpose, channel) → instrument → layer FX → sum → master FX →
   + metronome → limiter → device.
+- The metronome and the safety limiter are owned by the Engine's output stage, not by RackGraph: they persist
+  across swaps and are applied once to the mixed output of both graphs during a transition.
+- The Engine's maxBlock = device buffer size (offline: `--block`); larger callbacks are split.
 - `Transport` (tempo, play state, position) lives in the Engine, outside the graph.
 
 ### 5.4 Structural changes (GraphBuilder + GraphSwapper)
@@ -191,6 +202,10 @@ Patch (data)                              RackGraph (live, audio thread)
   all-notes-off and keeps rendering until silent or `min(tailSamples, 1 s)`, mixed with the new one; a new pending
   graph arriving during that time forces a 10 ms fade-out of the old graph. ChannelState (sustain, mod, bend) is
   global so it carries over.
+  Implementation: "shared" transitions are a 20 ms linear crossfade (old chain → new chain; shared modules
+  rendered once, so a shared instrument is not doubled); unshared transitions tail out for
+  `clamp(maxTail, 50 ms, 1 s)` or until 2048 silent samples, then fade 10 ms. Preset loads build with no reuse
+  (node ids of unrelated patches must not share modules); edits of the current patch reuse.
 - **Retire.** Old graph pointer → retire SPSC (capacity 8). If push fails, the audio thread keeps it and retries next
   block; it never frees. Control thread drains on a 50 ms timer and deletes.
 - Device/sample-rate/buffer change: stop device → rebuild graph with new prepare args (no reuse) → restart.
@@ -266,7 +281,9 @@ Drums, FX, Splits & Layers. Signature presets name their reference in `descripti
 ## 11. Control protocol & security
 
 JSON over WebSocket, see `docs/PROTOCOL.md` (source of truth for UI and engine; TS types mirror it).
-- Bind 127.0.0.1 only. Reject WS handshakes whose `Origin` is not `http://localhost|127.0.0.1:{7341,5173}`.
+- Bind 127.0.0.1 only. Reject WS handshakes whose `Origin` is not `http://localhost|127.0.0.1:{7341,5173}` or the
+  static UI port (7340, served by `ix::HttpServer` from `ui/dist`). Handshakes without `Origin` (non-browser local
+  clients) are accepted. WS paths other than `/` and `/ws` are rejected.
 - Every path in a request is resolved and must lie inside allow-listed roots (repo `presets/`, `userdata/`,
   `assets/`, `plugins/`). Handlers validate input and reply `error` instead of crashing.
 

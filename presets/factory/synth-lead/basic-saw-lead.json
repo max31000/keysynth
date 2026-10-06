@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Basic Saw Lead",
+    "category": "Synth Lead",
+    "tags": ["basic", "saw", "lead"],
+    "description": "Simple bright saw lead on the minimal `basic` engine (core test preset).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Lead",
+      "zone": { "key_lo": 0, "key_hi": 127, "vel_lo": 1, "vel_hi": 127, "transpose": 0,
+                "channel": 0, "volume_db": 0, "pan": 0, "mute": false, "solo": false, "sustain": true },
+      "instrument": {
+        "type": "basic",
+        "params": { "wave": 0, "cutoff": 2500, "resonance": 0.3, "attack": 0.004, "decay": 0.4,
+                    "sustain": 0.6, "release": 0.25, "volume_db": -6, "voice_mode": 0, "glide": 0, "polyphony": 16 },
+        "state": {}
+      },
+      "fx": [
+        { "type": "gain", "bypass": false, "params": { "gain_db": 0, "pan": 0 } }
+      ]
+    }
+  ],
+  "master": { "volume_db": -3, "fx": [ { "type": "limiter", "bypass": false, "params": { "ceiling_db": -1, "release_ms": 80 } } ] }
+}
