@@ -73,7 +73,8 @@ int FlangerFx::tailSamples() const {
     const float fb = std::min(std::fabs(params().get(Feedback)), 0.98f);
     // Passes until -100 dB, each pass at most the longest swept delay.
     const float passes = fb > 1e-3f ? std::log(1e-5f) / std::log(fb) : 1.0f;
-    return static_cast<int>((passes + 1.0f) * kMaxDelayMs * 0.001 * sr_ + dsp::Bbd::kFilterTailMs * 0.001 * sr_);
+    const float maxMs = std::min(params().get(Time) * std::exp2(2.5f * params().get(Depth)), kMaxDelayMs);
+    return static_cast<int>(((passes + 1.0f) * maxMs + dsp::Bbd::kFilterTailMs) * 0.001f * static_cast<float>(sr_));
 }
 
 void FlangerFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx) {

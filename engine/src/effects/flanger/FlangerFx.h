@@ -21,7 +21,7 @@ public:
     int tailSamples() const override;
 
     enum P { Time, Depth, Rate, Sync, Feedback, ThroughZero, Spread, Mix, Count };
-    static constexpr float kMaxDelayMs = 30.0f;
+    static constexpr float kMaxDelayMs = 60.0f; // time 10 ms x 2^2.5 sweep fits
 
 private:
     struct Channel {

@@ -98,9 +98,9 @@ int DelayFx::tailSamples() const {
     const float off = std::max(1.0f, 1.0f + params().get(Offset) * 0.01f);
     const float d = targetDelaySamples(ctx) * off;
     const float g = std::min(params().get(Feedback), 1.0f);
-    // Repeats until -90 dB (loop filters ignored -> conservative); infinite feedback capped at 30 s.
+    // Repeats until -90 dB (loop filters ignored -> conservative); infinite feedback capped at 120 s.
     const float passes = g >= 0.999f ? 1e9f : (g > 1e-4f ? std::log(3.16e-5f) / std::log(g) : 0.0f);
-    const double s = std::min(static_cast<double>(passes + 1.0f) * d, 30.0 * sr_);
+    const double s = std::min(static_cast<double>(passes + 1.0f) * d, 120.0 * sr_);
     return static_cast<int>(s + 0.05 * sr_);
 }
 

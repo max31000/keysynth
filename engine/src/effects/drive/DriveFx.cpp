@@ -59,7 +59,7 @@ void DriveFx::prepare(double sampleRate, int maxBlock) {
         c.tilt.setCutoff(800.0f, static_cast<float>(sampleRate));
     }
     dry_.assign(static_cast<size_t>(maxBlock), 0.0f);
-    tmp_.assign(static_cast<size_t>(maxBlock) * 4, 0.0f);
+    tmp_.assign(static_cast<size_t>(maxBlock) * 6, 0.0f);
     drive_.prepare(sampleRate, 0.02f);
     bias_.prepare(sampleRate, 0.02f);
     level_.prepare(sampleRate, 0.02f);
@@ -121,9 +121,12 @@ void DriveFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
         mixv[i] = mix_.next();
         hi[i] = std::exp2((tone_.next() - 0.5f) * 2.0f); // +-6 dB tilt around 800 Hz
     }
-    float biasVal = 0.0f;
-    for (int i = 0; i < n; ++i) biasVal = bias_.next();
-    const float offset = shape(mode, 0.0f, biasVal); // static offset of the bias, removed before the DC blocker
+    float* bias = hi + maxBlock_;
+    float* offs = bias + maxBlock_;
+    for (int i = 0; i < n; ++i) {
+        bias[i] = bias_.next();
+        offs[i] = shape(mode, 0.0f, bias[i]); // static offset of the bias, removed before the DC blocker
+    }
 
     for (int c = 0; c < 2; ++c) {
         Channel& ch = ch_[c];
@@ -137,9 +140,10 @@ void DriveFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
         float* b = ch.os.buffer();
         const int total = n * factor;
         for (int j = 0; j < total; ++j) {
-            float u = b[j] * gain[j / factor];
+            const int i = j / factor;
+            float u = b[j] * gain[i];
             if (mode == Tape) u += ch.preEmph.hp(u); // HF pre-emphasis: treble saturates first
-            float y = shape(mode, u, biasVal) - offset;
+            float y = shape(mode, u, bias[i]) - offs[i];
             if (mode == Tape) y = 0.5f * y + 0.5f * ch.deEmph.lp(y); // matching de-emphasis
             b[j] = y;
         }

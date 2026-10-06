@@ -2,6 +2,7 @@
 
 #include "dsp/NoteDivision.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace ks {
@@ -14,7 +15,7 @@ const ModuleInfo& PhaserFx::moduleInfo() {
         i.kind = ModuleKind::Effect;
         i.category = "Modulation";
         i.params = {
-            enumParam("stages", "Stages", {"4", "6", "8", "12"}, 0),
+            enumParam("stages", "Stages", {"4", "6", "8", "12"}, 0), // switching re-wires the chain (not smoothed)
             logParam("rate", "Rate", 0.02f, 10.0f, 0.5f, "Hz", {}, 0.5f),
             enumParam("sync", "Sync", dsp::noteDivisionChoices(), 0),
             linearParam("depth", "Depth", 0.0f, 1.0f, 0.8f),
@@ -23,6 +24,7 @@ const ModuleInfo& PhaserFx::moduleInfo() {
             linearParam("spread", "Stereo Spread", 0.0f, 1.0f, 0.25f),
             linearParam("mix", "Mix", 0.0f, 1.0f, 0.5f),
         };
+        i.params[Stages].flags = ParamFlags::NonAutomatable;
         i.uiHints = {{"front", {"rate", "depth", "feedback", "mix"}}};
         return i;
     }();
@@ -62,8 +64,14 @@ void PhaserFx::reset() {
 }
 
 int PhaserFx::tailSamples() const {
-    // Feedback decays by |fb| per pass through a short all-pass chain: 50 ms covers |fb| = 0.95 to -100 dB.
-    return static_cast<int>(0.05 * sr_);
+    // Each pass through the chain takes ~stages x 1/(pi f) at the lowest swept corner (first-order all-pass
+    // group delay at low frequency); feedback decays by |fb| per pass. Count passes to -100 dB.
+    const int stages = stageCount(static_cast<int>(params().get(Stages)));
+    const float fMin = std::max(params().get(CentreHz) * std::exp2(-2.5f * params().get(Depth)), 10.0f);
+    const float pass = static_cast<float>(stages) / (dsp::kPi * fMin);
+    const float fb = std::min(std::fabs(params().get(Feedback)), 0.95f);
+    const float passes = fb > 1e-3f ? std::log(1e-5f) / std::log(fb) : 1.0f;
+    return static_cast<int>(((passes + 2.0f) * pass + 0.05f) * static_cast<float>(sr_));
 }
 
 void PhaserFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx) {

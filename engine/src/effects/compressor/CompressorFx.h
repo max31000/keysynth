@@ -35,6 +35,7 @@ private:
     float fastDb_ = 0.0f, slowDb_ = 0.0f; // opto stages
     dsp::OnePoleSmoother makeup_, mix_;
     float lastHpf_ = -1.0f;
+    int lastMode_ = 0;
 };
 
 } // namespace ks

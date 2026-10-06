@@ -59,11 +59,17 @@ void CompressorFx::reset() {
     makeup_.snap(dsp::dbToGain(params().get(MakeupDb)));
     mix_.snap(params().get(Mix));
     lastHpf_ = -1.0f;
+    lastMode_ = static_cast<int>(params().get(Mode));
     params().setRaw(GainReductionDb, 0.0f);
 }
 
 void CompressorFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
     const int mode = static_cast<int>(params().get(Mode));
+    if (mode != lastMode_) { // hand the current gain over so a mode switch doesn't jump
+        if (mode == Opto) fastDb_ = slowDb_ = gsDb_;
+        else if (lastMode_ == Opto) gsDb_ = 0.65f * fastDb_ + 0.35f * slowDb_;
+        lastMode_ = mode;
+    }
     const float thr = params().get(ThresholdDb);
     const float ratio = params().get(Ratio);
     const float knee = mode == Opto ? std::max(params().get(KneeDb), 6.0f) : params().get(KneeDb);

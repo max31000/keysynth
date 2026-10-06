@@ -29,7 +29,7 @@ public:
 
     enum P { Mode, Time, Sync, Feedback, Mix, LowCutHz, HighCutHz, Offset, Width, Duck, Wow, Flutter, Drive, Count };
     enum ModeId { Stereo, PingPong, Tape };
-    static constexpr double kMaxSeconds = 5.0;
+    static constexpr double kMaxSeconds = 10.0; // longer synced divisions are clamped (2/1 below 49 bpm)
 
     // Current target delay of the left line in samples (tests).
     float targetDelaySamples(const ProcessContext& ctx) const noexcept;

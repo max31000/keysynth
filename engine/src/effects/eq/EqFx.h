@@ -1,8 +1,8 @@
 #pragma once
 // `eq`: HP + low shelf + 3 parametric bells + high shelf + LP, stereo. Simper TPT SVFs (RBJ-equivalent
 // responses, stable under modulation); parameters are smoothed and coefficients refreshed every 16 samples.
-// HP/LP are 12 or 24 dB/oct Butterworth (`cut_slope`). Flat bands (0 dB) and disabled cuts are skipped, so a flat
-// EQ is bit-transparent. Zero latency.
+// HP/LP are 12 or 24 dB/oct Butterworth (`cut_slope`, not automatable); switching them on/off crossfades.
+// Flat bands (0 dB) and disabled cuts are skipped, so a flat EQ is bit-transparent. Zero latency.
 
 #include "core/Module.h"
 #include "dsp/Smoother.h"
@@ -36,7 +36,8 @@ private:
     enum BandId { Hp, Ls, P1, P2, P3, Hs, Lp, NumBands };
     struct Band {
         dsp::TptSvf f[2][2]; // [stage][channel]; stage 1 only for 24 dB cuts
-        dsp::OnePoleSmoother hz, db, q;
+        dsp::OnePoleSmoother hz, db, q, amt; // amt: HP/LP on/off crossfade (~10 ms)
+        float amtVal = 1.0f;
         bool active = false;
         int stages = 0;
     };

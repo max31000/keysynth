@@ -19,7 +19,7 @@ namespace ks::dsp {
 class Bbd {
 public:
     // Settling time of the line's filters + 5 Hz DC blocker after the last delayed sample (for tailSamples()).
-    static constexpr float kFilterTailMs = 250.0f;
+    static constexpr float kFilterTailMs = 400.0f;
 
     // maxDelayMs: longest modulated delay used. cutoffHz: anti-alias / reconstruction corner.
     void prepare(double sampleRate, float maxDelayMs, float cutoffHz) {

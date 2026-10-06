@@ -42,7 +42,7 @@ struct Stereo {
     size_t size() const { return l.size(); }
 };
 
-std::unique_ptr<Module> make(const std::string& type, std::initializer_list<std::pair<const char*, float>> ps = {},
+std::unique_ptr<Module> make(const std::string& type, const std::vector<std::pair<const char*, float>>& ps = {},
                              double sr = kSr, int block = kBlock) {
     auto m = defaultRegistry().create(type);
     REQUIRE(m);
@@ -185,7 +185,7 @@ TEST_CASE("Halfband IIR oversampler: flat passband, image rejection, no lookahea
         os.prepare(256);
         os.setFactor(factor);
         // Passband: 1 kHz and 15 kHz sine through up->down at unity (+-0.1 dB).
-        for (double hz : {1000.0, 15000.0}) {
+        for (double hz : {1000.0, 15000.0, 20000.0}) {
             os.reset();
             Stereo s = sine(hz, 0.5, 256 * 188);
             std::vector<float> out(s.size());
@@ -262,7 +262,8 @@ TEST_CASE("Effects: bounded and finite under extreme params (incl. feedback 100%
                 const ParamSpec& sp = specs[static_cast<size_t>(p)];
                 if (sp.isReadOnly()) continue;
                 rng = rng * 1664525u + 1013904223u;
-                const bool hi = pass == 1 || (pass >= 2 && (rng >> 16) & 1);
+                // mix always fully wet, otherwise the min pass would just test bypass
+                const bool hi = pass == 1 || sp.id == "mix" || (pass >= 2 && (rng >> 16) & 1);
                 m->params().set(p, hi ? sp.max : sp.min);
             }
             m->reset();
@@ -316,6 +317,7 @@ TEST_CASE("Effects: mix = 0 is bit-transparent (drive: all-pass, flat)", "[fx]")
         Stereo s = src;
         run(*m, s);
         REQUIRE(s.l == src.l);
+        REQUIRE(s.r == src.r);
     }
     // Drive at mix 0: phase-matched dry through the oversampling filters -> flat magnitude, no distortion.
     auto m = make("drive", {{"mix", 0.0f}, {"drive_db", 40.0f}});
@@ -344,6 +346,37 @@ TEST_CASE("Effects: tails are honest and silence costs nothing (no denormal spik
         REQUIRE(rms(s.l, burst + tail, total) < 1e-4);
         REQUIRE(rms(s.r, burst + tail, total) < 1e-4);
     }
+    // Worst-case settings per effect: long rings must still be covered by the reported tail.
+    struct Worst {
+        const char* type;
+        std::vector<std::pair<const char*, float>> ps;
+    };
+    const Worst worst[] = {
+        {"phaser", {{"stages", 3.0f}, {"centre_hz", 100.0f}, {"depth", 1.0f}, {"feedback", 0.95f}, {"mix", 1.0f}}},
+        {"phaser", {{"stages", 3.0f}, {"centre_hz", 100.0f}, {"depth", 1.0f}, {"feedback", -0.95f}, {"mix", 1.0f}}},
+        {"eq", {{"hp_on", 1.0f}, {"hp_hz", 10.0f}, {"cut_slope", 1.0f}, {"p1_hz", 20.0f}, {"p1_q", 10.0f},
+                {"p1_db", 18.0f}}},
+        {"flanger", {{"time", 10.0f}, {"depth", 1.0f}, {"feedback", 0.98f}, {"mix", 1.0f}}},
+        {"delay", {{"time", 700.0f}, {"feedback", 0.9f}, {"mix", 1.0f}, {"offset", 50.0f}}},
+        {"reverb", {{"mode", static_cast<float>(ReverbFx::Gated)}, {"gate_hold_ms", 1000.0f},
+                    {"gate_threshold_db", -60.0f}, {"mix", 1.0f}}},
+        {"reverb", {{"mode", static_cast<float>(ReverbFx::Plate)}, {"decay", 8.0f}, {"predelay_ms", 250.0f},
+                    {"mix", 1.0f}}},
+        {"chorus", {{"mode", 4.0f}, {"depth", 1.0f}, {"hiss", 1.0f}, {"mix", 1.0f}}},
+    };
+    for (const Worst& w : worst) {
+        auto m = make(w.type, w.ps);
+        const size_t burst = 24000, tail = static_cast<size_t>(m->tailSamples()), total = burst + tail + 24000;
+        Stereo s(total);
+        const Stereo nz = noise(burst, 1.0f, 13);
+        std::copy(nz.l.begin(), nz.l.end(), s.l.begin());
+        std::copy(nz.r.begin(), nz.r.end(), s.r.begin());
+        run(*m, s);
+        INFO("worst " << w.type << " tail " << tail);
+        REQUIRE(rms(s.l, burst + tail, total) < 1e-4);
+        REQUIRE(rms(s.r, burst + tail, total) < 1e-4);
+    }
+
     // Long silent render (20 s after a burst): per-block cost must not blow up while state decays. Run with
     // FTZ/DAZ as the Engine does on the audio thread (ARCHITECTURE sec. 4.5).
     const dsp::ScopedNoDenormals ftz;
@@ -578,6 +611,13 @@ TEST_CASE("Reverb: shimmer stays bounded and adds energy above the input band", 
         return mx;
     };
     REQUIRE(at(880.0) > at(440.0) - 30.0); // octave up present
+    // ... and the shimmer loop does not sustain itself: after the input stops the tail decays within the
+    // reported tail length.
+    const size_t tail = static_cast<size_t>(m->tailSamples());
+    Stereo t(tail + 24000);
+    run(*m, t);
+    REQUIRE(allFinite(t));
+    REQUIRE(rms(t.l, tail, tail + 24000) < 1e-4);
 }
 
 // --------------------------------------------------------------------------------------------- eq

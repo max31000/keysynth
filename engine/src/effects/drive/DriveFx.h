@@ -39,7 +39,7 @@ private:
     double sr_ = 48000.0;
     int maxBlock_ = 0;
     Channel ch_[2];
-    std::vector<float> dry_, tmp_; // dry: maxBlock, tmp: 4 x maxBlock control lanes
+    std::vector<float> dry_, tmp_; // dry: maxBlock, tmp: 6 x maxBlock control lanes
     dsp::OnePoleSmoother drive_, bias_, level_, mix_, tone_;
     int lastFactor_ = 0;
 };

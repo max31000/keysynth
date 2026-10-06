@@ -35,6 +35,7 @@ const ModuleInfo& EqFx::moduleInfo() {
             linearParam("hs_db", "High Shelf Gain", -18.0f, 18.0f, 0.0f, "dB", "High Shelf"),
             linearParam("level_db", "Level", -24.0f, 12.0f, 0.0f, "dB"),
         };
+        i.params[CutSlope].flags = ParamFlags::NonAutomatable;
         i.uiHints = {{"groupOrder", {"Cut", "Low Shelf", "Low Mid", "Mid", "High Mid", "High Shelf"}}};
         return i;
     }();
@@ -62,6 +63,7 @@ void EqFx::prepare(double sampleRate, int) {
         b.hz.prepare(subRate, 0.03f);
         b.db.prepare(subRate, 0.03f);
         b.q.prepare(subRate, 0.03f);
+        b.amt.prepare(subRate, 0.01f);
     }
     level_.prepare(sampleRate, 0.02f);
     reset();
@@ -78,11 +80,28 @@ void EqFx::reset() {
         b.q.snap(p.q >= 0 ? params().get(p.q) : 0.7071f);
         b.active = false;
         b.stages = 0;
+        b.amt.snap(p.on < 0 || params().get(p.on) > 0.5f ? 1.0f : 0.0f); // non-cut bands: always 1
+        b.amtVal = b.amt.value();
     }
     level_.snap(dsp::dbToGain(params().get(LevelDb)));
 }
 
-int EqFx::tailSamples() const { return static_cast<int>(0.05 * sr_); }
+int EqFx::tailSamples() const {
+    // Ringing of the slowest band: time constant ~2Q / (2 pi f); -100 dB after ~11.5 time constants.
+    float worst = 0.0f;
+    const auto consider = [&](float hz, float q) { worst = std::max(worst, 11.5f * 2.0f * q / (dsp::kTwoPi * hz)); };
+    if (params().get(HpOn) > 0.5f) consider(params().get(HpHz), 1.31f);
+    if (params().get(LsDb) != 0.0f) consider(params().get(LsHz), 0.71f);
+    // Boosting bells have pole Q = Q * A (A = 10^(dB/40)).
+    const auto bell = [&](int hz, int db, int q) {
+        const float g = params().get(db);
+        if (g != 0.0f) consider(params().get(hz), params().get(q) * std::max(1.0f, std::pow(10.0f, g / 40.0f)));
+    };
+    bell(P1Hz, P1Db, P1Q);
+    bell(P2Hz, P2Db, P2Q);
+    bell(P3Hz, P3Db, P3Q);
+    return static_cast<int>((worst + 0.02f) * static_cast<float>(sr_));
+}
 
 void EqFx::configure(Band& b, BandId id, float sr) noexcept {
     using T = dsp::TptSvf::Type;
@@ -93,7 +112,10 @@ void EqFx::configure(Band& b, BandId id, float sr) noexcept {
     bool active;
     int stages = 1;
     if (cut) {
-        active = params().get(kBandParams[id].on) > 0.5f;
+        const bool on = params().get(kBandParams[id].on) > 0.5f;
+        b.amt.setTarget(on ? 1.0f : 0.0f);
+        b.amtVal = b.amt.next();
+        active = on || b.amtVal > 0.0f;
         stages = static_cast<int>(params().get(CutSlope)) == 1 ? 2 : 1;
     } else {
         active = !(db == 0.0f && b.db.target() == 0.0f);
@@ -142,9 +164,17 @@ void EqFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
             float* x = io.channel(c);
             for (auto& b : bands_) {
                 if (!b.active) continue;
-                for (int st = 0; st < b.stages; ++st) {
-                    dsp::TptSvf& f = b.f[st][c];
-                    for (int i = s; i < e; ++i) x[i] = f.process(x[i]);
+                if (b.amtVal >= 1.0f) {
+                    for (int st = 0; st < b.stages; ++st) {
+                        dsp::TptSvf& f = b.f[st][c];
+                        for (int i = s; i < e; ++i) x[i] = f.process(x[i]);
+                    }
+                } else { // HP/LP fading in or out
+                    for (int i = s; i < e; ++i) {
+                        float y = x[i];
+                        for (int st = 0; st < b.stages; ++st) y = b.f[st][c].process(y);
+                        x[i] += (y - x[i]) * b.amtVal;
+                    }
                 }
             }
         }

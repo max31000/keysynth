@@ -186,7 +186,8 @@ int ReverbFx::tailSamples() const {
     const double pre = (params().get(PredelayMs) + kErMaxMs) * 0.001;
     double t;
     if (mode == Gated) {
-        t = pre + params().get(GateHoldMs) * 0.001 + 0.15;
+        // Key envelope release to the threshold (up to ~0.25 s from 0 dBFS) + hold + gate fade to -100 dB.
+        t = pre + 0.25 + params().get(GateHoldMs) * 0.001 + 0.2;
     } else {
         // -90 dB = 1.5 x RT60. Shimmer re-injection lengthens the tail.
         double decay = 1.5 * params().get(Decay);
@@ -221,10 +222,7 @@ void ReverbFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
     const int mode = static_cast<int>(params().get(Mode));
     const ModeShape& s = shape(mode);
     const float sr = static_cast<float>(sr_);
-    if (mode != lastMode_) {
-        if (mode == Gated) gateGain_ = 0.0f;
-        lastMode_ = mode;
-    }
+    lastMode_ = mode;
     const float size = params().get(Size);
     mix_.setTarget(params().get(Mix));
     predelay_.setTarget(params().get(PredelayMs));
@@ -312,8 +310,8 @@ void ReverbFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
 
         // Shimmer: octave-up of the late sound back into the tank (soft-limited => bounded).
         const float sh = shimmer_.next();
-        if (sh > 0.0f) {
-            shimFeed_ = dsp::softClipKnee(0.6f * sh * shifter_.process(0.5f * (wl + wr)), 0.5f, 1.0f);
+        if (mode == ShimmerMode) { // shifter keeps running in Shimmer mode so it never replays stale grains
+            shimFeed_ = dsp::softClipKnee(0.4f * sh * shifter_.process(0.5f * (wl + wr)), 0.5f, 1.0f);
         } else {
             shimFeed_ = 0.0f;
         }
@@ -321,17 +319,21 @@ void ReverbFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
         wl += el;
         wr += er;
 
-        // Gate (Gated mode): keyed by the pre-delayed input.
-        if (gated) {
-            const float a = std::fmax(std::fabs(pl), std::fabs(pr));
-            gateEnv_ += (a - gateEnv_) * (a > gateEnv_ ? envAtt_ : envRel_);
-            float target = 0.0f;
-            if (gateEnv_ > gateThr) {
-                gateHold_ = holdSamples;
-                target = 1.0f;
-            } else if (gateHold_ > 0) {
-                --gateHold_;
-                target = 1.0f;
+        // Gate (Gated mode): keyed by the pre-delayed input. Outside Gated mode the gain ramps to 1, so mode
+        // switches fade instead of cutting/bursting the tank that kept ringing behind the gate.
+        {
+            float target = 1.0f;
+            if (gated) {
+                const float a = std::fmax(std::fabs(pl), std::fabs(pr));
+                gateEnv_ += (a - gateEnv_) * (a > gateEnv_ ? envAtt_ : envRel_);
+                target = 0.0f;
+                if (gateEnv_ > gateThr) {
+                    gateHold_ = holdSamples;
+                    target = 1.0f;
+                } else if (gateHold_ > 0) {
+                    --gateHold_;
+                    target = 1.0f;
+                }
             }
             gateGain_ += (target - gateGain_) * (target > gateGain_ ? gateAtt_ : gateRel_);
             wl *= gateGain_;
