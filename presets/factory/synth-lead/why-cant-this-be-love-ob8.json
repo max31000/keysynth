@@ -1,0 +1,121 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Why Can't This Be Love (OB-8)",
+    "category": "Synth Lead",
+    "tags": [
+      "80s",
+      "van halen",
+      "oberheim",
+      "ob-8",
+      "poly",
+      "stab"
+    ],
+    "description": "Punchy Oberheim OB-8 poly synth: saw + pulse with a little PWM into the SEM 12 dB filter, accented filter envelope, Dimension chorus, bright plate and a pre-delay slap. Reference: Van Halen - Why Can't This Be Love (1986, Eddie Van Halen on Oberheim OB-8).",
+    "author": "factory"
+  },
+  "tempo": 128,
+  "layers": [
+    {
+      "name": "OB-8",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.42,
+          "osc2_pwm": 0.2,
+          "osc2_level": 0.85,
+          "osc2_fine": 7,
+          "filter_model": 2,
+          "cutoff": 1600,
+          "resonance": 0.22,
+          "key_track": 0.6,
+          "filter_env_amt": 2.2,
+          "filter_vel": 0.8,
+          "fenv_attack": 0.002,
+          "fenv_decay": 0.38,
+          "fenv_sustain": 0.5,
+          "fenv_release": 0.25,
+          "amp_attack": 0.002,
+          "amp_decay": 0.5,
+          "amp_sustain": 0.85,
+          "amp_release": 0.25,
+          "amp_vel": 0.35,
+          "lfo1_rate": 0.8,
+          "hpf_cutoff": 110,
+          "drift": 0.3,
+          "pan_spread": 0.3,
+          "volume_db": -6.7
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "chorus",
+        "bypass": false,
+        "params": {
+          "mode": 4,
+          "rate": 0.5,
+          "depth": 0.5,
+          "mix": 0.4,
+          "width": 1.0,
+          "hiss": 0.05
+        }
+      },
+      {
+        "type": "delay",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "sync": 0,
+          "time": 95,
+          "feedback": 0.1,
+          "mix": 0.1,
+          "low_cut_hz": 200,
+          "high_cut_hz": 5000
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 1,
+          "mix": 0.18,
+          "size": 0.5,
+          "decay": 1.6,
+          "predelay_ms": 20,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Sonne Supersaw Choir",
+    "category": "Synth Pad",
+    "tags": [
+      "rammstein",
+      "flake",
+      "supersaw",
+      "choir",
+      "pad",
+      "layer",
+      "industrial"
+    ],
+    "description": "Massive 'Sonne' wall: JP-8000-style supersaw pad (plus sub-octave supersaw) through a 12 dB filter, layered with the SSO mixed choir 'aah' for the human weight, wide hall. Reference: Rammstein - Sonne (Christian 'Flake' Lorenz's huge string/choir synth pad).",
+    "author": "factory"
+  },
+  "tempo": 84,
+  "layers": [
+    {
+      "name": "Supersaw",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 4,
+          "osc1_detune": 0.45,
+          "osc2_wave": 4,
+          "osc2_octave": -1,
+          "osc2_detune": 0.35,
+          "osc2_level": 0.55,
+          "filter_model": 2,
+          "cutoff": 4200,
+          "resonance": 0.1,
+          "key_track": 0.3,
+          "filter_env_amt": 1.0,
+          "fenv_attack": 0.6,
+          "fenv_decay": 2.0,
+          "fenv_sustain": 0.6,
+          "fenv_release": 1.2,
+          "amp_attack": 0.2,
+          "amp_decay": 1.0,
+          "amp_sustain": 0.9,
+          "amp_release": 1.2,
+          "amp_vel": 0.2,
+          "hpf_cutoff": 110,
+          "drift": 0.0,
+          "volume_db": -9.6
+        },
+        "state": {}
+      },
+      "fx": []
+    },
+    {
+      "name": "Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 1.4,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 9.0
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Chorus - Mixed.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "ls_hz": 150,
+          "ls_db": 1.5,
+          "p2_hz": 2500,
+          "p2_db": -1.5,
+          "p2_q": 0.8
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.26,
+          "size": 0.85,
+          "decay": 2.6,
+          "predelay_ms": 35,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Deutschland Bass & Lead Split",
+    "category": "Splits & Layers",
+    "tags": [
+      "rammstein",
+      "flake",
+      "split",
+      "bass",
+      "lead",
+      "analog",
+      "industrial"
+    ],
+    "description": "Split at C3. Left hand: dark, driven analog mono bass (saw + square sub into a ladder filter with a punchy decay, tape saturation). Right hand: cold detuned unison saw lead with a dotted-eighth echo and hall. Reference: Rammstein - Deutschland (2019; the pulsing analog bass and synth lead).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Analog Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 47,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "sub_level": 0.7,
+          "sub_octave": 0,
+          "osc2_wave": 1,
+          "osc2_level": 0.4,
+          "filter_model": 0,
+          "cutoff": 320,
+          "resonance": 0.25,
+          "key_track": 0.4,
+          "filter_env_amt": 2.6,
+          "fenv_attack": 0.001,
+          "fenv_decay": 0.22,
+          "fenv_sustain": 0.2,
+          "fenv_release": 0.1,
+          "amp_attack": 0.001,
+          "amp_decay": 0.4,
+          "amp_sustain": 0.75,
+          "amp_release": 0.08,
+          "amp_vel": 0.3,
+          "voice_mode": 1,
+          "filter_drive": 0.3,
+          "drift": 0.1,
+          "volume_db": -10
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "drive_db": 8,
+            "tone": 0.4,
+            "level_db": -0.1,
+            "mix": 0.7,
+            "asymmetry": 0.2,
+            "oversample": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unison Lead",
+      "zone": {
+        "key_lo": 48,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.7,
+          "osc2_octave": -1,
+          "filter_model": 0,
+          "cutoff": 2400,
+          "resonance": 0.15,
+          "key_track": 0.6,
+          "filter_env_amt": 1.2,
+          "fenv_attack": 0.005,
+          "fenv_decay": 0.6,
+          "fenv_sustain": 0.5,
+          "amp_attack": 0.004,
+          "amp_decay": 0.5,
+          "amp_sustain": 0.95,
+          "amp_release": 0.35,
+          "amp_vel": 0.25,
+          "voice_mode": 2,
+          "glide": 0.04,
+          "glide_mode": 1,
+          "unison": 3,
+          "unison_detune": 14,
+          "unison_spread": 0.8,
+          "hpf_cutoff": 150,
+          "drift": 0.1,
+          "volume_db": -8.1
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "sync": 10,
+            "time": 375,
+            "feedback": 0.28,
+            "mix": 0.15,
+            "low_cut_hz": 200,
+            "high_cut_hz": 3500
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.2,
+            "size": 0.7,
+            "decay": 2.0,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

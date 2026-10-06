@@ -1,0 +1,125 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Alpha Juno Hoover",
+    "category": "Synth Lead",
+    "tags": [
+      "juno",
+      "hoover",
+      "rave",
+      "pwm",
+      "chorus",
+      "90s"
+    ],
+    "description": "The 'Hoover': PWM pulse + saw an octave down, 4-voice unison, a downward pitch dip and swoop from the filter envelope, wide Juno chorus I+II. Reference: Roland Alpha Juno 'What The' patch (Joey Beltram - Mentasm, Human Resource - Dominator); the Juno-family chorus sound.",
+    "author": "factory"
+  },
+  "tempo": 135,
+  "layers": [
+    {
+      "name": "Hoover",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 1,
+          "osc1_pw": 0.5,
+          "osc1_pwm": 0.6,
+          "osc2_wave": 0,
+          "osc2_octave": -1,
+          "osc2_level": 0.7,
+          "filter_model": 1,
+          "cutoff": 4000,
+          "resonance": 0.1,
+          "key_track": 0.5,
+          "filter_env_amt": 0.0,
+          "fenv_attack": 0.0005,
+          "fenv_decay": 0.35,
+          "fenv_sustain": 0.0,
+          "fenv_release": 0.3,
+          "mod1_src": 3,
+          "mod1_dst": 1,
+          "mod1_amt": -0.08,
+          "lfo1_rate": 4.5,
+          "lfo1_wave": 1,
+          "amp_attack": 0.004,
+          "amp_decay": 0.5,
+          "amp_sustain": 1.0,
+          "amp_release": 0.4,
+          "amp_vel": 0.2,
+          "voice_mode": 2,
+          "glide": 0.06,
+          "glide_mode": 1,
+          "unison": 4,
+          "unison_detune": 28,
+          "unison_spread": 0.9,
+          "hpf_cutoff": 100,
+          "drift": 0.2,
+          "volume_db": 2.1
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "chorus",
+        "bypass": false,
+        "params": {
+          "mode": 2,
+          "rate": 0.6,
+          "depth": 0.85,
+          "mix": 0.6,
+          "width": 1.0,
+          "hiss": 0.05
+        }
+      },
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "p2_hz": 2500,
+          "p2_db": -2.0,
+          "p2_q": 1.0
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 2,
+          "mix": 0.12,
+          "size": 0.4,
+          "decay": 0.9,
+          "predelay_ms": 20,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

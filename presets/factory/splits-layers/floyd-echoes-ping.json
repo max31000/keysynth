@@ -1,0 +1,162 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Echoes Ping (Floyd)",
+    "category": "Splits & Layers",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "piano",
+      "leslie",
+      "hammond",
+      "split",
+      "70s",
+      "ambient"
+    ],
+    "description": "The famous 'ping': a grand piano note (B5) fed through a Leslie speaker, here in the right hand from C5 up (Salamander grand into a slow rotary, echo and hall), with a mellow B3 (C2 chorus, slow Leslie) below for the organ pad. Reference: Pink Floyd - Echoes (Meddle, 1971).",
+    "author": "factory"
+  },
+  "tempo": 60,
+  "layers": [
+    {
+      "name": "B3",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 71,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -18,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 6,
+          "db_8": 8,
+          "db_4": 4,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "vibrato": 5,
+          "click": 0.2,
+          "leakage": 0.25,
+          "drive": 0.08,
+          "volume_db": -3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.12,
+            "spread": 0.8,
+            "mix": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ping Piano",
+      "zone": {
+        "key_lo": 72,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 12,
+          "polyphony": 48
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.05,
+            "spread": 0.9,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "time": 520,
+            "sync": 0,
+            "feedback": 0.3,
+            "mix": 0.25,
+            "low_cut_hz": 150,
+            "high_cut_hz": 4500,
+            "offset": 12
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.28,
+          "decay": 2.1,
+          "size": 0.75,
+          "predelay_ms": 30,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "gain",
+        "bypass": false,
+        "params": {
+          "gain_db": 11.7,
+          "pan": 0.0
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

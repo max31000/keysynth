@@ -1,0 +1,113 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "The End (Doors)",
+    "category": "Organ",
+    "tags": [
+      "doors",
+      "manzarek",
+      "vox",
+      "continental",
+      "60s",
+      "ambient",
+      "reverb"
+    ],
+    "description": "Soft, dark Vox Continental drone (16' + 8' + 4' with flute, little reed, slow shallow vibrato) floating in a long hall with a faint tape echo, for the hypnotic raga-like opening and the spoken section. Reference: The Doors - The End (1967).",
+    "author": "factory"
+  },
+  "tempo": 100,
+  "layers": [
+    {
+      "name": "Vox Continental",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 10.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 6,
+          "vox_8": 8,
+          "vox_4": 4,
+          "vox_2": 0,
+          "vox_iv": 0,
+          "vox_flute": 6,
+          "vox_reed": 2,
+          "vibrato": 1,
+          "vibrato_rate": 5.2,
+          "vibrato_depth": 0.35,
+          "bright": 0,
+          "leakage": 0.2,
+          "click": 0.05,
+          "velocity": 0,
+          "volume_db": -1.4
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 50,
+            "hs_hz": 7000,
+            "hs_db": -3
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 450,
+            "sync": 0,
+            "feedback": 0.2,
+            "mix": 0.1,
+            "low_cut_hz": 150,
+            "high_cut_hz": 3000,
+            "wow": 0.3,
+            "flutter": 0.2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.3,
+            "decay": 2.1,
+            "size": 0.75,
+            "predelay_ms": 30,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

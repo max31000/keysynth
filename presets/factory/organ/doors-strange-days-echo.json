@@ -1,0 +1,117 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Strange Days Organ Echo (Doors)",
+    "category": "Organ",
+    "tags": [
+      "doors",
+      "manzarek",
+      "vox",
+      "continental",
+      "60s",
+      "echo",
+      "psychedelic"
+    ],
+    "description": "Eerie Vox Continental (8' + 4' flute-heavy with a little reed) through a slow phaser, a wobbly tape echo and a chamber, the disorienting organ wash of the Strange Days sessions (Sunset Sound / TTG, Paul Rothchild & Bruce Botnick's tape effects). Reference: The Doors - Strange Days (1967).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Vox Continental",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 10.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 0,
+          "vox_8": 8,
+          "vox_4": 6,
+          "vox_2": 0,
+          "vox_iv": 0,
+          "vox_flute": 6,
+          "vox_reed": 4,
+          "vibrato": 1,
+          "vibrato_rate": 5.4,
+          "vibrato_depth": 0.5,
+          "bright": 1,
+          "leakage": 0.2,
+          "click": 0.12,
+          "velocity": 0,
+          "volume_db": 4.2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 1,
+            "rate": 0.15,
+            "depth": 0.5,
+            "centre_hz": 900,
+            "feedback": 0.2,
+            "spread": 0.4,
+            "mix": 0.25
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 340,
+            "sync": 0,
+            "feedback": 0.32,
+            "mix": 0.26,
+            "low_cut_hz": 150,
+            "high_cut_hz": 3500,
+            "wow": 0.5,
+            "flutter": 0.35,
+            "drive": 0.3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.2,
+            "decay": 1.8,
+            "size": 0.6,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

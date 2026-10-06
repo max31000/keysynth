@@ -1,0 +1,100 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Love Me Two Times Harpsichord (Doors)",
+    "category": "Bells & Keys",
+    "tags": [
+      "doors",
+      "manzarek",
+      "harpsichord",
+      "60s",
+      "baroque"
+    ],
+    "description": "Bright, jangly harpsichord (Clavecin samples) with presence boost and a short room, for Manzarek's baroque-blues solo. Reference: The Doors - Love Me Two Times (Strange Days, 1967).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Harpsichord",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 7.4,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 0,
+          "polyphony": 64
+        },
+        "state": {
+          "sfz": "assets/samples/clavecin/Clavecin-master/Clavecin.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 90,
+            "p2_hz": 3000,
+            "p2_db": 2,
+            "p2_q": 0.9,
+            "hs_hz": 11000,
+            "hs_db": -2
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "threshold_db": -20,
+            "ratio": 3,
+            "attack_ms": 2,
+            "release_ms": 120,
+            "knee_db": 6,
+            "makeup_db": 2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.15,
+            "decay": 1.0,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

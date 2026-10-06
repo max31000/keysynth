@@ -1,0 +1,138 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Feuer Frei Drive Saw",
+    "category": "Synth Lead",
+    "tags": [
+      "rammstein",
+      "flake",
+      "saw",
+      "drive",
+      "industrial",
+      "lead"
+    ],
+    "description": "Aggressive industrial saw lead: two saws + octave-down square, ladder filter with a quick punch, tube drive into a VCA compressor and a mid-scoop/presence EQ so it cuts through walls of guitars. Reference: Rammstein - Feuer frei! (driven synth riff).",
+    "author": "factory"
+  },
+  "tempo": 124,
+  "layers": [
+    {
+      "name": "Drive Saw",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 0.9,
+          "osc2_fine": 12,
+          "osc3_wave": 1,
+          "osc3_octave": -1,
+          "osc3_level": 0.4,
+          "filter_model": 0,
+          "cutoff": 1800,
+          "resonance": 0.22,
+          "key_track": 0.6,
+          "filter_env_amt": 2.0,
+          "filter_vel": 0.5,
+          "fenv_attack": 0.001,
+          "fenv_decay": 0.3,
+          "fenv_sustain": 0.45,
+          "fenv_release": 0.2,
+          "amp_attack": 0.002,
+          "amp_decay": 0.4,
+          "amp_sustain": 0.9,
+          "amp_release": 0.2,
+          "amp_vel": 0.25,
+          "voice_mode": 1,
+          "hpf_cutoff": 120,
+          "drift": 0.15,
+          "volume_db": -16
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 18,
+            "tone": 0.45,
+            "level_db": -2,
+            "mix": 1.0,
+            "asymmetry": 0.2,
+            "oversample": 2
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -16,
+            "ratio": 4,
+            "attack_ms": 5,
+            "release_ms": 100,
+            "knee_db": 6,
+            "makeup_db": 7.4,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "p1_hz": 500,
+          "p1_db": -2.5,
+          "p1_q": 0.9,
+          "p3_hz": 2800,
+          "p3_db": 1.5,
+          "p3_q": 1.0,
+          "lp_on": true,
+          "lp_hz": 11000
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 2,
+          "mix": 0.1,
+          "size": 0.35,
+          "decay": 0.7,
+          "predelay_ms": 20,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "See Emily Play Farfisa (Floyd)",
+    "category": "Organ",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "barrett",
+      "farfisa",
+      "combo",
+      "60s",
+      "echo",
+      "psychedelic"
+    ],
+    "description": "Reedy Farfisa Compact Duo (oboe 8' + strings 8' + 4' with a little flute, fast vibrato, bright) through a valve amp and a Binson Echorec-style echo (the Echorec is a magnetic-drum echo; modelled with the tape delay, low wow) and a small room: the 1967 psychedelic organ of the Barrett era. Reference: Pink Floyd - See Emily Play / Arnold Layne (1967).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Farfisa",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 9.8,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 1,
+          "far_flute_16": 0,
+          "far_flute_8": 0.4,
+          "far_flute_4": 0,
+          "far_oboe_8": 1,
+          "far_trumpet_8": 0,
+          "far_strings_8": 1,
+          "far_strings_4": 1,
+          "vibrato": 1,
+          "vibrato_rate": 6.8,
+          "vibrato_depth": 0.5,
+          "bright": 1,
+          "leakage": 0.25,
+          "click": 0.1,
+          "volume_db": -3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 13,
+            "asymmetry": 0.2,
+            "tone": 0.42,
+            "level_db": -7,
+            "mix": 0.8
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 80,
+            "hs_hz": 8000,
+            "hs_db": -3
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 290,
+            "sync": 0,
+            "feedback": 0.33,
+            "mix": 0.24,
+            "low_cut_hz": 150,
+            "high_cut_hz": 3500,
+            "wow": 0.08,
+            "flutter": 0.15,
+            "drive": 0.3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.14,
+            "decay": 1.0,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

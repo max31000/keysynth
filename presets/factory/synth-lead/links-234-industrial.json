@@ -1,0 +1,134 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Links 2 3 4 Industrial Lead",
+    "category": "Synth Lead",
+    "tags": [
+      "rammstein",
+      "flake",
+      "industrial",
+      "ring mod",
+      "sync",
+      "drive",
+      "lead"
+    ],
+    "description": "Metallic industrial lead: hard-synced saw with a filter-envelope sync sweep, a touch of ring mod, fuzz drive and a slow 8-stage phaser, tight room. Reference: Rammstein - Links 2 3 4 (marching, machine-like synth textures).",
+    "author": "factory"
+  },
+  "tempo": 115,
+  "layers": [
+    {
+      "name": "Sync Lead",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc1_sync": true,
+          "osc1_pm_env": 14,
+          "osc2_wave": 0,
+          "osc2_level": 0.5,
+          "osc2_octave": -1,
+          "ring_level": 0.15,
+          "filter_model": 0,
+          "cutoff": 2200,
+          "resonance": 0.15,
+          "key_track": 0.6,
+          "filter_env_amt": 1.5,
+          "fenv_attack": 0.001,
+          "fenv_decay": 0.45,
+          "fenv_sustain": 0.2,
+          "fenv_release": 0.2,
+          "amp_attack": 0.002,
+          "amp_decay": 0.4,
+          "amp_sustain": 0.85,
+          "amp_release": 0.2,
+          "amp_vel": 0.3,
+          "voice_mode": 1,
+          "hpf_cutoff": 140,
+          "drift": 0.1,
+          "volume_db": -18
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "drive_db": 14,
+            "tone": 0.4,
+            "level_db": 9.5,
+            "mix": 0.55,
+            "asymmetry": 0.2,
+            "oversample": 2
+          }
+        },
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 2,
+            "rate": 0.25,
+            "depth": 0.6,
+            "centre_hz": 900,
+            "feedback": 0.45,
+            "spread": 0.4,
+            "mix": 0.4
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.0,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "p2_hz": 3500,
+          "p2_db": -2.5,
+          "p2_q": 1.2,
+          "lp_on": true,
+          "lp_hz": 12000
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 2,
+          "mix": 0.12,
+          "size": 0.35,
+          "decay": 0.8,
+          "predelay_ms": 20,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

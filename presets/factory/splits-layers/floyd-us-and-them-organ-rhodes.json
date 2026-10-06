@@ -1,0 +1,152 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Us and Them Organ + Rhodes (Floyd)",
+    "category": "Splits & Layers",
+    "tags": [
+      "pink floyd",
+      "wright",
+      "hammond",
+      "rhodes",
+      "layer",
+      "70s",
+      "ballad"
+    ],
+    "description": "Breathe / Us and Them layer: soft Hammond (16' + 8' + 4' + 2', C3 chorus, slow Leslie) blended with a warm Rhodes with slow autopan, in a big hall. Reference: Pink Floyd - Breathe / Us and Them (The Dark Side of the Moon, 1973).",
+    "author": "factory"
+  },
+  "tempo": 72,
+  "layers": [
+    {
+      "name": "Hammond",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.3,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 4,
+          "db_5_1_3": 0,
+          "db_8": 8,
+          "db_4": 6,
+          "db_2_2_3": 0,
+          "db_2": 2,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "vibrato": 6,
+          "click": 0.1,
+          "leakage": 0.25,
+          "drive": 0.08,
+          "volume_db": -6
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.1,
+            "spread": 0.8,
+            "mix": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 5.3,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 0,
+          "tone": 0.35,
+          "bark": 0.2,
+          "hammer_hardness": 0.35,
+          "velocity_curve": 0.1,
+          "dynamics": 30,
+          "decay": 1.5,
+          "release": 0.9,
+          "tine_mix": 0.45,
+          "strike_position": 0.5,
+          "pickup_position": 0.5,
+          "pickup_distance": 0.6,
+          "drive": 0.05,
+          "noise": 0.15,
+          "key_variation": 0.5,
+          "polyphony": 32,
+          "volume_db": -4
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "rate": 1.2,
+            "sync": 0,
+            "depth": 0.4,
+            "shape": 0,
+            "smoothing": 0.5
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.0,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.25,
+          "decay": 2.0,
+          "size": 0.7,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
