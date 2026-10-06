@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "LinnDrum (Linnoleum)",
     "category": "Drums",
@@ -43,7 +43,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 7.7,
     "fx": [
       {
         "type": "limiter",

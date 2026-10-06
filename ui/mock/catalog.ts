@@ -170,7 +170,7 @@ const effects: ModuleInfo[] = [
   ]),
   fx('delay', 'Delay', 'Time', [
     p('mode', 'Mode', 'Main', { choices: ['Stereo', 'Ping-Pong', 'Tape'] }),
-    bool('sync', 'Tempo Sync', 'Main'),
+    p('sync', 'Sync', 'Main', { choices: ['Off', '4/1', '2/1', '1/1', '1/2', '1/2.', '1/2T', '1/4', '1/4.', '1/4T', '1/8', '1/8.', '1/8T', '1/16', '1/16.', '1/16T', '1/32', '1/32.', '1/32T'] }),
     ms('time', 'Time', 'Main', 375, 2000, 300),
     p('feedback', 'Feedback', 'Main', { def: 0.35, max: 0.98 }),
     p('tone', 'Tone', 'Main', { min: 500, max: 16000, def: 6000, scale: 'log', unit: 'Hz' }),

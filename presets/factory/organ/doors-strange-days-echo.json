@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Strange Days Organ Echo (Doors)",
     "category": "Organ",
@@ -102,7 +102,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -6.3,
     "fx": [
       {
         "type": "limiter",

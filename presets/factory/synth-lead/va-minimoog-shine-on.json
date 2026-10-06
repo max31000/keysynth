@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Minimoog Shine On Lead",
     "category": "Synth Lead",
@@ -73,7 +73,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -3.5,
     "fx": []
   }
 }

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Take On Me Lead",
     "category": "Synth Lead",
@@ -63,7 +63,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 1.4,
     "fx": []
   }
 }

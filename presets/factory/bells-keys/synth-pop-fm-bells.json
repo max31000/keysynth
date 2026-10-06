@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Synth-Pop FM Bell Lead",
     "category": "Bells & Keys",
@@ -210,14 +210,14 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": 1.2,
     "fx": [
       {
         "type": "delay",
         "bypass": false,
         "params": {
           "mode": 1,
-          "sync": 9,
+          "sync": 10,
           "time": 375,
           "feedback": 0.3,
           "mix": 0.17,

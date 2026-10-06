@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Welcome to the Machine Drone (Floyd)",
     "category": "Synth Pad",
@@ -97,7 +97,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -4.3,
     "fx": [
       {
         "type": "limiter",

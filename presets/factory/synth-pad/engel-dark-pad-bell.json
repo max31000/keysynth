@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Engel Dark Pad & Bell",
     "category": "Synth Pad",
@@ -259,7 +259,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -4.7,
     "fx": [
       {
         "type": "reverb",

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Alpha Juno Hoover",
     "category": "Synth Lead",
@@ -75,7 +75,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -6,
     "fx": [
       {
         "type": "chorus",

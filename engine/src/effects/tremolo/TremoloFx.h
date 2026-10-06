@@ -18,12 +18,10 @@ public:
     void reset() override;
     void process(AudioBlock& io, MidiEventSpan events, const ProcessContext& ctx) override;
 
-    enum P { Mode, Rate, Sync, Division, Depth, Shape, Smoothing, StereoPhase, Count };
+    enum P { Mode, Rate, Sync, Depth, Shape, Smoothing, StereoPhase, Count };
     enum class ModeId { Tremolo = 0, Autopan = 1 };
     enum class ShapeId { Sine = 0, Triangle = 1, Square = 2 };
 
-    // Beats (quarter notes) per LFO cycle for each Division choice.
-    static double divisionBeats(int index) noexcept;
     // LFO value in [-1, 1] for phase in [0, 1) (shape, smoothing 0..1 for the square).
     static float lfoValue(double phase, ShapeId shape, float smoothing) noexcept;
 

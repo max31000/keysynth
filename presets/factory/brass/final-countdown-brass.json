@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Final Countdown Brass",
     "category": "Brass",
@@ -257,7 +257,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -3.9,
     "fx": [
       {
         "type": "chorus",

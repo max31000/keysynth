@@ -1,5 +1,7 @@
 #include "effects/chorus/ChorusFx.h"
 
+#include "dsp/NoteDivision.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -19,8 +21,9 @@ const ModuleInfo& ChorusFx::moduleInfo() {
             linearParam("mix", "Mix", 0.0f, 1.0f, 0.5f),
             linearParam("width", "Width", 0.0f, 1.0f, 1.0f),
             linearParam("hiss", "BBD Hiss", 0.0f, 1.0f, 0.15f),
+            enumParam("sync", "Sync", dsp::noteDivisionChoices(), 0), // replaces `rate` (Custom/Dimension)
         };
-        // rate/depth apply to Custom and Dimension; the Juno modes use the original fixed values.
+        // rate/depth/sync apply to Custom and Dimension; the Juno modes use the original fixed values.
         i.uiHints = {{"front", {"mode", "rate", "depth", "mix"}}};
         return i;
     }();
@@ -77,9 +80,12 @@ void ChorusFx::reset() {
 
 int ChorusFx::tailSamples() const { return static_cast<int>((kMaxDelayMs + dsp::Bbd::kFilterTailMs) * 0.001 * sr_); }
 
-void ChorusFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext&) {
+void ChorusFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx) {
     const int mode = static_cast<int>(params().get(Mode));
-    const Shape s = shapeFor(mode, params().get(Rate), params().get(Depth));
+    const double div = dsp::noteDivisionSeconds(static_cast<int>(params().get(Sync)), ctx.transport.tempo);
+    // Synced rate stays inside the `rate` range (fast divisions at high tempo would be a ~40 Hz wobble).
+    const float rate = div > 0.0 ? std::clamp(static_cast<float>(1.0 / div), 0.05f, 10.0f) : params().get(Rate);
+    const Shape s = shapeFor(mode, rate, params().get(Depth));
     if (mode != lastMode_) {
         a_.setCutoff(s.cutoffHz);
         b_.setCutoff(s.cutoffHz);

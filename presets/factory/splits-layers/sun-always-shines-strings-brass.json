@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Sun Always Shines Strings & Brass",
     "category": "Splits & Layers",
@@ -114,7 +114,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -4,
     "fx": [
       {
         "type": "reverb",

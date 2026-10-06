@@ -3,6 +3,7 @@
 #include "dsp/FastMath.h"
 #include "dsp/Lfo.h"
 #include "dsp/Math.h"
+#include "dsp/NoteDivision.h"
 
 #include <algorithm>
 #include <cmath>
@@ -116,15 +117,13 @@ const ModuleInfo& VaSynth::moduleInfo() {
         ps.push_back(logParam("amp_release", "Release", 0.001f, 20.0f, 0.3f, "s", "Amp Env", 0.5f));
         ps.push_back(linearParam("amp_vel", "Velocity", 0.0f, 1.0f, 0.5f, {}, "Amp Env"));
         const std::vector<std::string> lfoWaves = {"Sine", "Triangle", "Saw Up", "Saw Down", "Square", "S&H"};
-        const std::vector<std::string> divisions(dsp::kLfoDivisionLabels,
-                                                 dsp::kLfoDivisionLabels + dsp::kLfoDivisionCount);
+        const std::vector<std::string> divisions = dsp::noteDivisionChoices();
         auto lfoBlock = [&](int n) {
             const std::string p = "lfo" + std::to_string(n) + "_";
             const std::string g = "LFO" + std::to_string(n);
             ps.push_back(enumParam(p + "wave", "Wave", lfoWaves, 1, g));
             ps.push_back(logParam(p + "rate", "Rate", 0.01f, 50.0f, 5.0f, "Hz", g, 2.0f));
-            ps.push_back(boolParam(p + "sync", "Tempo Sync", false, g));
-            ps.push_back(enumParam(p + "division", "Division", divisions, 8, g));
+            ps.push_back(enumParam(p + "sync", "Sync", divisions, 0, g)); // NoteDivision, 0 = Off (free `rate`)
             ps.push_back(linearParam(p + "delay", "Delay", 0.0f, 5.0f, 0.0f, "s", g));
             ps.push_back(boolParam(p + "key_sync", "Key Sync", false, g));
         };
@@ -304,12 +303,11 @@ void VaSynth::updateShared(const ProcessContext& ctx) noexcept {
     for (int j = 0; j < 2; ++j) {
         const int base = j == 0 ? Lfo1Wave : Lfo2Wave;
         s.lfoWave[j] = clampv(toInt(p.get(base + 0)), 0, 5);
-        const bool sync = p.get(base + 2) >= 0.5f;
-        const int div = clampv(toInt(p.get(base + 3)), 0, dsp::kLfoDivisionCount - 1);
-        const double beats = dsp::kLfoDivisionBeats[div];
+        const double beats = dsp::noteDivisionBeats(toInt(p.get(base + 2)));
+        const bool sync = beats > 0.0;
         const double hz = sync ? tempo / 60.0 / beats : static_cast<double>(p.get(base + 1));
-        s.lfoDelay[j] = p.get(base + 4);
-        s.lfoKeySync[j] = p.get(base + 5) >= 0.5f;
+        s.lfoDelay[j] = p.get(base + 3);
+        s.lfoKeySync[j] = p.get(base + 4) >= 0.5f;
         s.lfoIncPerTick[j] = hz * kControlInterval / s.sampleRate;
         s.lfoGlobalInc[j] = hz / s.sampleRate;
         if (sync && ctx.transport.playing) {

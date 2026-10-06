@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Mellotron 8-Choir",
     "category": "Choir & Vox",
@@ -42,7 +42,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 0.6,
     "fx": [
       {
         "type": "limiter",

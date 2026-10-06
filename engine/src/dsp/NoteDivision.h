@@ -1,6 +1,8 @@
 #pragma once
-// Tempo-synced note divisions shared by effects (`sync` enum params). Index 0 = "Off" (free-running in ms/Hz).
+// Tempo-synced note divisions: the one enum behind every `sync` param (delay, phaser, flanger, chorus, tremolo,
+// VA LFOs; ARCHITECTURE §7). Index 0 = "Off" (free-running in ms/Hz), then longest to shortest.
 // Lengths in quarter-note beats; "." = dotted (x1.5), "T" = triplet (x2/3).
+// The index order is a compatibility surface (patch format 2): changes need a migration (preset/Migrations.cpp).
 
 #include <array>
 #include <string>
@@ -13,9 +15,9 @@ struct NoteDivision {
     double beats; // quarter notes
 };
 
-inline constexpr std::array<NoteDivision, 18> kNoteDivisions{{
+inline constexpr std::array<NoteDivision, 19> kNoteDivisions{{
     {"Off", 0.0},
-    {"2/1", 8.0},    {"1/1", 4.0},     {"1/2", 2.0},     {"1/2.", 3.0},  {"1/2T", 4.0 / 3.0},
+    {"4/1", 16.0},   {"2/1", 8.0},    {"1/1", 4.0},     {"1/2", 2.0},     {"1/2.", 3.0},  {"1/2T", 4.0 / 3.0},
     {"1/4", 1.0},    {"1/4.", 1.5},    {"1/4T", 2.0 / 3.0},
     {"1/8", 0.5},    {"1/8.", 0.75},   {"1/8T", 1.0 / 3.0},
     {"1/16", 0.25},  {"1/16.", 0.375}, {"1/16T", 1.0 / 6.0},
@@ -27,6 +29,14 @@ inline std::vector<std::string> noteDivisionChoices() {
     std::vector<std::string> v;
     for (const auto& d : kNoteDivisions) v.emplace_back(d.label);
     return v;
+}
+
+// Index of a division label ("1/8.", also "1/8D" for dotted), -1 if unknown (control thread / migrations).
+inline int noteDivisionIndex(std::string label) {
+    if (!label.empty() && (label.back() == 'D' || label.back() == 'd')) label.back() = '.';
+    for (size_t i = 0; i < kNoteDivisions.size(); ++i)
+        if (label == kNoteDivisions[i].label) return static_cast<int>(i);
+    return -1;
 }
 
 // Beats of a sync index (0 for Off / out of range).

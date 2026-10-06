@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Poly Synth Brass",
     "category": "Brass",
@@ -63,7 +63,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -7,
     "fx": []
   }
 }

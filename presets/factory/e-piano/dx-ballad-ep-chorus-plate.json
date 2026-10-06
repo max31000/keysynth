@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "DX Ballad E.Piano (Chorus + Plate)",
     "category": "E.Piano",
@@ -209,7 +209,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": 1.5,
     "fx": [
       {
         "type": "chorus",

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Mein Herz Brennt Orchestra",
     "category": "Strings",
@@ -123,7 +123,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -2.4,
     "fx": [
       {
         "type": "reverb",

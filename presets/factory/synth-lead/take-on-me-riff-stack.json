@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Take On Me Riff (Juno + DX)",
     "category": "Synth Lead",
@@ -255,7 +255,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -1.2,
     "fx": [
       {
         "type": "chorus",
@@ -274,7 +274,7 @@
         "bypass": false,
         "params": {
           "mode": 1,
-          "sync": 9,
+          "sync": 10,
           "time": 375,
           "feedback": 0.22,
           "mix": 0.12,

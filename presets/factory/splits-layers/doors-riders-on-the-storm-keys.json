@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Riders on the Storm Keys (Doors)",
     "category": "Splits & Layers",
@@ -104,7 +104,7 @@
           "params": {
             "mode": 2,
             "time": 375,
-            "sync": 9,
+            "sync": 10,
             "feedback": 0.22,
             "mix": 0.14,
             "low_cut_hz": 150,
@@ -132,7 +132,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": 3.9,
     "fx": [
       {
         "type": "limiter",

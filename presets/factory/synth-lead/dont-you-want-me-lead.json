@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Don't You Want Me Lead",
     "category": "Synth Lead",
@@ -63,7 +63,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -0.6,
     "fx": [
       {
         "type": "chorus",

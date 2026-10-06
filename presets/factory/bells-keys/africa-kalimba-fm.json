@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Africa Kalimba Flute (FM)",
     "category": "Bells & Keys",
@@ -223,7 +223,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": 3.2,
     "fx": [
       {
         "type": "reverb",

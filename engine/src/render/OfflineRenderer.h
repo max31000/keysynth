@@ -51,6 +51,15 @@ public:
     static std::vector<TimedEvent> notesToEvents(const std::vector<NoteSpec>& notes, int channel = 1);
     // "C4:0:1[:100],E4:0:1,..."  (note name or number : start s : duration s [: velocity 1..127])
     static bool parseNotes(const std::string& spec, std::vector<NoteSpec>& out, std::string& error);
+    // Controller automation, appended to `out` (unsorted; render() sorts):
+    //   "CC:VALUE:TIME[:RAMP],..."  CC 0..119 or mod / breath / expr / sustain; VALUE 0..127; TIME s.
+    //   RAMP > 0 s: linear ramp from the controller's previous value (0, expr 127) starting at TIME, reaching
+    //   VALUE at TIME + RAMP (one event per ~5 ms).
+    static bool parseControllers(const std::string& spec, std::vector<TimedEvent>& out, std::string& error,
+                                 int channel = 1);
+    //   "VALUE:TIME[:RAMP],..."  pitch bend VALUE -1..1 (full range = the patch's bend range), ramps as above.
+    static bool parseBends(const std::string& spec, std::vector<TimedEvent>& out, std::string& error,
+                           int channel = 1);
     // "C4" = 60, "F#3", "Bb2", "60". Returns -1 on error.
     static int parseNoteName(const std::string& s);
     // Standard test pattern: chord, scale, sustain-pedal section (used by render tests and ks-bench).

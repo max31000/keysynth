@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Light My Fire Intro (Doors)",
     "category": "Organ",
@@ -85,7 +85,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -3.1,
     "fx": [
       {
         "type": "limiter",

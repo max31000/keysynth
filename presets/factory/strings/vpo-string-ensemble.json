@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "String Ensemble (VPO)",
     "category": "Strings",
@@ -43,8 +43,16 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 2.3,
     "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "hp_on": true,
+          "hp_hz": 20
+        }
+      },
       {
         "type": "limiter",
         "bypass": false,

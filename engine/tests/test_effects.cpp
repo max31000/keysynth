@@ -855,13 +855,15 @@ TEST_CASE("Phaser: notch count = stages / 2", "[fx][phaser]") {
     }
 }
 
-TEST_CASE("Phaser / flanger: tempo sync sets the LFO period", "[fx][phaser][flanger]") {
+TEST_CASE("Phaser / flanger / chorus: tempo sync sets the LFO period", "[fx][phaser][flanger][chorus]") {
     // Synced to 1/4 at 120 bpm: the sweep has a 0.5 s period.
     float syncIdx = -1.0f;
     for (size_t i = 0; i < dsp::kNoteDivisions.size(); ++i)
         if (std::string(dsp::kNoteDivisions[i].label) == "1/4") syncIdx = static_cast<float>(i);
-    for (const char* t : {"phaser", "flanger"}) {
-        auto m = make(t, {{"sync", syncIdx}, {"mix", 0.5f}, {"depth", 1.0f}, {"feedback", 0.0f}});
+    for (const char* t : {"phaser", "flanger", "chorus"}) {
+        auto m = std::string(t) == "chorus"
+                     ? make(t, {{"sync", syncIdx}, {"mix", 0.5f}, {"depth", 1.0f}, {"mode", 3.0f}, {"hiss", 0.0f}})
+                     : make(t, {{"sync", syncIdx}, {"mix", 0.5f}, {"depth", 1.0f}, {"feedback", 0.0f}});
         // A static tone through the sweeping notches: its level envelope repeats with the LFO period.
         Stereo s = sine(2000.0, 0.3, static_cast<size_t>(3 * kSr));
         run(*m, s, 120.0);

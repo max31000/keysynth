@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "In the Air Tonight Prophet Pad",
     "category": "Synth Pad",
@@ -65,14 +65,14 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -6.4,
     "fx": [
       {
         "type": "delay",
         "bypass": false,
         "params": {
           "mode": 1,
-          "sync": 6,
+          "sync": 7,
           "time": 375,
           "feedback": 0.25,
           "mix": 0.1,

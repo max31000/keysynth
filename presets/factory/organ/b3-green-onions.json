@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "B3 Green Onions",
     "category": "Organ",
@@ -66,7 +66,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -6.7,
     "fx": []
   }
 }

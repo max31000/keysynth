@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Great Gig Piano + Organ (Floyd)",
     "category": "Splits & Layers",
@@ -97,7 +97,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": 0.8,
     "fx": [
       {
         "type": "eq",

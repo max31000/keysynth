@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Vox Light My Fire",
     "category": "Organ",
@@ -55,7 +55,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -6.3,
     "fx": []
   }
 }

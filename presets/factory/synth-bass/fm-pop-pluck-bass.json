@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "meta": {
   "name": "FM Pop Pluck Bass",
   "category": "Synth Bass",
@@ -208,7 +208,7 @@
   }
  ],
  "master": {
-  "volume_db": -3,
+  "volume_db": 12,
   "fx": [
    {
     "type": "limiter",

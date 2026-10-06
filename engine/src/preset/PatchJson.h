@@ -11,7 +11,7 @@
 
 namespace ks {
 
-inline constexpr int kPatchFormat = 1;
+inline constexpr int kPatchFormat = 2; // 2: unified note-division `sync` enums (Migrations.cpp)
 
 Patch patchFromJson(const nlohmann::json& j, std::vector<std::string>* warnings = nullptr);
 nlohmann::json patchToJson(const Patch& p);
