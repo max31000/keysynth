@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "meta": {
+    "name": "Suitcase 70s Autopan",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "suitcase",
+      "70s",
+      "stereo"
+    ],
+    "description": "Rhodes Suitcase 73 with its built-in stereo vibrato (autopan) and Peterson preamp bass boost. Reference: 70s soul / jazz-funk Suitcase sound (Stevie Wonder, Herbie Hancock).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Suitcase",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 2,
+          "tone": 0.5,
+          "bark": 0.4,
+          "hammer_hardness": 0.5,
+          "dynamics": 30,
+          "decay": 1.1,
+          "tine_mix": 0.5,
+          "pickup_position": 0.45,
+          "pickup_distance": 0.5,
+          "drive": 0.1,
+          "noise": 0.3,
+          "stereo_depth": 0.75,
+          "stereo_rate": 5.0,
+          "polyphony": 32,
+          "volume_db": 1
+        },
+        "state": {}
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

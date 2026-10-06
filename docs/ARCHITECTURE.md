@@ -238,13 +238,13 @@ Patch (data)                              RackGraph (live, audio thread)
 | `fm` | DX7-compatible 6-op FM via vendored MSFA; loads .syx banks | DX7 E.Piano, bells, basses |
 | `organ` | Tonewheel: 9 drawbars, percussion, key click, scanner vibrato/chorus, crosstalk; pairs with `rotary` | Hammond B3 (Floyd: Echoes, Time) |
 | `combo` | Transistor combo organ: Vox Continental / Farfisa voicings, footages, vibrato, bass section | Doors: Light My Fire; early Floyd |
-| `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |
+| `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
 | `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
 | `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
 
 Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
 (stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
-`rotary` (Leslie horn+drum, ramped slow/fast), `tremolo` (trem/autopan), `compressor`, `eq`, `limiter` (master
+`rotary` (Leslie horn+drum, ramped slow/fast), `tremolo` (amp trem with L/R phase / equal-power autopan; sine/tri/smoothed square; free or tempo-synced, ppq-locked), `compressor`, `eq`, `limiter` (master
 safety, fixed).
 
 ## 8. Transport

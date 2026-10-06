@@ -177,8 +177,9 @@ TEST_CASE("protocol: presets list/load/save, get/set patch", "[protocol]") {
     REQUIRE(r["type"] == "list_presets_ok");
     REQUIRE(r["presets"].size() >= 2);
     std::string split;
-    for (const auto& p : r["presets"])
-        if (p["category"] == "Splits & Layers") split = p["path"];
+    for (const auto& p : r["presets"]) // the `basic` split: the test below edits its `cutoff` param
+        if (p["category"] == "Splits & Layers" && p["path"].get<std::string>().find("basic-") != std::string::npos)
+            split = p["path"];
     REQUIRE(!split.empty());
 
     auto out = f.send({{"type", "load_preset"}, {"id", 6}, {"path", split}});
