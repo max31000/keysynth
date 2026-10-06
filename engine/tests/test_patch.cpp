@@ -2,6 +2,7 @@
 #include "core/GraphBuilder.h"
 #include "core/ModuleRegistry.h"
 #include "core/PatchModel.h"
+#include "dsp/NoteDivision.h"
 #include "preset/PatchJson.h"
 #include "preset/PresetStore.h"
 
@@ -73,6 +74,106 @@ TEST_CASE("Patch JSON: lenient load, node ids, defaults", "[patch]") {
     auto br = GraphBuilder::build(q, defaultRegistry(), nullptr, 48000.0, 64);
     REQUIRE(br.graph);
     REQUIRE_FALSE(br.warnings.empty());
+}
+
+TEST_CASE("Migration: format 1 tempo-sync params -> shared NoteDivision enum", "[patch][preset]") {
+    auto div = [](const char* label) { return static_cast<float>(dsp::noteDivisionIndex(label)); };
+    const json v1 = json::parse(R"({
+      "format": 1,
+      "layers": [
+        { "instrument": { "type": "va", "params": { "lfo1_sync": true, "lfo1_division": 7,
+                                                     "lfo2_sync": 0, "lfo2_division": 3 } },
+          "fx": [ { "type": "tremolo", "params": { "sync": true, "division": 6 } },
+                  { "type": "delay", "params": { "sync": 10 } },
+                  { "type": "phaser", "params": { "sync": 0 } },
+                  { "type": "flanger", "params": { "sync": 6 } } ] },
+        { "instrument": { "type": "va", "params": { "lfo2_sync": 1 } },
+          "fx": [ { "type": "tremolo", "params": { "sync": false, "division": 2 } } ] }
+      ],
+      "master": { "fx": [ { "type": "tremolo", "params": { "sync": 1 } } ] }
+    })");
+    std::vector<std::string> w;
+    PatchModel m(defaultRegistry());
+    auto w2 = m.setPatch(patchFromJson(v1, &w));
+    w.insert(w.end(), w2.begin(), w2.end());
+    for (const auto& s : w) INFO(s);
+    REQUIRE(w.empty()); // old ids consumed, nothing unknown
+    const Patch& p = m.patch();
+    const auto& va = p.layers[0].instrument.params;
+    REQUIRE(va.at("lfo1_sync") == div("1/8D")); // old VA index 7 = 1/8 dotted
+    REQUIRE(va.at("lfo2_sync") == 0.0f);        // sync off -> Off
+    REQUIRE(va.count("lfo1_division") == 0);
+    REQUIRE(p.layers[0].fx[0].params.at("sync") == div("1/8.")); // old tremolo index 6
+    REQUIRE(p.layers[0].fx[1].params.at("sync") == div("1/8.")); // delay: old 10 (1/8.) shifted by the new 4/1
+    REQUIRE(p.layers[0].fx[2].params.at("sync") == 0.0f);
+    REQUIRE(p.layers[0].fx[3].params.at("sync") == div("1/4"));
+    REQUIRE(p.layers[1].instrument.params.at("lfo2_sync") == div("1/4")); // on, old default division (1/4)
+    REQUIRE(p.layers[1].fx[0].params.at("sync") == 0.0f);
+    REQUIRE(p.master.fx[0].params.at("sync") == div("1/8")); // on, old tremolo default (1/8)
+
+    // Written back as format 2; loading that again changes nothing (no double shift).
+    const json v2 = patchToJson(p);
+    REQUIRE(v2.at("format") == kPatchFormat);
+    PatchModel m2(defaultRegistry());
+    REQUIRE(m2.setPatch(patchFromJson(v2)).empty());
+    REQUIRE(patchToJson(m2.patch()) == v2);
+
+    // Current format with a hand-written old `division` id: still merged.
+    json mixed = v2;
+    mixed["layers"][1]["fx"][0]["params"] = {{"sync", 1}, {"division", 4}};
+    PatchModel m3(defaultRegistry());
+    REQUIRE(m3.setPatch(patchFromJson(mixed)).empty());
+    REQUIRE(m3.patch().layers[1].fx[0].params.at("sync") == div("1/4"));
+    // Current format: delay index kept as is.
+    REQUIRE(m3.patch().layers[0].fx[1].params.at("sync") == div("1/8."));
+}
+
+TEST_CASE("Migration: every old division maps, edge cases", "[patch][preset]") {
+    auto load = [](const json& j) {
+        PatchModel m(defaultRegistry());
+        m.setPatch(patchFromJson(j));
+        return m.patch();
+    };
+    auto patchWith = [](int format, const char* type, json params, bool instrument) {
+        json slot = {{"type", type}, {"params", std::move(params)}};
+        json layer = instrument ? json{{"instrument", slot}} : json{{"instrument", {{"type", "basic"}}}, {"fx", {slot}}};
+        return json{{"format", format}, {"layers", {layer}}};
+    };
+    std::set<float> seen;
+    for (int i = 0; i < 12; ++i) { // old tremolo list: 12 distinct divisions, all valid
+        const Patch p = load(patchWith(1, "tremolo", {{"sync", true}, {"division", i}}, false));
+        const float v = p.layers[0].fx[0].params.at("sync");
+        REQUIRE(v >= 1.0f);
+        seen.insert(v);
+    }
+    REQUIRE(seen.size() == 12);
+    seen.clear();
+    for (int i = 0; i < 15; ++i) { // old VA list: 15
+        const Patch p = load(patchWith(1, "va", {{"lfo1_sync", 1}, {"lfo1_division", i}}, true));
+        const float v = p.layers[0].instrument.params.at("lfo1_sync");
+        REQUIRE(v >= 1.0f);
+        seen.insert(v);
+    }
+    REQUIRE(seen.size() == 15);
+    REQUIRE(seen.count(static_cast<float>(dsp::noteDivisionIndex("4/1"))) == 1);
+    // Out-of-range old division -> old default; VA without any LFO ids keeps the default (Off).
+    REQUIRE(load(patchWith(1, "tremolo", {{"sync", 1}, {"division", 99}}, false)).layers[0].fx[0].params.at("sync") ==
+            static_cast<float>(dsp::noteDivisionIndex("1/8")));
+    REQUIRE(load(patchWith(1, "va", json::object(), true)).layers[0].instrument.params.at("lfo2_sync") == 0.0f);
+    // Format-1 delay sync index shifts by one (4/1 inserted).
+    REQUIRE(load(patchWith(1, "delay", {{"sync", 5}}, false)).layers[0].fx[0].params.at("sync") == 6.0f);
+    // Current format: an enum `sync` next to a stray old `division` stays as is (division dropped).
+    REQUIRE(load(patchWith(kPatchFormat, "tremolo", {{"sync", 5}, {"division", 3}}, false))
+                .layers[0]
+                .fx[0]
+                .params.at("sync") == 5.0f);
+    // Layer volume clamp warns.
+    json j = patchWith(kPatchFormat, "delay", json::object(), false);
+    j["layers"][0]["zone"] = {{"volume_db", 40}};
+    PatchModel m(defaultRegistry());
+    const auto w = m.setPatch(patchFromJson(j));
+    REQUIRE(m.patch().layers[0].zone.volumeDb == PatchModel::kMaxVolumeDb);
+    REQUIRE(std::any_of(w.begin(), w.end(), [](const std::string& s) { return s.find("clamped") != std::string::npos; }));
 }
 
 TEST_CASE("Patch JSON round-trip is stable", "[patch]") {

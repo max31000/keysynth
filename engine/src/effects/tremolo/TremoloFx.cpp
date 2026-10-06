@@ -1,16 +1,12 @@
 #include "effects/tremolo/TremoloFx.h"
 
 #include "dsp/Math.h"
+#include "dsp/NoteDivision.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace ks {
-
-namespace {
-constexpr double kDivBeats[] = {4.0, 2.0, 4.0 / 3.0, 1.5, 1.0, 2.0 / 3.0, 0.75, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0, 0.125};
-constexpr int kNumDiv = static_cast<int>(sizeof(kDivBeats) / sizeof(kDivBeats[0]));
-} // namespace
 
 const ModuleInfo& TremoloFx::moduleInfo() {
     static const ModuleInfo info = [] {
@@ -22,10 +18,7 @@ const ModuleInfo& TremoloFx::moduleInfo() {
         i.params = {
             enumParam("mode", "Mode", {"Tremolo", "Autopan"}, 0, "LFO"),
             logParam("rate", "Rate", 0.1f, 20.0f, 5.0f, "Hz", "LFO", 4.0f),
-            boolParam("sync", "Tempo Sync", false, "LFO"),
-            enumParam("division", "Division",
-                      {"1/1", "1/2", "1/2T", "1/4.", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16", "1/16T", "1/32"}, 7,
-                      "LFO"),
+            enumParam("sync", "Sync", dsp::noteDivisionChoices(), 0, "LFO"), // 0 = Off (free `rate`)
             linearParam("depth", "Depth", 0.0f, 1.0f, 0.5f, {}, "LFO"),
             enumParam("shape", "Shape", {"Sine", "Triangle", "Square"}, 0, "Shape"),
             linearParam("smoothing", "Square Smoothing", 0.0f, 1.0f, 0.5f, {}, "Shape"),
@@ -38,8 +31,6 @@ const ModuleInfo& TremoloFx::moduleInfo() {
 }
 
 TremoloFx::TremoloFx() : Module(moduleInfo()) {}
-
-double TremoloFx::divisionBeats(int index) noexcept { return kDivBeats[std::clamp(index, 0, kNumDiv - 1)]; }
 
 float TremoloFx::lfoValue(double phase, ShapeId shape, float smoothing) noexcept {
     const double ph = phase - std::floor(phase);
@@ -80,8 +71,7 @@ void TremoloFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx
 
     double hz = std::clamp(static_cast<double>(p.get(Rate)), 0.1, 20.0);
     double correction = 0.0; // phase error spread over this block (no gain steps on transport jumps)
-    if (p.get(Sync) >= 0.5f) {
-        const double beats = divisionBeats(static_cast<int>(p.get(Division)));
+    if (const double beats = dsp::noteDivisionBeats(static_cast<int>(p.get(Sync))); beats > 0.0) {
         const double tempo = std::clamp(ctx.transport.tempo, 20.0, 400.0);
         hz = tempo / 60.0 / beats;
         if (ctx.transport.playing && io.numSamples > 0) { // lock the phase to the bar grid (PLL-style slew)

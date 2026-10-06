@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "OB-Xa Jump",
     "category": "Brass",
@@ -63,7 +63,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -6.5,
     "fx": []
   }
 }

@@ -5,6 +5,7 @@
 #include "dsp/BeamModes.h"
 #include "dsp/Denormals.h"
 #include "dsp/Math.h"
+#include "dsp/NoteDivision.h"
 #include "effects/tremolo/TremoloFx.h"
 #include "instruments/epiano/EPiano.h"
 
@@ -495,19 +496,16 @@ TEST_CASE("tremolo: stereo phase, autopan equal power, tempo sync", "[tremolo]")
     }
     {
         TremRig t;
-        t.set("sync", 1.0f);
-        t.set("division", 7.0f); // 1/8 at 120 BPM = 4 Hz
+        t.set("sync", static_cast<float>(dsp::noteDivisionIndex("1/8"))); // 1/8 at 120 BPM = 4 Hz
         t.ctx.transport.tempo = 120.0;
         t.ctx.transport.playing = true;
         t.run(3.0);
         REQUIRE(std::fabs(measuredRate(t.L) - 4.0) < 0.02);
-        REQUIRE(TremoloFx::divisionBeats(4) == 1.0);
     }
     {
         // Phase lock: starting off-grid, the LFO converges to the ppq phase (1/4 = one cycle per beat).
         TremRig t;
-        t.set("sync", 1.0f);
-        t.set("division", 4.0f);
+        t.set("sync", static_cast<float>(dsp::noteDivisionIndex("1/4")));
         t.set("depth", 1.0f);
         t.ctx.transport.tempo = 100.0;
         t.ctx.transport.playing = true;

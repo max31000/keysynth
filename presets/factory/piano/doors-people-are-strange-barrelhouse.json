@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "People Are Strange Barrelhouse (Doors)",
     "category": "Piano",
@@ -77,7 +77,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": 12,
     "fx": [
       {
         "type": "eq",
@@ -120,14 +120,6 @@
           "damp_hf": 0.45,
           "low_cut_hz": 120,
           "high_cut_hz": 9000
-        }
-      },
-      {
-        "type": "gain",
-        "bypass": false,
-        "params": {
-          "gain_db": 11.7,
-          "pan": 0.0
         }
       },
       {

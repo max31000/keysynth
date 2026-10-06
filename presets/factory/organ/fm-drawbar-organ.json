@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "meta": {
   "name": "FM Drawbar Organ",
   "category": "Organ",
@@ -207,7 +207,7 @@
   }
  ],
  "master": {
-  "volume_db": -3,
+  "volume_db": -7.2,
   "fx": [
    {
     "type": "limiter",

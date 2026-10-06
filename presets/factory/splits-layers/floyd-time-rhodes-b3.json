@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Time Rhodes + B3 (Floyd)",
     "category": "Splits & Layers",
@@ -122,7 +122,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -0.4,
     "fx": [
       {
         "type": "reverb",

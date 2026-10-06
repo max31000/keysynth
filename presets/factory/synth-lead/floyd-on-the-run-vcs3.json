@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "On the Run VCS3 (Floyd)",
     "category": "Synth Lead",
@@ -83,7 +83,7 @@
           "params": {
             "mode": 1,
             "time": 375,
-            "sync": 12,
+            "sync": 13,
             "feedback": 0.3,
             "mix": 0.2,
             "low_cut_hz": 150,
@@ -94,7 +94,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": 1.1,
     "fx": [
       {
         "type": "limiter",

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "TR-808 Kit",
     "category": "Drums",
@@ -17,6 +17,6 @@
       "fx": []
     }
   ],
-  "master": { "volume_db": -3, "fx": [] },
+  "master": { "volume_db": 1.5, "fx": [] },
   "rhythm": { "kit": { "kit": 0 }, "pattern": "presets/patterns/ballad.json" }
 }

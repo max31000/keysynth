@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Wurlitzer 200A Supertramp",
     "category": "E.Piano",
@@ -56,14 +56,15 @@
             "mode": 0,
             "rate": 5.6,
             "depth": 0.12,
-            "shape": 0
+            "shape": 0,
+            "sync": 0
           }
         }
       ]
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 3.9,
     "fx": [
       {
         "type": "limiter",

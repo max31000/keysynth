@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Light My Fire Solo (Doors)",
     "category": "Splits & Layers",
@@ -138,7 +138,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -4.3,
     "fx": [
       {
         "type": "limiter",

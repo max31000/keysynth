@@ -2,9 +2,19 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <set>
+#include <string>
 
 namespace ks {
+
+namespace {
+std::string fmtDb(float db) {
+    char b[32];
+    std::snprintf(b, sizeof b, "%+.1f", static_cast<double>(db));
+    return b;
+}
+} // namespace
 
 PatchModel::PatchModel(const ModuleRegistry& registry) : registry_(registry) { setPatch(makeDefaultPatch()); dirty_ = false; }
 
@@ -28,7 +38,7 @@ Zone PatchModel::sanitizeZone(Zone z) {
     z.transpose = std::clamp(z.transpose, -48, 48);
     z.channel = std::clamp(z.channel, 0, 16);
     if (!std::isfinite(z.volumeDb)) z.volumeDb = 0.0f;
-    z.volumeDb = std::clamp(z.volumeDb, -96.0f, 12.0f);
+    z.volumeDb = std::clamp(z.volumeDb, kMinVolumeDb, kMaxVolumeDb);
     if (!std::isfinite(z.pan)) z.pan = 0.0f;
     z.pan = std::clamp(z.pan, -1.0f, 1.0f);
     return z;
@@ -109,6 +119,8 @@ std::vector<std::string> PatchModel::setPatch(Patch p) {
         const std::string where = "layer " + std::to_string(li);
         assign(l.node);
         assign(l.instrument.node);
+        if (std::isfinite(l.zone.volumeDb) && (l.zone.volumeDb > kMaxVolumeDb || l.zone.volumeDb < kMinVolumeDb))
+            warnings.push_back(where + ": volume_db " + fmtDb(l.zone.volumeDb) + " dB clamped");
         l.zone = sanitizeZone(l.zone);
         if (l.name.empty()) l.name = "Layer " + std::to_string(li);
         normalizeSlot(l.instrument, ModuleKind::Instrument, &warnings, where + " instrument");
@@ -128,7 +140,11 @@ std::vector<std::string> PatchModel::setPatch(Patch p) {
     p.rhythm.drums.bypass = false;
     normalizeSlot(p.rhythm.drums, ModuleKind::Instrument, &warnings, "rhythm kit");
     if (!std::isfinite(p.master.volumeDb)) p.master.volumeDb = 0.0f;
-    p.master.volumeDb = std::clamp(p.master.volumeDb, -96.0f, 12.0f);
+    if (p.master.volumeDb > kMaxVolumeDb || p.master.volumeDb < kMinVolumeDb)
+        warnings.push_back("master volume_db " + fmtDb(p.master.volumeDb) + " dB clamped to [" +
+                           std::to_string(static_cast<int>(kMinVolumeDb)) + ", +" +
+                           std::to_string(static_cast<int>(kMaxVolumeDb)) + "] dB");
+    p.master.volumeDb = std::clamp(p.master.volumeDb, kMinVolumeDb, kMaxVolumeDb);
     if (!std::isfinite(p.tempo) || p.tempo <= 0) p.tempo = 120.0;
     p.tempo = std::clamp(p.tempo, 20.0, 400.0);
     patch_ = std::move(p);
@@ -282,7 +298,7 @@ float PatchModel::setParam(NodeId node, const std::string& param, float value) {
 }
 
 void PatchModel::setMasterVolume(float db) {
-    patch_.master.volumeDb = std::isfinite(db) ? std::clamp(db, -96.0f, 12.0f) : 0.0f;
+    patch_.master.volumeDb = std::isfinite(db) ? std::clamp(db, kMinVolumeDb, kMaxVolumeDb) : 0.0f;
     dirty_ = true;
 }
 

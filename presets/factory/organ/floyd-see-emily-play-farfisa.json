@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "See Emily Play Farfisa (Floyd)",
     "category": "Organ",
@@ -111,7 +111,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": -5.5,
     "fx": [
       {
         "type": "limiter",

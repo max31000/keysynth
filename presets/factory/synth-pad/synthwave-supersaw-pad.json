@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Synthwave Supersaw Pad",
     "category": "Synth Pad",
@@ -63,7 +63,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -6.3,
     "fx": [
       {
         "type": "chorus",
@@ -82,7 +82,7 @@
         "bypass": false,
         "params": {
           "mode": 1,
-          "sync": 10,
+          "sync": 11,
           "time": 375,
           "feedback": 0.3,
           "mix": 0.14,

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Breathe Rhodes",
     "category": "E.Piano",
@@ -58,14 +58,15 @@
             "mode": 1,
             "rate": 1.2,
             "depth": 0.4,
-            "shape": 0
+            "shape": 0,
+            "sync": 0
           }
         }
       ]
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 4.2,
     "fx": [
       {
         "type": "limiter",

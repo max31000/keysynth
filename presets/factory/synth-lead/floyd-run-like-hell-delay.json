@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Run Like Hell Delay Synth (Floyd)",
     "category": "Synth Lead",
@@ -75,7 +75,7 @@
           "params": {
             "mode": 1,
             "time": 375,
-            "sync": 10,
+            "sync": 11,
             "feedback": 0.35,
             "mix": 0.3,
             "low_cut_hz": 150,
@@ -100,7 +100,7 @@
     }
   ],
   "master": {
-    "volume_db": 0.0,
+    "volume_db": 2.1,
     "fx": [
       {
         "type": "limiter",

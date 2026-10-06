@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Supersaw Pad",
     "category": "Synth Pad",
@@ -65,7 +65,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": -3.8,
     "fx": []
   }
 }

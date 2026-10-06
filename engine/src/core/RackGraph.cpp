@@ -163,6 +163,8 @@ void RackGraph::finalize() {
         l->gainR.snap(g * (z.pan >= 0.0f ? 1.0f : 1.0f + z.pan));
     }
     for (auto& f : masterFx) moduleIndex_[f->node] = f.get();
+    masterVolumeAt_ = masterFx.size();
+    while (masterVolumeAt_ > 0 && masterFx[masterVolumeAt_ - 1]->type == "limiter") --masterVolumeAt_;
     if (rhythm.drums.node != 0) moduleIndex_[rhythm.drums.node] = &rhythm.drums;
     rhythm.bufL.assign(static_cast<size_t>(maxBlock_), 0.0f);
     rhythm.bufR.assign(static_cast<size_t>(maxBlock_), 0.0f);
@@ -306,17 +308,24 @@ void RackGraph::render(const AudioBlock& out, MidiEventSpan events, const Render
         rhythm.lastGain = g1;
     }
 
+    // Master chain; `volume_db` goes before the trailing limiter slot(s) so they still catch the result (the
+    // Engine's output safety limiter follows in any case).
     AudioBlock mb{out.left, out.right, n};
-    for (auto& f : masterFx) {
-        if (f->bypass.load(std::memory_order_relaxed)) continue;
-        if (f->module && f->module->info().kind != ModuleKind::Effect) continue;
-        processNode(*f, mb, MidiEventSpan(), mctx, args);
-    }
     masterGain_.setTarget(dsp::dbToGain(masterVolumeDb.load(std::memory_order_relaxed)));
-    for (int i = 0; i < n; ++i) {
-        const float g = masterGain_.next();
-        out.left[i] *= g;
-        out.right[i] *= g;
+    const size_t volAt = std::min(masterVolumeAt_, masterFx.size());
+    for (size_t k = 0; k <= masterFx.size(); ++k) {
+        if (k == volAt) {
+            for (int i = 0; i < n; ++i) {
+                const float g = masterGain_.next();
+                out.left[i] *= g;
+                out.right[i] *= g;
+            }
+        }
+        if (k == masterFx.size()) break;
+        ModuleNode& f = *masterFx[k];
+        if (f.bypass.load(std::memory_order_relaxed)) continue;
+        if (f.module && f.module->info().kind != ModuleKind::Effect) continue;
+        processNode(f, mb, MidiEventSpan(), mctx, args);
     }
 }
 

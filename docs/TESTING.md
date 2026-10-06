@@ -56,7 +56,7 @@ Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] 
 `[sampler]` unit tests generate their own tiny WAV + SFZ fixtures (in `userdata/.test-sampler-<pid>/`) and never need
 downloaded libraries. Factory presets using `sampler` are **skipped by the render suite** (they need GBs of samples)
 and covered by the hidden `[samples]` test instead, which renders every one whose library is installed (skips the
-rest) with the same criteria (drum kits: RMS > -50 dB, tail < -50 dB, since one-shot cymbals ring) and prints
+rest) with the same criteria (drum kits: RMS > -50 dB, tail at least 20 dB below the overall RMS, since one-shot cymbals ring) and prints
 load+render time per preset:
 
 ```powershell
@@ -92,6 +92,13 @@ build/bin/Release/ks-render.exe --play-pattern presets/patterns/money-7-4.json -
 Patches using `plugin:<name>` modules make ks-render compile/load those plugins from `plugins/` first (synchronously,
 Faust machine-code cache in `plugins/.build/cache`); `--no-plugins` skips that, `--root DIR` picks another repo root.
 
+`--cc "CC:value:time[:ramp],..."` adds controller automation (CC 0–119 or `mod`, `breath`, `expr`, `sustain`;
+value 0–127; time in s; `ramp` s = linear ramp from the controller's previous value, reaching `value` at
+`time + ramp`; ramps follow the `--cc` items only, not CCs from `--midi`), `--bend "value:time[:ramp],..."` pitch bend (−1..1 = the patch's full bend range). Use them to audition
+mod-wheel behaviour offline (rotary slow/fast, vibrato, filter), e.g.
+`ks-render --preset presets/factory/organ/b3-full-rock.json --notes "C4:0:4,E4:0:4,G4:0:4" --cc "mod:127:1,mod:0:3" --out renders/leslie.wav`.
+Without `--notes/--midi/--test-pattern` the automation plays over the default C4.
+
 `--play-pattern FILE --bars N [--tempo BPM]` plays a drum pattern through the patch's rhythm kit (pattern tempo, kit,
 swing and meter applied; transport stops exactly after N bars, then `--tail`). Combine with `--notes`/`--midi` to
 layer played notes on top.
@@ -99,6 +106,21 @@ layer played notes on top.
 `--notes "NOTE:start:dur[:vel],..."` — note name (`C4` = 60, `F#3`, `Bb2`) or number, times in seconds, velocity
 1–127 (default 100). Without `--notes/--midi/--test-pattern` a single C4 is rendered; without `--preset/--patch-json`
 the default patch (one `basic` layer). Output: 32-bit float stereo WAV (default `renders/out.wav`, gitignored).
+
+## Loudness (`scripts/loudness.py`)
+
+```powershell
+python scripts/loudness.py --check                     # all factory presets on target? exit 1 if not
+python scripts/loudness.py --filter organ              # measure a subset, print LUFS / dBTP
+python scripts/loudness.py --apply --report docs/research/LOUDNESS.md   # renormalize master volume_db
+```
+
+Renders a standard phrase per category with ks-render (keys: bass note + chords + melody with sustain; leads, basses,
+drums: their own phrase) and measures BS.1770-4 integrated loudness (LUFS) and 4x-oversampled true peak. Target
+−16 LUFS ±1, ≤ −1 dBTP; only the master `volume_db` is changed (table and exceptions: `docs/research/LOUDNESS.md`).
+Run `--check` (with `$env:KS_ASSETS_DIR` for sampler presets; missing libraries are skipped) after adding or
+changing a factory preset or anything that changes the level of an engine/effect, and `--apply` for new presets
+(≈ 2–5 min for all with `--jobs 8`; `--ks-render PATH` picks the binary, default the first `build*/bin/<cfg>/`).
 
 ## Analysis (`scripts/analyze_wav.py`)
 

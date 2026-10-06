@@ -7,6 +7,7 @@
 #include "dsp/BlepOsc.h"
 #include "dsp/LadderFilter.h"
 #include "dsp/Lfo.h"
+#include "dsp/NoteDivision.h"
 #include "instruments/va/VaSynth.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -615,8 +616,7 @@ TEST_CASE("VA: tempo-synced LFO follows the transport", "[va]") {
     cleanOsc(r);
     r.set("osc1_wave", 3.0f); // sine
     r.set("lfo1_wave", 4.0f);
-    r.set("lfo1_sync", 1.0f);
-    r.set("lfo1_division", 8.0f);
+    r.set("lfo1_sync", static_cast<float>(dsp::noteDivisionIndex("1/4")));
     r.set("lfo1_amp", 1.0f);
     r.run(2.0, {MidiEvent::noteOn(69, 100)});
     int edges = 0;
@@ -635,8 +635,7 @@ TEST_CASE("VA: tempo-synced LFO follows the transport", "[va]") {
     cleanOsc(t);
     t.set("osc1_wave", 3.0f);
     t.set("lfo1_wave", 4.0f);
-    t.set("lfo1_sync", 1.0f);
-    t.set("lfo1_division", 8.0f);
+    t.set("lfo1_sync", static_cast<float>(dsp::noteDivisionIndex("1/4")));
     t.set("lfo1_amp", 1.0f);
     t.transport.playing = true;
     t.transport.tempo = 150.0;

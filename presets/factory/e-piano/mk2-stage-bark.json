@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Mk II Stage Bark",
     "category": "E.Piano",
@@ -54,7 +54,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 6.2,
     "fx": [
       {
         "type": "limiter",

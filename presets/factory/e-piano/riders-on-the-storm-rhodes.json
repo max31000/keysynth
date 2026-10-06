@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Riders on the Storm Rhodes",
     "category": "E.Piano",
@@ -59,7 +59,7 @@
           "params": {
             "mode": 0,
             "rate": 4.2,
-            "sync": false,
+            "sync": 0,
             "depth": 0.22,
             "shape": 0,
             "smoothing": 0.5,
@@ -70,7 +70,7 @@
     }
   ],
   "master": {
-    "volume_db": -3,
+    "volume_db": 6.9,
     "fx": [
       {
         "type": "limiter",

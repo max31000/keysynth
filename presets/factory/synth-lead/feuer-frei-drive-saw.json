@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Feuer Frei Drive Saw",
     "category": "Synth Lead",
@@ -95,7 +95,7 @@
     }
   ],
   "master": {
-    "volume_db": -3.0,
+    "volume_db": -2.3,
     "fx": [
       {
         "type": "eq",

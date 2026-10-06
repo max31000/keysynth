@@ -2,6 +2,7 @@
 // Fast tier: 48 kHz / 64. Full tier ([.full], run with `ks-tests "[full]"`): {44.1, 48, 96} kHz x {32, 64, 512}.
 
 #include "core/AppPaths.h"
+#include "core/PatchModel.h"
 #include "core/RtCheck.h"
 #include "preset/PresetStore.h"
 #include "render/OfflineRenderer.h"
@@ -10,6 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <vector>
 
 using namespace ks;
 
@@ -141,4 +144,87 @@ TEST_CASE("Note name parsing", "[render]") {
     REQUIRE(v.size() == 2);
     REQUIRE(v[1].velocity == 80);
     REQUIRE_FALSE(OfflineRenderer::parseNotes("C4:0", v, err));
+}
+
+TEST_CASE("Controller / bend automation specs (ks-render --cc / --bend)", "[render]") {
+    std::vector<TimedEvent> ev;
+    std::string err;
+    REQUIRE(OfflineRenderer::parseControllers("sustain:127:0, mod:127:1:0.5, 11:64:2", ev, err));
+    // sustain step, mod ramp 0 -> 127 over 0.5 s (5 ms steps), expression step.
+    REQUIRE(ev.size() == 1 + 100 + 1);
+    REQUIRE(ev.front().event.type == MidiEventType::ControlChange);
+    REQUIRE(ev.front().event.data1 == 64);
+    int lastMod = -1;
+    double lastModT = 0.0;
+    for (const auto& e : ev)
+        if (e.event.data1 == 1) {
+            REQUIRE(static_cast<int>(e.event.value7) >= lastMod); // monotonic ramp
+            lastMod = e.event.value7;
+            lastModT = e.time;
+        }
+    REQUIRE(lastMod == 127);
+    REQUIRE(std::fabs(lastModT - 1.5) < 1e-9);
+    REQUIRE(ev.back().event.data1 == 11);
+    REQUIRE(ev.back().event.value7 == 64);
+    REQUIRE_FALSE(OfflineRenderer::parseControllers("mod:128:0", ev, err)); // value range
+    REQUIRE_FALSE(OfflineRenderer::parseControllers("120:1:0", ev, err));   // channel-mode CCs refused
+    REQUIRE_FALSE(OfflineRenderer::parseControllers("foo:1:0", ev, err));
+    REQUIRE_FALSE(OfflineRenderer::parseControllers("1:1", ev, err));
+
+    ev.clear();
+    REQUIRE(OfflineRenderer::parseBends("1:0.5:0.1,0:1", ev, err));
+    REQUIRE(ev.size() == 20 + 1);
+    REQUIRE(ev[19].event.type == MidiEventType::PitchBend);
+    REQUIRE(ev[19].event.valueF == 1.0f);
+    REQUIRE(ev.back().event.valueF == 0.0f);
+    REQUIRE_FALSE(OfflineRenderer::parseBends("1.5:0", ev, err));
+    REQUIRE_FALSE(OfflineRenderer::parseBends("0.5:-1", ev, err));
+
+    // A full bend on the basic synth (range 2 semitones) raises A4 to B4.
+    const PresetStore store(AppPaths::fromRoot(KS_SOURCE_DIR));
+    Patch patch = store.load("presets/factory/synth-lead/basic-saw-lead.json");
+    patch.layers[0].instrument.params["cutoff"] = 600.0f;
+    patch.layers[0].instrument.params["resonance"] = 0.0f;
+    auto events = OfflineRenderer::notesToEvents({{69, 0.0, 1.0, 100}});
+    REQUIRE(OfflineRenderer::parseBends("1:0", events, err));
+    RenderOptions opt;
+    opt.tailSeconds = 0.0;
+    const auto r = OfflineRenderer::render(patch, events, opt);
+    int crossings = 0;
+    const size_t a = static_cast<size_t>(0.2 * r.sampleRate), b = static_cast<size_t>(0.9 * r.sampleRate);
+    for (size_t i = a + 1; i < b; ++i)
+        if (r.left[i - 1] < 0.0f && r.left[i] >= 0.0f) ++crossings;
+    REQUIRE(std::fabs(crossings / 0.7 - 440.0 * std::exp2(2.0 / 12.0)) < 4.0);
+}
+
+TEST_CASE("Master volume_db applies before a trailing limiter", "[render][patch]") {
+    // Hot basic patch, master limiter at -6 dB, +12 dB master volume: the limiter must catch the boost.
+    Patch patch = PatchModel::makeDefaultPatch();
+    ModuleSlot lim;
+    lim.type = "limiter";
+    lim.params["ceiling_db"] = -6.0f;
+    patch.master.fx.push_back(lim);
+    patch.master.volumeDb = 12.0f;
+    RenderOptions opt;
+    opt.tailSeconds = 0.2;
+    const auto loud = OfflineRenderer::notesToEvents({{48, 0.0, 0.5, 127}, {60, 0.0, 0.5, 127}});
+    const Stats s = analyze(OfflineRenderer::render(patch, loud, opt), 10.0);
+    REQUIRE(db(s.peak) < -5.5);
+    REQUIRE(db(s.peak) > -9.0); // boosted into the limiter, not attenuated after it
+
+    // Without a limiter slot the volume is still applied (Engine safety limiter at the output).
+    patch.master.fx.clear();
+    const auto one = OfflineRenderer::notesToEvents({{60, 0.0, 0.5, 100}});
+    patch.master.volumeDb = -20.0f;
+    const double quiet = db(analyze(OfflineRenderer::render(patch, one, opt), 10.0).rms);
+    patch.master.volumeDb = 0.0f;
+    const double unity = db(analyze(OfflineRenderer::render(patch, one, opt), 10.0).rms);
+    REQUIRE(std::fabs(unity - quiet - 20.0) < 0.5);
+
+    // Out-of-range volume is clamped with a load warning.
+    patch.master.volumeDb = 30.0f;
+    PatchModel m(defaultRegistry());
+    const auto w = m.setPatch(patch);
+    REQUIRE(m.patch().master.volumeDb == PatchModel::kMaxVolumeDb);
+    REQUIRE(std::any_of(w.begin(), w.end(), [](const std::string& x) { return x.find("clamped") != std::string::npos; }));
 }

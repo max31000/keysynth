@@ -1,11 +1,16 @@
 # Patch / preset format
 
-One patch per JSON file. `format` is bumped only for breaking changes (migrations in `engine/src/preset/Migrations.cpp`).
+One patch per JSON file. `format` is bumped only for breaking changes (migrations in `engine/src/preset/Migrations.cpp`;
+the engine always writes the current format). Format history:
+- **2** — every tempo-syncable param is one `sync` enum over the shared note-division list (ARCHITECTURE §7).
+  Format 1 → 2: `delay`/`phaser`/`flanger` `sync` ≥ 1 shift by one ("4/1" was added); `tremolo` `sync` (bool) +
+  `division` and `va` `lfoN_sync` (bool) + `lfoN_division` merge into `sync` / `lfoN_sync` (0 = off). Old
+  `division` ids are merged in any format; a file without `format` is read as the current one.
 Loading is lenient: unknown keys/params are ignored (logged), missing params take the module default.
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "meta": {
     "name": "Light My Fire Organ",
     "category": "Organ",
@@ -37,6 +42,9 @@ Field rules:
   — the drum-sequencer kit (RhythmNode, ARCHITECTURE §5.3) and the pattern loaded with the preset. A preset without
   `rhythm` keeps the current rhythm section (kit + pattern) and, without `tempo`, the current tempo, so a running
   groove survives sound changes. Written back always.
+- `master.volume_db`: −96..+12 dB, applied after the master fx but before trailing `limiter` slots (ARCHITECTURE
+  §5.3). Factory presets are normalized with it to −16 LUFS / ≤ −1 dBTP (`scripts/loudness.py`, docs/TESTING.md);
+  `zone.volume_db` has the same range. Out-of-range values are clamped with a load warning.
 - `zone.channel`: 0 = omni, 1–16 = specific channel. Keys are MIDI note numbers (C4 = 60).
 - `zone.transpose`: semitones, applied after the key-range filter (range is on the physical key).
 - `params`: plain units as defined by the module's `ParamSpec` (see engine catalog via protocol `get_catalog`,
