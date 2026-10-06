@@ -9,6 +9,8 @@
 // noise, ring mod (osc1*osc2), one-pole HPF, filter (Moog ladder / IR3109 ladder / SEM SVF), VCA, pan.
 // Analog drift: per-sub-voice slow random pitch/cutoff wander plus a static calibration offset.
 // Output: soft saturation, volume, DC blocker. Zero latency (oscillators carry a 1-sample BLEP look-ahead).
+// Zipper-free knobs: continuous mixer/filter params are one-pole smoothed per voice at control rate (snapped on
+// a fresh note); filter coefficients, gain and pulse width are additionally ramped per sample.
 
 #include "core/Module.h"
 #include "core/VoiceAllocator.h"
@@ -75,6 +77,10 @@ public:
                         DstCutoff, DstResonance, DstHpf, DstAmp, DstPan, DstLfo1Depth, DstDetune, DstFenvAmt,
                         DstCount };
 
+    // Per-voice control-rate smoothed params (targets in Shared::smTarget).
+    enum Sm : int { SmCutoff = 0, SmResonance, SmDrive, SmLevel1, SmLevel2, SmLevel3, SmPw1, SmPw2, SmPw3, SmSub,
+                    SmNoise, SmRing, SmFm, SmHpf, SmCount };
+
     struct OscShared {
         OscType type = OscType::Saw;
         float pitchOffset = 0.0f; // semitones (octave + semi + fine)
@@ -86,6 +92,13 @@ public:
         double sampleRate = 48000.0;
         float sr = 48000.0f, invSr = 1.0f / 48000.0f;
         float tickSeconds = kControlInterval / 48000.0f;
+        float smCoef = 1.0f;      // per-tick one-pole coefficient of the param smoothers
+        float driftCoef = 1.0f;   // per-tick drift wander smoothing
+        float driftTickScale = 1.0f; // drift target interval scale (sample-rate independent)
+        float smTarget[SmCount] = {};
+        float ssCurve[kNumOscs] = {}; // SuperSaw::detuneCurve(osc detune), per block
+        int typeEpoch = 0;            // bumped when an osc type changes: voices recompute control at once
+        int voiceSubs[kMaxVoices] = {}; // sub-voices in use per voice, refreshed before each event (budget)
         OscShared osc[kNumOscs];
         bool sync = false;
         float fm = 0.0f, pmEnv = 0.0f;
@@ -131,8 +144,7 @@ public:
         dsp::LadderFilter ladder;
         dsp::Svf svf;
         float inc[kNumOscs] = {};
-        float pw[kNumOscs] = {0.5f, 0.5f, 0.5f};
-        float gCur = -1.0f, gInc = 0.0f; // ladder coefficient, ramped per sample (gCur < 0: snap next tick)
+        float gCur = -1.0f, gInc = 0.0f; // filter coefficient, ramped per sample (gCur < 0: snap next tick)
         float panL = 0.7071f, panR = 0.7071f;
         // drift
         float driftStatic = 0.0f, driftCutStatic = 0.0f;
@@ -157,7 +169,13 @@ public:
         float fenvValue = 0.0f;
         float level[kNumOscs] = {}, subLevel = 0.0f, noiseLevel = 0.0f, ringLevel = 0.0f, fm = 0.0f;
         float fbK = 0.0f; // ladder feedback
-        float svfRes = 0.0f;
+        float svfK = 2.0f; // SVF damping
+        float driveGain = 1.0f, driveComp = 1.0f;
+        float pwCur[kNumOscs] = {-1.0f, -1.0f, -1.0f}, pwInc[kNumOscs] = {}; // ramped per sample
+        float sm[SmCount] = {};
+        bool smSnap = true; // next control tick copies the targets (fresh note)
+        FilterType curFilter = FilterType::Moog;
+        int typeEpoch = -1;
         float hpfG = 0.0f;
         bool hpfOn = false;
         float gainCur = 0.0f, gainInc = 0.0f; // ramped per sample over the control period

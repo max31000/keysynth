@@ -96,6 +96,9 @@ All code is testable without an audio device.
 6. Bounded cost per block.
 7. **Zero added latency**: built-in modules have `latencySamples()==0`. Master limiter is zero-lookahead (soft clip +
    fast release). Oversampling only via min-phase IIR polyphase, never linear-phase FIR.
+   Allowed exception: the 2-sample PolyBLEP/BLAMP oscillators (`dsp/BlepOsc.h`, used by `va`) output the
+   waveform one sample late (21 us at 48 kHz) so residuals can be applied on both sides of a discontinuity.
+   This is below any audible/MIDI-jitter threshold and is not reported as `latencySamples()`.
 8. **Enforcement** (`KS_RT_CHECKS`, on in Debug/tests): `RtScope` sets a thread_local flag inside
    `Engine::process`; replaced global `operator new/delete` and the `ks::Mutex` wrapper assert when it is set.
    A swap stress test does 10k random publishes during offline render.

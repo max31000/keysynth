@@ -70,13 +70,15 @@ public:
         const float y4 = v + s4_;
         s4_ = y4 + v;
 
-        // Passband makeup for the resonance bass loss (DC gain of the linear loop is 1/(1+k)).
+        // Makeup for the resonance bass loss (DC gain of the linear loop is 1/(1+k)). Only the low-frequency
+        // (y4) part loses level: HP/BP passbands are not attenuated by the feedback, so they stay uncompensated.
         const float comp = 1.0f + k * (m == Model::Transistor ? 0.35f : 0.6f);
+        const float hp = u - 4.0f * y1 + 6.0f * y2 - 4.0f * y3 + y4;
         switch (resp) {
         case Response::LowPass: return y4 * comp;
-        case Response::BandPass: return 4.0f * (y2 - 2.0f * y3 + y4) * comp;
-        case Response::HighPass: return (u - 4.0f * y1 + 6.0f * y2 - 4.0f * y3 + y4) * comp;
-        case Response::Notch: return (u - 4.0f * y1 + 6.0f * y2 - 4.0f * y3 + 2.0f * y4) * comp;
+        case Response::BandPass: return 4.0f * (y2 - 2.0f * y3 + y4);
+        case Response::HighPass: return hp;
+        case Response::Notch: return hp + y4 * comp;
         }
         return y4;
     }

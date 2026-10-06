@@ -31,21 +31,26 @@ struct Rig {
     ChannelState channel;
     std::vector<float> left, right;
     int64_t time = 0;
+    double sr = kSr;
+    int block = kBlock;
+    TransportInfo transport; // ppqPosition is advanced by run() while playing
 
-    explicit Rig(double sr = kSr) { synth.prepare(sr, kBlock); }
+    explicit Rig(double sampleRate = kSr, int blockSize = kBlock) : sr(sampleRate), block(blockSize) {
+        synth.prepare(sr, block);
+    }
     void set(const char* id, float v) { REQUIRE(synth.params().set(id, v)); }
 
     // Render `seconds`, delivering `events` (offsets relative to the start of this call, in samples).
     void run(double seconds, std::vector<MidiEvent> events = {}) {
-        const int total = static_cast<int>(seconds * kSr);
+        const int total = static_cast<int>(seconds * sr);
         std::sort(events.begin(), events.end(),
                   [](const MidiEvent& a, const MidiEvent& b) { return a.sampleOffset < b.sampleOffset; });
-        std::vector<float> l(kBlock), r(kBlock);
+        std::vector<float> l(static_cast<size_t>(block)), r(static_cast<size_t>(block));
         std::vector<MidiEvent> blockEvents;
         blockEvents.reserve(events.size());
         size_t ei = 0;
-        for (int pos = 0; pos < total; pos += kBlock) {
-            const int n = std::min(kBlock, total - pos);
+        for (int pos = 0; pos < total; pos += block) {
+            const int n = std::min(block, total - pos);
             blockEvents.clear();
             while (ei < events.size() && static_cast<int>(events[ei].sampleOffset) < pos + n) {
                 MidiEvent e = events[ei++];
@@ -59,8 +64,9 @@ struct Rig {
             std::fill(r.begin(), r.end(), 0.0f);
             AudioBlock b{l.data(), r.data(), n};
             ProcessContext ctx;
-            ctx.sampleRate = kSr;
+            ctx.sampleRate = sr;
             ctx.numSamples = n;
+            ctx.transport = transport;
             ctx.sampleTime = time;
             ctx.channel = &channel;
             {
@@ -70,6 +76,7 @@ struct Rig {
             left.insert(left.end(), l.begin(), l.begin() + n);
             right.insert(right.end(), r.begin(), r.begin() + n);
             time += n;
+            if (transport.playing) transport.ppqPosition += n / sr * transport.tempo / 60.0;
         }
     }
     void clear() {
@@ -81,8 +88,9 @@ struct Rig {
 uint32_t at(double s) { return static_cast<uint32_t>(s * kSr); }
 
 // Autocorrelation pitch estimate (normalised, first strong peak, parabolic interpolation).
-double pitchOf(const std::vector<float>& x, size_t a, size_t b, double minHz = 40.0, double maxHz = 3000.0) {
-    const int minLag = static_cast<int>(kSr / maxHz), maxLag = static_cast<int>(kSr / minHz);
+double pitchOf(const std::vector<float>& x, size_t a, size_t b, double minHz = 40.0, double maxHz = 3000.0,
+               double fs = kSr) {
+    const int minLag = static_cast<int>(fs / maxHz), maxLag = static_cast<int>(fs / minHz);
     const size_t n = b - a - static_cast<size_t>(maxLag);
     std::vector<double> r(static_cast<size_t>(maxLag + 2), 0.0);
     double r0 = 0.0;
@@ -100,7 +108,7 @@ double pitchOf(const std::vector<float>& x, size_t a, size_t b, double minHz = 4
             const double y0 = r[static_cast<size_t>(lag - 1)], y2 = r[static_cast<size_t>(lag + 1)];
             const double den = y0 - 2.0 * c + y2;
             const double off = std::fabs(den) > 1e-12 ? 0.5 * (y0 - y2) / den : 0.0;
-            return kSr / (lag + off);
+            return fs / (lag + off);
         }
     }
     return 0.0;
@@ -252,20 +260,65 @@ TEST_CASE("LadderFilter: self-oscillation is stable and at the cutoff", "[dsp][v
 
 TEST_CASE("LadderFilter: stable for extreme inputs and coefficients", "[dsp][va]") {
     dsp::LadderFilter f;
-    for (float fc : {5.0f, 1000.0f, 21000.0f})
-        for (float r : {0.0f, 0.5f, 1.0f})
-            for (int resp = 0; resp < 4; ++resp) {
-                f.reset();
-                const float g = dsp::LadderFilter::coefG(fc, 48000.0f);
-                for (int i = 0; i < 4800; ++i) {
-                    const float x = (i % 50 < 25) ? 10.0f : -10.0f;
-                    const float v = f.process(x, g, dsp::LadderFilter::feedbackFor(r, dsp::LadderFilter::Model::Transistor),
-                                              dsp::LadderFilter::Model::Transistor,
-                                              static_cast<dsp::LadderFilter::Response>(resp));
-                    REQUIRE(std::isfinite(v));
-                    REQUIRE(std::fabs(v) < 200.0f);
-                }
+    for (auto m : {dsp::LadderFilter::Model::Transistor, dsp::LadderFilter::Model::Ota})
+        for (float fs : {44100.0f, 48000.0f, 96000.0f})
+            for (float fc : {5.0f, 1000.0f, 21000.0f, 0.49f * fs})
+                for (float r : {0.0f, 0.5f, 1.0f})
+                    for (int resp = 0; resp < 4; ++resp) {
+                        f.reset();
+                        const float g = dsp::LadderFilter::coefG(fc, fs);
+                        bool ok = true;
+                        float peak = 0.0f;
+                        for (int i = 0; i < 4800; ++i) {
+                            const float x = (i % 50 < 25) ? 10.0f : -10.0f;
+                            const float v = f.process(x, g, dsp::LadderFilter::feedbackFor(r, m), m,
+                                                      static_cast<dsp::LadderFilter::Response>(resp));
+                            ok = ok && std::isfinite(v);
+                            peak = std::max(peak, std::fabs(v));
+                        }
+                        INFO("model " << static_cast<int>(m) << " fs " << fs << " fc " << fc << " r " << r
+                                      << " resp " << resp << " peak " << peak);
+                        REQUIRE(ok);
+                        REQUIRE(peak < 200.0f);
+                    }
+}
+
+TEST_CASE("LadderFilter: resonance makeup only on the low-pass part", "[dsp][va]") {
+    // HP passband (well above the cutoff) must stay near unity at high resonance.
+    for (auto m : {dsp::LadderFilter::Model::Transistor, dsp::LadderFilter::Model::Ota}) {
+        dsp::LadderFilter f;
+        const float g = dsp::LadderFilter::coefG(200.0f, 48000.0f);
+        const float k = dsp::LadderFilter::feedbackFor(0.7f, m);
+        double in = 0.0, out = 0.0;
+        for (int i = 0; i < 48000; ++i) {
+            const float x = 0.1f * std::sin(2.0f * 3.14159265f * 8000.0f * static_cast<float>(i) / 48000.0f);
+            const float y = f.process(x, g, k, m, dsp::LadderFilter::Response::HighPass);
+            if (i >= 4800) {
+                in += static_cast<double>(x) * x;
+                out += static_cast<double>(y) * y;
             }
+        }
+        const double db = 10.0 * std::log10(out / in);
+        INFO("model " << static_cast<int>(m) << " HP passband " << db << " dB");
+        REQUIRE(std::fabs(db) < 1.5);
+    }
+}
+
+TEST_CASE("BlepOsc: pulse-width edges crossed by PW changes are band-limited", "[dsp][va]") {
+    // Low pitch, PW stepping back and forth across the phase every 16 samples (stepped PWM). A missed edge
+    // shows as a naive full-height (2.0) jump between two samples; a BLEP-corrected edge is split (<= 1.5).
+    dsp::BlepOsc o;
+    const float inc = 50.0f / 48000.0f;
+    float prev = o.tick(dsp::OscWave::Pulse, inc, 0.5f);
+    float maxStep = 0.0f;
+    for (int i = 1; i < 48000; ++i) {
+        const float pw = ((i / 16) & 1) ? 0.47f : 0.53f;
+        const float y = o.tick(dsp::OscWave::Pulse, inc, pw);
+        maxStep = std::max(maxStep, std::fabs(y - prev));
+        prev = y;
+    }
+    INFO("max sample step " << maxStep);
+    REQUIRE(maxStep < 1.65f); // 1.5 BLEP split + 0.12 DC-compensation step
 }
 
 TEST_CASE("AnalogEnv: exponential stages, timing, retrigger from current level", "[dsp][va]") {
@@ -575,4 +628,123 @@ TEST_CASE("VA: tempo-synced LFO follows the transport", "[va]") {
     }
     REQUIRE(edges >= 3);
     REQUIRE(edges <= 5); // ~2 Hz over 1.9 s
+
+    // Playing transport at 150 BPM, starting half a beat in: the LFO phase is locked to the song position
+    // (square high half = tremolo silent, low half = loud), so the first 0.2 s are loud, the next 0.2 s silent.
+    Rig t;
+    cleanOsc(t);
+    t.set("osc1_wave", 3.0f);
+    t.set("lfo1_wave", 4.0f);
+    t.set("lfo1_sync", 1.0f);
+    t.set("lfo1_division", 8.0f);
+    t.set("lfo1_amp", 1.0f);
+    t.transport.playing = true;
+    t.transport.tempo = 150.0;
+    t.transport.ppqPosition = 0.5;
+    t.run(1.0, {MidiEvent::noteOn(69, 100)});
+    REQUIRE(stats(t.left, at(0.05), at(0.15)).rms > 0.05);
+    REQUIRE(stats(t.left, at(0.25), at(0.35)).rms < 0.01);
+    REQUIRE(stats(t.left, at(0.45), at(0.55)).rms > 0.05);
+    REQUIRE(stats(t.left, at(0.65), at(0.75)).rms < 0.01);
+}
+
+TEST_CASE("VA: filter tuning is sample-rate independent (44.1 / 48 / 96 kHz)", "[va]") {
+    for (double fs : {44100.0, 48000.0, 96000.0})
+        for (int model = 0; model < 3; ++model) {
+            Rig r(fs);
+            r.set("filter_model", static_cast<float>(model));
+            r.set("osc1_level", 0.0f);
+            r.set("noise_level", model == 2 ? 1.0f : 0.02f); // SEM rings (Q ~ 12), ladders self-oscillate
+            r.set("resonance", 1.0f);
+            r.set("cutoff", 1000.0f);
+            r.set("key_track", 0.0f);
+            r.set("drift", 0.0f);
+            r.run(1.5, {MidiEvent::noteOn(60, 100)});
+            const auto a = static_cast<size_t>(0.8 * fs), b = static_cast<size_t>(1.4 * fs);
+            const Stats s = stats(r.left, a, b);
+            const double hz = pitchOf(r.left, a, b, 200.0, 3000.0, fs);
+            INFO("fs " << fs << " model " << model << " -> " << hz << " Hz, rms " << s.rms);
+            REQUIRE(s.finite);
+            REQUIRE(s.rms > 0.005);
+            REQUIRE(std::fabs(cents(hz, 1000.0)) < 100.0);
+        }
+}
+
+TEST_CASE("VA: output is independent of the block size", "[va]") {
+    auto render = [](int block) {
+        Rig r(kSr, block);
+        r.set("osc1_wave", 1.0f);
+        r.set("osc1_pwm", 0.6f);
+        r.set("osc2_level", 0.7f);
+        r.set("osc2_wave", 4.0f); // supersaw
+        r.set("osc2_fine", 7.0f);
+        r.set("unison", 3.0f);
+        r.set("filter_env_amt", 3.0f);
+        r.set("resonance", 0.6f);
+        r.set("lfo1_rate", 6.0f);
+        r.set("lfo1_pitch", 0.3f);
+        r.set("lfo2_key_sync", 1.0f);
+        r.set("mod1_src", 2.0f); // LFO2 -> cutoff
+        r.set("mod1_dst", 14.0f);
+        r.set("mod1_amt", 0.2f);
+        r.set("glide", 0.05f);
+        r.run(0.6, {MidiEvent::noteOn(48, 100, 1, 3), MidiEvent::noteOn(55, 80, 1, 1001),
+                    MidiEvent::noteOn(64, 90, 1, 5333), MidiEvent::noteOff(48, 0, 1, 12007),
+                    MidiEvent::noteOn(67, 70, 1, 12007), MidiEvent::noteOff(55, 0, 1, 20011)});
+        return r.left;
+    };
+    const auto a = render(64), b = render(7);
+    REQUIRE(a.size() == b.size());
+    float maxDiff = 0.0f, peak = 0.0f;
+    for (size_t i = 0; i < a.size(); ++i) {
+        maxDiff = std::max(maxDiff, std::fabs(a[i] - b[i]));
+        peak = std::max(peak, std::fabs(a[i]));
+    }
+    INFO("max diff " << maxDiff << " peak " << peak);
+    REQUIRE(peak > 0.05f);
+    REQUIRE(maxDiff < 1e-4f);
+}
+
+TEST_CASE("VA: unison raised while notes are held stays within the sub-voice budget", "[va]") {
+    Rig r;
+    r.set("amp_release", 2.0f);
+    std::vector<MidiEvent> ev;
+    for (int n = 0; n < 16; ++n) ev.push_back(MidiEvent::noteOn(48 + n, 100, 1, static_cast<uint32_t>(n * 10)));
+    r.run(0.1, ev);
+    REQUIRE(r.synth.activeSubVoices() == 16);
+    r.set("unison", 8.0f);
+    // Re-strike every held note: the allocator reuses each note's voice, also those above the new cap.
+    r.run(0.1, ev);
+    INFO(r.synth.activeSubVoices() << " sub-voices");
+    REQUIRE(r.synth.activeSubVoices() <= VaSynth::kSubVoiceBudget);
+}
+
+TEST_CASE("VA: pan spread keeps a mono part centred", "[va]") {
+    Rig r;
+    cleanOsc(r);
+    r.set("voice_mode", 1.0f);
+    r.set("pan_spread", 1.0f);
+    r.set("unison_spread", 0.0f);
+    r.run(0.4, {MidiEvent::noteOn(60, 100)});
+    const double l = stats(r.left, at(0.1)).rms, rr = stats(r.right, at(0.1)).rms;
+    REQUIRE(l > 0.01);
+    REQUIRE(std::fabs(20.0 * std::log10(l / rr)) < 0.1);
+}
+
+TEST_CASE("VA: tremolo gain never inverts with LFO1 depth modulation", "[va]") {
+    // LFO1 square, depth doubled by the mod matrix (velocity 127 -> LFO1 Depth +1): without the clamp the
+    // tremolo gain would reach -0.5 (loud, inverted) on the LFO's high half instead of silence.
+    Rig r;
+    cleanOsc(r);
+    r.set("osc1_wave", 3.0f);
+    r.set("lfo1_wave", 4.0f);
+    r.set("lfo1_rate", 2.0f);
+    r.set("lfo1_key_sync", 1.0f);
+    r.set("lfo1_amp", 1.0f);
+    r.set("mod1_src", 5.0f);  // Velocity
+    r.set("mod1_dst", 19.0f); // LFO1 Depth
+    r.set("mod1_amt", 1.0f);
+    r.run(0.3, {MidiEvent::noteOn(69, 127)});
+    // Key-synced square starts high (silent half) for 0.25 s.
+    REQUIRE(stats(r.left, at(0.05), at(0.2)).rms < 1e-3);
 }
