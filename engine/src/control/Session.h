@@ -8,6 +8,7 @@
 #include "core/ModuleRegistry.h"
 #include "core/PatchModel.h"
 #include "preset/PresetStore.h"
+#include "transport/Pattern.h"
 
 #include <nlohmann/json.hpp>
 
@@ -53,6 +54,29 @@ public:
 
     const std::string& presetPath() const noexcept { return presetPath_; }
 
+    // --- rhythm (drum sequencer, ARCHITECTURE §8). Throw PatchError on bad input. ---
+    struct PatternInfo {
+        std::string path, name;
+        int numerator = 4, denominator = 4, bars = 1;
+        double tempo = 0.0;
+        bool factory = false;
+    };
+    std::vector<PatternInfo> listPatterns() const;
+    // Load a pattern file and make it current. applyMeta: also apply its tempo and kit (not when it comes with a
+    // preset, which defines those itself). "" = empty pattern. Returns warnings.
+    std::vector<std::string> loadPattern(const std::string& path, bool applyMeta = true);
+    Pattern readPatternFile(const std::string& path, std::vector<std::string>* warnings = nullptr) const;
+    // Replace the current pattern (UI step edits). Meter/swing of the pattern become the transport's.
+    void setPattern(Pattern p);
+    std::string savePattern(const std::string& name, bool overwrite);
+    void setTimeSignature(int num, int den);
+    void setSwing(float swing);
+    const Pattern& pattern() const noexcept { return pattern_; }
+    const std::string& patternPath() const noexcept { return patternPath_; }
+    bool patternEdited() const noexcept { return patternEdited_; }
+    nlohmann::json patternJson() const; // { path, edited, pattern }
+    static Pattern emptyPattern();
+
     // Snapshots for the protocol.
     nlohmann::json stateJson() const;
     nlohmann::json transportJson() const;
@@ -61,9 +85,11 @@ public:
     nlohmann::json pollTelemetry();
     // Drains note activity; returns a `midi` event or null when nothing happened.
     nlohmann::json pollMidi();
+    nlohmann::json transportTelemetry() const; // { ppq, playing, step, bar }
 
 private:
     void logWarnings(const std::vector<std::string>& w);
+    void publishPattern();
 
     Engine& engine_;
     const ModuleRegistry& registry_;
@@ -73,6 +99,9 @@ private:
     AudioControl* audio_ = nullptr;
     MidiControl* midi_ = nullptr;
     std::string presetPath_;
+    Pattern pattern_;
+    std::string patternPath_;
+    bool patternEdited_ = false;
 };
 
 } // namespace ks

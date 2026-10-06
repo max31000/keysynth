@@ -185,6 +185,11 @@ Patch (data)                              RackGraph (live, audio thread)
   across swaps and are applied once to the mixed output of both graphs during a transition.
 - The Engine's maxBlock = device buffer size (offline: `--block`); larger callbacks are split.
 - `Transport` (tempo, play state, position) lives in the Engine, outside the graph.
+- **RhythmNode** = a `drums` ModuleNode (stable `nodeId` from `patch.rhythm.node`, addressable by `set_param`, reused
+  across rebuilds like any module, render-once shared in transitions). The Engine's DrumSequencer generates its
+  note events per block (`RenderArgs.rhythmEvents`, sample offsets inside the block); the graph renders it into its
+  own buffer, applies the per-block `drums_volume` gain ramp and sums it with the layers *before* master FX. During
+  a transition the old graph's RhythmNode gets no sequencer events (only the AllNotesOff).
 
 ### 5.4 Structural changes (GraphBuilder + GraphSwapper)
 
@@ -240,7 +245,7 @@ Patch (data)                              RackGraph (live, audio thread)
 | `combo` | Transistor combo organ: Vox Continental / Farfisa voicings, footages, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Physical-ish EP: Rhodes (tine/tonebar modal + pickup, bark), Wurlitzer (reed + preamp), Piano Bass mode | Riders on the Storm, Money/Breathe |
 | `sampler` | SFZ via sfizz (isolated target) | Grand piano, Mellotron, choir, orchestra |
-| `drums` | Synth kit (808/909/Linn-style voices), keys-playable; used by DrumSequencer | 80s beats |
+| `drums` | Synth kit, 13 voices (kick, snare, clap, closed/open hat w/ choke, crash, ride, 3 toms, rim, cowbell, tambourine), each with model 808/909/Linn/Industrial (`kit` default or per-voice `<v>_model`) + level/tune/decay/tone/pan; GM key map, other octaves fold onto 36–47; keys-playable; used by the RhythmNode | 80s beats, Rammstein stomp |
 
 Effects v1: `chorus` (Juno BBD I/II), `ensemble` (string-machine 3-phase), `phaser`, `flanger`, `delay`
 (stereo/ping-pong/tape, tempo sync), `reverb` (FDN hall/plate/room + gated), `drive` (IIR-oversampled),
@@ -249,9 +254,19 @@ safety, fixed).
 
 ## 8. Transport
 
-Engine-owned: tempo, time signature, play/stop, ppq position.
-- `Metronome`: synthesized click, downbeat accent, volume; mixed after master FX, before limiter.
-- `DrumSequencer`: 16-step × N tracks, patterns in `presets/patterns/*.json`, drives the RhythmNode's `drums`.
+Engine-owned: tempo, time signature, play/stop, ppq position, count-in, swing, drums on/volume (atomics written by
+the control thread, read once per block).
+- `Transport`: position = anchor ppq + samples since anchor × tempo (re-anchored on tempo change), so step times do not
+  drift with block size.
+- `Metronome`: synthesized click on every denominator beat, downbeat accent, volume; forced on during the count-in
+  bar; mixed after master FX, before limiter.
+- `DrumSequencer`: up to 16 tracks × 256 steps (`bars × num × steps_per_beat`), per-step velocity, accent row, track
+  mute, swing; patterns in `presets/patterns/*.json` (schema PRESETS.md). Control → audio via a preallocated
+  **triple buffer** of fixed-size `RtPattern` PODs (no allocation, no locks; the audio thread picks the newest at block
+  start, so a pattern swap while playing is seamless and keeps the position modulo the new length; a different step
+  length re-anchors at the next step). Step k fires at the first sample ≥ its exact ppq time (ε = 1e-4 samples),
+  computed per block from the block-start ppq — sample-accurate for any block size. Note-ons only (drum voices are
+  one-shots), channel 10.
 - `Looper`: later (not v1).
 
 ## 9. Presets

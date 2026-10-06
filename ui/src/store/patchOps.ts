@@ -4,9 +4,17 @@ import { MASTER_NODE, type FxSlot, type Layer, type ModuleSlot, type NodeId, typ
 
 export interface ModuleLocation {
   slot: ModuleSlot;
-  /** owning layer (undefined = master chain) */
+  /** owning layer (undefined = master chain or rhythm) */
   layer?: Layer;
-  kind: 'instrument' | 'fx';
+  /** `rhythm` = the drum-sequencer kit (patch.rhythm) */
+  kind: 'instrument' | 'fx' | 'rhythm';
+}
+
+/** The RhythmNode's kit as a module slot (type `drums`, params = `rhythm.kit`). */
+export function rhythmSlot(patch: Patch | null): ModuleSlot | null {
+  const r = patch?.rhythm;
+  if (!r || r.node === undefined) return null;
+  return { node: r.node, type: 'drums', params: r.kit ?? {} };
 }
 
 export function findModule(patch: Patch | null, node: NodeId): ModuleLocation | null {
@@ -17,7 +25,9 @@ export function findModule(patch: Patch | null, node: NodeId): ModuleLocation | 
     if (fx) return { slot: fx, layer, kind: 'fx' };
   }
   const mfx = patch.master.fx.find((f) => f.node === node);
-  return mfx ? { slot: mfx, kind: 'fx' } : null;
+  if (mfx) return { slot: mfx, kind: 'fx' };
+  const rs = rhythmSlot(patch);
+  return rs && rs.node === node ? { slot: rs, kind: 'rhythm' } : null;
 }
 
 export function findLayer(patch: Patch | null, node: NodeId): Layer | null {
@@ -43,8 +53,22 @@ function mapSlot(patch: Patch, node: NodeId, f: <S extends ModuleSlot>(s: S) => 
   });
   const mfx = mapFx(patch.master.fx, node, f);
   if (mfx !== patch.master.fx) changed = true;
+  let rhythm = patch.rhythm;
+  const rs = !changed ? rhythmSlot(patch) : null;
+  if (rs && rs.node === node) {
+    const ns = f(rs);
+    if (ns !== rs) {
+      rhythm = { ...patch.rhythm, kit: ns.params };
+      changed = true;
+    }
+  }
   if (!changed) return patch;
-  return { ...patch, layers, master: mfx === patch.master.fx ? patch.master : { ...patch.master, fx: mfx } };
+  return {
+    ...patch,
+    layers,
+    master: mfx === patch.master.fx ? patch.master : { ...patch.master, fx: mfx },
+    ...(rhythm ? { rhythm } : {}),
+  };
 }
 
 /** Set a param value. Node 0 + `volume_db` addresses the master volume. Unknown node → unchanged. */

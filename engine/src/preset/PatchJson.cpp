@@ -211,7 +211,18 @@ Patch patchFromJson(const json& in, std::vector<std::string>* w) {
         if (auto fx = it->find("fx"); fx != it->end()) p.master.fx = fxFromJson(*fx, w, "master.fx");
         unknownKeys(*it, {"volume_db", "fx", "node"}, w, "master");
     }
-    if (auto it = j.find("rhythm"); it != j.end() && it->is_object()) p.rhythm = *it;
+    p.hasTempo = j.contains("tempo") && j["tempo"].is_number();
+    if (auto it = j.find("rhythm"); it != j.end() && it->is_object()) {
+        const json& r = *it;
+        p.hasRhythm = true;
+        p.rhythm.drums.node = readNode(r);
+        if (auto k = r.find("kit"); k != r.end() && k->is_object()) {
+            json slot = {{"type", "drums"}, {"params", *k}};
+            p.rhythm.drums.params = slotFromJson(slot, w, "rhythm.kit").params;
+        }
+        readStr(r, "pattern", p.rhythm.pattern, w, "rhythm");
+        unknownKeys(r, {"node", "kit", "pattern"}, w, "rhythm");
+    }
     unknownKeys(j, {"format", "meta", "tempo", "layers", "master", "rhythm"}, w, "patch");
     return p;
 }
@@ -239,7 +250,9 @@ json patchToJson(const Patch& p) {
               {"tempo", p.tempo},
               {"layers", layers},
               {"master", {{"volume_db", p.master.volumeDb}, {"fx", mfx}}}};
-    if (p.rhythm.is_object()) j["rhythm"] = p.rhythm;
+    json kit = json::object();
+    for (const auto& [k, v] : p.rhythm.drums.params) kit[k] = v;
+    j["rhythm"] = {{"node", p.rhythm.drums.node}, {"kit", kit}, {"pattern", p.rhythm.pattern}};
     return j;
 }
 

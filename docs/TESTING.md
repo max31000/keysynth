@@ -27,7 +27,7 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport]`. Run the full tier before merging anything that touches DSP or presets.
+[transport] [sequencer] [drums]`. Run the full tier before merging anything that touches DSP or presets.
 
 Render suite (`engine/tests/test_render.cpp`): every `presets/factory/**` preset renders the standard pattern
 (`OfflineRenderer::standardTestEvents()`: C-major chord, scale with rising velocity, low/high extremes, sustain-pedal
@@ -42,7 +42,12 @@ build/bin/Release/ks-render.exe --preset presets/factory/synth-lead/basic-saw-le
 build/bin/Release/ks-render.exe --preset presets/factory/splits-layers/basic-bass-lead-split.json --test-pattern --out renders/split.wav
 build/bin/Release/ks-render.exe --patch-json '@my_patch.json' --midi song.mid --sr 96000 --block 32 --out renders/song.wav
 build/bin/Release/ks-render.exe --list-modules          # catalog JSON (ModuleInfo[])
+build/bin/Release/ks-render.exe --play-pattern presets/patterns/money-7-4.json --bars 2 --tail 1.5 --out renders/money.wav
 ```
+
+`--play-pattern FILE --bars N [--tempo BPM]` plays a drum pattern through the patch's rhythm kit (pattern tempo, kit,
+swing and meter applied; transport stops exactly after N bars, then `--tail`). Combine with `--notes`/`--midi` to
+layer played notes on top.
 
 `--notes "NOTE:start:dur[:vel],..."` — note name (`C4` = 60, `F#3`, `Bb2`) or number, times in seconds, velocity
 1–127 (default 100). Without `--notes/--midi/--test-pattern` a single C4 is rendered; without `--preset/--patch-json`

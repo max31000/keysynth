@@ -79,6 +79,34 @@ describe('mock engine round trip', () => {
     expect(store.getState().presets.some((p) => p.path === path && !p.factory)).toBe(true);
   });
 
+  it('rhythm: patterns listed, load applies meter/tempo, step edits reach the engine, playhead streams', async () => {
+    await until(() => store.getState().patterns.length >= 10 && !!store.getState().pattern);
+    const money = store.getState().patterns.find((p) => p.path.endsWith('money-7-4.json'))!;
+    store.getState().loadPattern(money.path);
+    await until(() => store.getState().pattern?.path === money.path);
+    expect(store.getState().pattern!.pattern.time_sig).toEqual([7, 4]);
+    expect(store.getState().transport.tempo).toBe(123);
+    store.getState().editPattern((p) => {
+      const tracks = p.tracks.map((t, i) => (i === 0 ? { ...t, steps: t.steps.map((v, s) => (s === 1 ? 99 : v)) } : t));
+      return { ...p, tracks };
+    });
+    await new Promise((r) => setTimeout(r, 30)); // let the coalesced set_pattern flush
+    const got = await client.request({ type: 'get_pattern' }, { expect: 'get_pattern_ok' });
+    expect(got.pattern.tracks[0]!.steps[1]).toBe(99);
+    expect(got.edited).toBe(true);
+    // kit param on the rhythm node
+    const kit = store.getState().patch!.rhythm!.node!;
+    store.getState().setParam(kit, 'kick_tune', 3);
+    await until(() => engine.patch.rhythm?.kit?.kick_tune === 3);
+    // play → telemetry carries a step
+    store.getState().setTransport({ playing: true });
+    let step = -1;
+    const off = client.on('telemetry', (t) => (step = t.transport?.step ?? -1));
+    await until(() => step >= 0);
+    off();
+    store.getState().setTransport({ playing: false });
+  });
+
   it('streams telemetry and midi', async () => {
     let midi = 0;
     let tele = 0;

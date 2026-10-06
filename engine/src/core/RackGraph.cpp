@@ -163,6 +163,9 @@ void RackGraph::finalize() {
         l->gainR.snap(g * (z.pan >= 0.0f ? 1.0f : 1.0f + z.pan));
     }
     for (auto& f : masterFx) moduleIndex_[f->node] = f.get();
+    if (rhythm.drums.node != 0) moduleIndex_[rhythm.drums.node] = &rhythm.drums;
+    rhythm.bufL.assign(static_cast<size_t>(maxBlock_), 0.0f);
+    rhythm.bufR.assign(static_cast<size_t>(maxBlock_), 0.0f);
 }
 
 ModuleNode* RackGraph::findModuleNode(NodeId node) const {
@@ -187,9 +190,7 @@ std::vector<ModuleNode*> RackGraph::allModuleNodes() const {
         for (auto& f : l->fx) out.push_back(f.get());
     }
     for (auto& f : masterFx) out.push_back(f.get());
-    if (rhythm.drums) {
-        // placeholder: not addressable yet
-    }
+    out.push_back(const_cast<ModuleNode*>(&rhythm.drums));
     return out;
 }
 
@@ -202,6 +203,7 @@ int RackGraph::maxTailSamples() const noexcept {
     }
     for (auto& f : masterFx)
         if (f->module) t = std::max(t, f->module->tailSamples());
+    if (rhythm.drums.module) t = std::max(t, rhythm.drums.module->tailSamples());
     return t;
 }
 
@@ -209,6 +211,7 @@ int RackGraph::activeVoices() const noexcept {
     int v = 0;
     for (auto& l : layers)
         if (l->instrument.module) v += l->instrument.module->activeVoices();
+    if (rhythm.drums.module) v += rhythm.drums.module->activeVoices();
     return v;
 }
 
@@ -218,6 +221,7 @@ void RackGraph::clearCacheSlots() noexcept {
         for (auto& f : l->fx) f->cacheSlot = -1;
     }
     for (auto& f : masterFx) f->cacheSlot = -1;
+    rhythm.drums.cacheSlot = -1;
 }
 
 void RackGraph::processNode(ModuleNode& n, AudioBlock& block, MidiEventSpan events, const ProcessContext& ctx,
@@ -280,11 +284,29 @@ void RackGraph::render(const AudioBlock& out, MidiEventSpan events, const Render
         l.meterR.store(pr, std::memory_order_relaxed);
     }
 
-    AudioBlock mb{out.left, out.right, n};
     ChannelState omni = args.channels ? args.channels[0] : kDefaultState;
     ProcessContext mctx = args.ctx;
     mctx.numSamples = n;
     mctx.channel = &omni;
+
+    // Rhythm node (drum sequencer), before master FX.
+    if (rhythm.drums.module && rhythm.drums.module->info().kind == ModuleKind::Instrument &&
+        static_cast<int>(rhythm.bufL.size()) >= n) {
+        AudioBlock rb{rhythm.bufL.data(), rhythm.bufR.data(), n};
+        rb.clear();
+        processNode(rhythm.drums, rb, args.rhythmEvents, mctx, args);
+        const float g1 = std::clamp(args.rhythmGain, 0.0f, 2.0f);
+        const float g0 = rhythm.lastGain < 0.0f ? g1 : rhythm.lastGain;
+        const float step = n > 0 ? (g1 - g0) / static_cast<float>(n) : 0.0f;
+        for (int i = 0; i < n; ++i) {
+            const float g = g0 + step * static_cast<float>(i + 1);
+            out.left[i] += rb.left[i] * g;
+            out.right[i] += rb.right[i] * g;
+        }
+        rhythm.lastGain = g1;
+    }
+
+    AudioBlock mb{out.left, out.right, n};
     for (auto& f : masterFx) {
         if (f->bypass.load(std::memory_order_relaxed)) continue;
         if (f->module && f->module->info().kind != ModuleKind::Effect) continue;

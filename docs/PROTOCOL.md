@@ -30,7 +30,11 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `rescan_midi` | — | `devices` |
 | `note` | `{ on: bool, note, velocity, channel? }` (virtual keyboard) | none |
 | `cc` | `{ cc, value, channel? }` | none |
-| `transport` | `{ playing?, tempo?, metronome?, metronome_volume?, pattern?, drums? }` | none |
+| `transport` | `{ playing?, tempo?, metronome?, metronome_volume?, pattern?, drums?, drums_volume?, swing?, time_sig?, count_in? }` (see *Rhythm*) | none (`error` on a bad pattern path) |
+| `list_patterns` | — | `list_patterns_ok { patterns: { path, name, time_sig, bars, tempo, factory }[] }` |
+| `get_pattern` | `{ path? }` (default: the current pattern) | `get_pattern_ok { path, edited, pattern: Pattern }` |
+| `set_pattern` | `{ pattern: Pattern }` (replaces the current pattern; live, sample-accurate swap) | `set_pattern_ok`; others get a `pattern` event |
+| `save_pattern` | `{ name, overwrite? }` (current pattern → `userdata/patterns/<slug>.json`) | `save_pattern_ok { path }`, then `state` to all |
 | `list_devices` | — | `devices` |
 | `set_audio_device` | `{ device_type, name, sample_rate?, buffer_size? }` | `devices` |
 | `panic` | — | none (all notes off, reset tails) |
@@ -43,6 +47,7 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `param` | `{ node, param, value }` — another client changed a param |
 | `telemetry` | `{ cpu, xruns, voices, meters: { master:[l,r], layers:{ "<node>":[l,r] } }, readouts: { "<node>": { param: value } } }` ≤30 Hz, peaks in dBFS |
 | `midi` | `{ notes: [ {note, on, velocity} ] }` batched ≤30 Hz, for keyboard highlighting |
+| `pattern` | `{ path, edited, pattern: Pattern }` — another client changed the current pattern (`set_pattern`) |
 | `devices` | `{ types: string[], current: AudioStatus, available: { type, names[], sampleRates: number[], bufferSizes: number[] }[], midiInputs: string[] }` |
 | `log` | `{ level, message }` |
 
@@ -57,7 +62,10 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
   `ParamSpec = { id, name, group, unit, min, max, def, scale: "linear"|"log"|"int"|"enum"|"bool", skewCentre,
   flags (bitmask: 1 ReadOnly, 2 Hidden, 4 NonAutomatable), choices: string[] }`.
   `uiHints = { groupOrder?: string[], front?: string[], controls?: { <param>: "knob"|"slider"|"drawbar" } }`.
-- `state.transport` has the same keys as the `transport` request (all present). `telemetry.cpu` is 0..1.
+- `state.transport` has the same keys as the `transport` request (all present) plus `pattern_edited` (bool).
+  `telemetry.cpu` is 0..1.
+- `telemetry.transport = { ppq, playing, step, bar }`: `step` = index of the last played step of the current pattern
+  (-1 while stopped / counting in), `bar` = 0-based bar of the pattern.
 - Master volume is the param `volume_db` on node `0` (`set_param { node: 0, param: "volume_db" }`).
 - `devices.available[].sampleRates` / `bufferSizes`: supported values of the currently *open* device when it belongs
   to that type; empty arrays for other types (unknown until selected — probing would require loading drivers, and
@@ -66,3 +74,28 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
   `midi` events like hardware notes. `transport` changes are echoed to other clients as a `state` snapshot.
 - WebSocket handshakes without an `Origin` header (non-browser clients: scripts, tests) are accepted; browser
   origins must be `http://localhost|127.0.0.1` on the WS port, the static UI port (7340) or 5173.
+
+### Rhythm (transport, drum sequencer)
+`transport` fields (all optional; omitted = unchanged):
+
+| field | type | meaning |
+|---|---|---|
+| `playing` | bool | start (position → 0, optional count-in) / stop |
+| `tempo` | number 20..400 | BPM (also stored as the patch `tempo`) |
+| `metronome`, `metronome_volume` | bool, 0..1 | click on every beat (denominator note), accented downbeat |
+| `pattern` | string | path of a pattern JSON (`presets/patterns/…`, `userdata/patterns/…`); loading applies the pattern's `tempo`, `time_sig`, `swing` and `kit` when present and stores the path in the patch `rhythm.pattern`. `""` = empty pattern |
+| `drums` | bool | sequencer output on/off (position keeps running) |
+| `drums_volume` | 0..1 | linear gain of the rhythm node |
+| `swing` | 0..1 | delay of every 2nd step by `swing × ½ step` (0.33 ≈ triplet shuffle) |
+| `time_sig` | `[num, den]` num 1..16, den 2/4/8/16 | transport meter; the current pattern is resized to it (steps kept by index) |
+| `count_in` | bool | when starting: one bar of metronome before the pattern |
+
+If the request has `pattern` or `time_sig` the new `state` goes to *all* clients (the pattern can change tempo, kit…),
+otherwise to the others only. The drum kit of the sequencer is the `drums` module at node `patch.rhythm.node`
+(params via `set_param`; `kit` param selects 808/909/Linn/Industrial voice models).
+
+`Pattern` (same as the file format, see PRESETS.md *Patterns*; the engine always sends steps as number arrays):
+`{ format: 1, name, description, tempo?, time_sig: [num, den], steps_per_beat, bars, swing, accent_amount,
+kit?, tracks: { name, note, mute, steps: number[] /* 0 = off, 1..127 velocity */ }[], accent: number[] /* 0|1 */ }`.
+`set_pattern` validates and clamps (≤ 16 tracks, steps = bars × num × steps_per_beat ≤ 256; shorter arrays are padded).
+

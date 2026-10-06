@@ -4,12 +4,14 @@
 #include "effects/gain/GainFx.h"
 #include "effects/limiter/LimiterFx.h"
 #include "instruments/basic/BasicSynth.h"
+#include "instruments/drums/DrumKit.h"
 
 namespace ks {
 
 void registerBuiltinModules(ModuleRegistry& r) {
     // Instruments
     r.add<BasicSynth>();
+    r.add<DrumKit>();
     // Effects
     r.add<GainFx>();
     r.add<LimiterFx>();

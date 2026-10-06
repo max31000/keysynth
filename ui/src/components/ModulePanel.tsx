@@ -41,9 +41,13 @@ const ParamCell = memo(function ParamCell({
   );
 });
 
-/** Auto-generated panel for the selected module, built from its ParamSpec list. */
-export function ModulePanel() {
-  const node = useEngine((s) => s.selectedModule);
+/**
+ * Auto-generated panel built from the module's ParamSpec list: the selected module, or `node` when given
+ * (the Rhythm panel shows the drum-sequencer kit this way).
+ */
+export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) {
+  const selected = useEngine((s) => s.selectedModule);
+  const node = fixedNode !== undefined ? fixedNode : selected;
   const type = useEngine((s) => (node === null ? undefined : findModule(s.patch, node)?.slot.type));
   const kind = useEngine((s) => (node === null ? undefined : findModule(s.patch, node)?.kind));
   const layerName = useEngine((s) => (node === null ? undefined : findModule(s.patch, node)?.layer?.name));
@@ -62,10 +66,12 @@ export function ModulePanel() {
   return (
     <section className="module panel" aria-label={`${info.name} parameters`}>
       <header className="module-head">
-        <span className={`kind-tag ${kind}`}>{kind === 'instrument' ? 'INST' : 'FX'}</span>
+        <span className={`kind-tag ${kind}`}>{kind === 'instrument' ? 'INST' : kind === 'rhythm' ? 'RHY' : 'FX'}</span>
         <h2 className="module-name">{info.name}</h2>
         <span className="module-type mono">{info.typeId}</span>
-        <span className="module-where">{layerName ? `on ${layerName}` : 'master chain'}</span>
+        <span className="module-where">
+          {layerName ? `on ${layerName}` : kind === 'rhythm' ? 'drum sequencer' : 'master chain'}
+        </span>
         <span className="module-node mono">#{node}</span>
       </header>
       <div className="groups">

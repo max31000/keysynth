@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "name": "80s Synth Pop (Take On Me-ish)",
+  "description": "Driving LinnDrum-style 16th hats, fast 80s pop. Reference: a-ha — Take On Me.",
+  "tempo": 169,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 2,
+  "swing": 0,
+  "kit": "linn",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... .... x.x. .... | x... .... x.x. ..x."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... x... .... x... | .... x... .... x.xx"
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "x5x5 x5x5 x5x5 x5x5 | x5x5 x5x5 x5x5 x5.."
+    },
+    {
+      "name": "Open Hat",
+      "note": 46,
+      "steps": ".... .... .... .... | .... .... .... ..x."
+    },
+    {
+      "name": "Clap",
+      "note": 39,
+      "steps": ".... 6... .... 6... | .... 6... .... 6..."
+    }
+  ],
+  "accent": "x... .... .... .... | x... .... .... ...."
+}

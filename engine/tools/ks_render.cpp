@@ -11,6 +11,7 @@
 #include "preset/PatchJson.h"
 #include "preset/PresetStore.h"
 #include "render/OfflineRenderer.h"
+#include "transport/Pattern.h"
 
 #include <algorithm>
 #include <cmath>
@@ -26,6 +27,7 @@ int usage(const char* err = nullptr) {
     if (err) std::fprintf(stderr, "error: %s\n", err);
     std::fprintf(stderr,
                  "usage: ks-render (--preset PATH | --patch-json JSON|@FILE) [--notes SPEC | --midi FILE | --test-pattern]\n"
+                 "                 [--play-pattern FILE.json [--bars N] [--tempo BPM]]\n"
                  "                 [--sr HZ] [--block N] [--tail SEC] [--out FILE.wav]\n"
                  "       ks-render --list-modules\n"
                  "  SPEC: NOTE:start:dur[:vel],...  e.g. \"C4:0:1:100,E4:0.5:1\" (seconds; C4 = 60)\n");
@@ -34,9 +36,9 @@ int usage(const char* err = nullptr) {
 } // namespace
 
 int main(int argc, char** argv) {
-    std::string preset, patchJson, notes, midi, out = "renders/out.wav";
-    double sr = 48000.0, tail = 2.0;
-    int block = 64;
+    std::string preset, patchJson, notes, midi, pattern, out = "renders/out.wav";
+    double sr = 48000.0, tail = 2.0, tempo = 0.0;
+    int block = 64, bars = 2;
     bool listModules = false, testPattern = false;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -46,6 +48,9 @@ int main(int argc, char** argv) {
             else if (a == "--patch-json") patchJson = next();
             else if (a == "--notes") notes = next();
             else if (a == "--midi") midi = next();
+            else if (a == "--play-pattern") pattern = next();
+            else if (a == "--bars") bars = std::stoi(next());
+            else if (a == "--tempo") tempo = std::stod(next());
             else if (a == "--sr") sr = std::stod(next());
             else if (a == "--block") block = std::stoi(next());
             else if (a == "--tail") tail = std::stod(next());
@@ -98,6 +103,8 @@ int main(int argc, char** argv) {
         events = ks::OfflineRenderer::notesToEvents(specs);
     } else if (testPattern) {
         events = ks::OfflineRenderer::standardTestEvents();
+    } else if (!pattern.empty()) {
+        // pattern only
     } else {
         events = ks::OfflineRenderer::notesToEvents({{60, 0.0, 1.0, 100}});
     }
@@ -106,6 +113,20 @@ int main(int argc, char** argv) {
     opt.sampleRate = sr;
     opt.blockSize = block;
     opt.tailSeconds = tail;
+    ks::Pattern pat;
+    if (!pattern.empty()) {
+        std::ifstream f(ks::pathFromUtf8(pattern), std::ios::binary);
+        if (!f) return usage(("cannot open " + pattern).c_str());
+        std::stringstream ss;
+        ss << f.rdbuf();
+        const auto j = nlohmann::json::parse(ss.str(), nullptr, false);
+        if (j.is_discarded() || !j.is_object()) return usage("pattern: invalid JSON");
+        pat = ks::patternFromJson(j, &warnings);
+        if (bars < 1 || bars > 256) return usage("out-of-range --bars");
+        opt.pattern = &pat;
+        opt.patternBars = bars;
+        opt.tempo = tempo;
+    }
     ks::RenderResult r = ks::OfflineRenderer::render(patch, events, opt, registry);
     for (const auto& w : warnings) std::fprintf(stderr, "warning: %s\n", w.c_str());
     for (const auto& w : r.warnings) std::fprintf(stderr, "warning: %s\n", w.c_str());

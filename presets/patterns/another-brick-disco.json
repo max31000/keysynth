@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "name": "Disco Rock (Another Brick-ish)",
+  "description": "Four-on-the-floor disco-rock with open hats on the off-beat. Reference: Pink Floyd — Another Brick in the Wall, Pt. 2.",
+  "tempo": 104,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 1,
+  "swing": 0,
+  "kit": "909",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... x... x... x..."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... x... .... x..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "x... x... x... x..."
+    },
+    {
+      "name": "Open Hat",
+      "note": 46,
+      "steps": "..x. ..x. ..x. ..x."
+    }
+  ]
+}

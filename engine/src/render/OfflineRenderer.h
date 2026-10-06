@@ -5,6 +5,7 @@
 #include "core/MidiEvent.h"
 #include "core/ModuleRegistry.h"
 #include "core/Patch.h"
+#include "transport/Pattern.h"
 
 #include <string>
 #include <vector>
@@ -27,6 +28,11 @@ struct RenderOptions {
     double sampleRate = 48000.0;
     int blockSize = 64;
     double tailSeconds = 2.0; // rendered after the last event
+    // Optional drum pattern: transport plays from t = 0 for `patternBars` bars (pattern tempo/kit/swing applied,
+    // `tempo` > 0 overrides), then stops; the tail follows.
+    const Pattern* pattern = nullptr;
+    int patternBars = 1;
+    double tempo = 0.0;
 };
 
 struct RenderResult {

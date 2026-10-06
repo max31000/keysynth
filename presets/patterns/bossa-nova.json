@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "name": "Bossa Nova",
+  "description": "Bossa clave on rim, dotted bass-drum figure, steady shaker (8th notes).",
+  "tempo": 140,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 2,
+  "bars": 2,
+  "swing": 0,
+  "kit": "linn",
+  "tracks": [
+    {
+      "name": "Rim",
+      "note": 37,
+      "steps": "x..x ..x. | ..x. .x.."
+    },
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x..x x..x | x..x x..x"
+    },
+    {
+      "name": "Shaker",
+      "note": 70,
+      "steps": "x5x5 x5x5 | x5x5 x5x5"
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "..4. ..4. | ..4. ..4."
+    }
+  ]
+}

@@ -126,10 +126,10 @@ TEST_CASE("GraphBuilder reuses unchanged modules", "[patch][graph]") {
     const NodeId layer = m.patch().layers[0].node;
     m.addFx(layer, "gain", std::nullopt);
     auto a = GraphBuilder::build(m.patch(), defaultRegistry(), nullptr, 48000.0, 64);
-    REQUIRE(a.created == 2);
+    REQUIRE(a.created == 3); // instrument, gain, rhythm kit
     m.addFx(layer, "limiter", std::nullopt);
     auto b = GraphBuilder::build(m.patch(), defaultRegistry(), a.graph.get(), 48000.0, 64);
-    REQUIRE(b.reused == 2);
+    REQUIRE(b.reused == 3);
     REQUIRE(b.created == 1);
     const NodeId instr = m.patch().layers[0].instrument.node;
     REQUIRE(a.graph->findModule(instr) == b.graph->findModule(instr));

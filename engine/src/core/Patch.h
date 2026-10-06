@@ -45,6 +45,13 @@ struct MasterSection {
     std::vector<ModuleSlot> fx;
 };
 
+// Rhythm section (ARCHITECTURE §5.3 RhythmNode): the drum-sequencer kit + the pattern loaded with the patch.
+struct RhythmSection {
+    RhythmSection() { drums.type = "drums"; }
+    ModuleSlot drums;    // type is always "drums"; node id assigned by PatchModel
+    std::string pattern; // pattern path ("" = none)
+};
+
 struct PatchMeta {
     std::string name = "Init";
     std::string category;
@@ -59,7 +66,11 @@ struct Patch {
     double tempo = 120.0;
     std::vector<Layer> layers;
     MasterSection master;
-    nlohmann::json rhythm; // optional (null when absent); RhythmNode is a placeholder in this phase
+    RhythmSection rhythm;
+    // Parse info (patchFromJson): whether the JSON had these keys. A preset without them keeps the current
+    // rhythm section / tempo when loaded (PRESETS.md).
+    bool hasRhythm = false;
+    bool hasTempo = false;
 };
 
 } // namespace ks

@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "name": "House 4-on-the-Floor",
+  "description": "909 house: kick on every beat, clap backbeat, open hat off-beats.",
+  "tempo": 124,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 1,
+  "swing": 0.08,
+  "kit": "909",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... x... x... x..."
+    },
+    {
+      "name": "Clap",
+      "note": 39,
+      "steps": ".... x... .... x..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": ".4.4 .4.4 .4.4 .4.4"
+    },
+    {
+      "name": "Open Hat",
+      "note": 46,
+      "steps": "..x. ..x. ..x. ..x."
+    }
+  ],
+  "accent": "x... x... x... x..."
+}

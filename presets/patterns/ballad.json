@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "name": "Slow Ballad",
+  "description": "Gentle 808 ballad: soft hats, kick pickup, snare on 2 and 4.",
+  "tempo": 72,
+  "time_sig": [
+    4,
+    4
+  ],
+  "steps_per_beat": 4,
+  "bars": 2,
+  "swing": 0,
+  "kit": "808",
+  "tracks": [
+    {
+      "name": "Kick",
+      "note": 36,
+      "steps": "x... .... ..x. x... | x... .... ..x. ...."
+    },
+    {
+      "name": "Snare",
+      "note": 38,
+      "steps": ".... x... .... x... | .... x... .... x..."
+    },
+    {
+      "name": "Closed Hat",
+      "note": 42,
+      "steps": "5.3. 5.3. 5.3. 5.3. | 5.3. 5.3. 5.3. 5.3."
+    },
+    {
+      "name": "Rim",
+      "note": 37,
+      "steps": ".... .... .... .... | .... .... .... ...4"
+    },
+    {
+      "name": "Crash",
+      "note": 49,
+      "steps": "4... .... .... .... | .... .... .... ...."
+    }
+  ]
+}

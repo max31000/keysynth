@@ -81,6 +81,7 @@ BuildResult GraphBuilder::build(const Patch& patch, const ModuleRegistry& regist
         fillNode(c, *fn, f, ModuleKind::Effect);
         g.masterFx.push_back(std::move(fn));
     }
+    fillNode(c, g.rhythm.drums, patch.rhythm.drums, ModuleKind::Instrument);
     g.masterVolumeDb.store(patch.master.volumeDb);
     g.finalize();
     return r;
