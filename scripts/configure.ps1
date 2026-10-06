@@ -4,8 +4,10 @@
 .DESCRIPTION
   Configures <repo>/<BuildDir> with the Visual Studio generator (multi-config; binaries in <BuildDir>/bin/<Config>/).
   Dependencies are fetched into the shared <repo>/.deps cache so several build dirs / worktrees reuse downloads.
-  - When every dependency source already exists in .deps, the configure runs with FETCHCONTENT_FULLY_DISCONNECTED=ON
-    (no network, never touches the shared sources). -Online forces a connected configure (e.g. after a pin bump).
+  - When every dependency source already exists in .deps at its pin (KS_PIN_* in cmake/Dependencies.cmake), the
+    configure runs with FETCHCONTENT_FULLY_DISCONNECTED=ON (no network, never touches the shared sources); a missing
+    or off-pin source (pin bump) makes it online. -Online forces a connected configure. A later cmake re-run of a
+    disconnected build dir (ZERO_CHECK) after a pin bump fails with a hint to re-run this script.
   - Configures are serialized with an exclusive lock on <.deps>/.configure.lock, so concurrent configures from
     several worktrees can't wipe each other's sources. The lock is an OS file handle: it is released when this
     script exits, even if it crashes.
@@ -40,22 +42,35 @@ $depsCmake = $DepsDir -replace '\\', '/'
 $deps = @("juce", "nlohmann_json", "ixwebsocket", "catch2")
 $extra = $ExtraArgs -join ' '
 if ($extra -notmatch '-DKS_WITH_SFIZZ(:BOOL)?=(OFF|0|FALSE|NO)\b') { $deps += "sfizz" }
-$missing = @($deps | Where-Object { -not (Test-Path (Join-Path $DepsDir "$_-src/CMakeLists.txt")) })
 $userSetDisconnected = $extra -match 'FETCHCONTENT_FULLY_DISCONNECTED'
+
+# Pins from cmake/Dependencies.cmake (set(KS_PIN_<dep> <tag>)), the single source of truth.
+$pins = @{}
+foreach ($m in [regex]::Matches((Get-Content -Raw (Join-Path $repo "cmake/Dependencies.cmake")), 'set\(KS_PIN_(\w+)\s+([^\s)]+)\)')) {
+    $pins[$m.Groups[1].Value] = $m.Groups[2].Value
+}
+
+# Why a shared dependency source can't be used as-is ("" = present and at its pin). Same checks as
+# cmake/Dependencies.cmake: nlohmann_json is a URL download (version in the header banner), the others git tags.
+function Get-DepProblem([string]$dep) {
+    $src = Join-Path $DepsDir "$dep-src"
+    if (-not (Test-Path (Join-Path $src "CMakeLists.txt"))) { return "missing" }
+    $pin = $pins[$dep]
+    if (-not $pin) { return "no KS_PIN_$dep in cmake/Dependencies.cmake" }
+    if ($dep -eq "nlohmann_json") {
+        $hdr = Join-Path $src "include/nlohmann/json.hpp"
+        if ((Test-Path $hdr) -and (Get-Content $hdr -TotalCount 5 | Select-String -SimpleMatch "version $pin" -Quiet)) { return "" }
+        return "not at $pin"
+    }
+    $saved = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { $tag = (& git -C $src describe --tags --exact-match HEAD 2>$null) } finally { $ErrorActionPreference = $saved }
+    if ($LASTEXITCODE -eq 0 -and "$tag".Trim() -eq $pin) { return "" }
+    return "not at $pin"
+}
 
 $cmakeArgs = @("-S", $repo, "-B", $buildPath, "-G", $Generator, "-A", "x64",
     "-DFETCHCONTENT_BASE_DIR=$depsCmake")
-if (-not $userSetDisconnected) {
-    if (-not $Online -and $missing.Count -eq 0) {
-        $cmakeArgs += "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
-        Write-Host "All dependency sources present in $DepsDir -> disconnected configure"
-    } else {
-        # Explicit OFF so a cache entry from an earlier disconnected configure doesn't block the download.
-        $cmakeArgs += "-DFETCHCONTENT_FULLY_DISCONNECTED=OFF"
-        if ($missing.Count -gt 0) { Write-Host "Missing dependency sources: $($missing -join ', ') -> online configure" }
-    }
-}
-$cmakeArgs += $ExtraArgs
 
 # --- exclusive lock on the shared .deps --------------------------------------------------------------------------
 $lockPath = Join-Path $DepsDir ".configure.lock"
@@ -75,6 +90,20 @@ while (-not $lock) {
 try {
     $info = [System.Text.Encoding]::UTF8.GetBytes("pid $PID $buildPath $(Get-Date -Format o)`n")
     $lock.SetLength(0); $lock.Write($info, 0, $info.Length); $lock.Flush()
+
+    # Decided under the lock: another configure may have been populating/updating .deps until now.
+    if (-not $userSetDisconnected) {
+        $problems = @($deps | ForEach-Object { $p = Get-DepProblem $_; if ($p) { "$_ ($p)" } })
+        if (-not $Online -and $problems.Count -eq 0) {
+            $cmakeArgs += "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
+            Write-Host "All dependency sources present in $DepsDir at their pins -> disconnected configure"
+        } else {
+            # Explicit OFF so a cache entry from an earlier disconnected configure doesn't block the download.
+            $cmakeArgs += "-DFETCHCONTENT_FULLY_DISCONNECTED=OFF"
+            if ($problems.Count -gt 0) { Write-Host "Dependency sources to fetch/update: $($problems -join ', ') -> online configure" }
+        }
+    }
+    $cmakeArgs += $ExtraArgs
 
     Write-Host "cmake $($cmakeArgs -join ' ')"
     # cmake prints warnings (CMake Deprecation/Dev warnings) to stderr. With $ErrorActionPreference = Stop, Windows

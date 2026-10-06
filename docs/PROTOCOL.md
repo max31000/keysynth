@@ -36,8 +36,8 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `set_pattern` | `{ pattern: Pattern }` (replaces the current pattern; live, sample-accurate swap) | `set_pattern_ok`; others get a `pattern` event |
 | `save_pattern` | `{ name, overwrite? }` (current pattern → `userdata/patterns/<slug>.json`) | `save_pattern_ok { path }`, then `state` to all |
 | `list_devices` | — | `devices` |
-| `set_audio_device` | `{ device_type, name, sample_rate?, buffer_size? }` | `devices` (+ `log` warn if the driver kept another buffer size) |
-| `open_audio_panel` | — (opens the driver's own settings panel, ASIO) | `open_audio_panel_ok`, or `error` `not_available` (see *Audio latency*) |
+| `set_audio_device` | `{ device_type, name, sample_rate?, buffer_size? }` | `devices` (also to others; + `log` warn if the driver kept another buffer size), then `state` to all; `error` `busy` while the driver panel is open |
+| `open_audio_panel` | — (opens the driver's own settings panel, ASIO) | `open_audio_panel_ok`, or `error` `not_available` / `busy` (already open) (see *Audio latency*) |
 | `panic` | — | none (all notes off, reset tails) |
 | `list_plugins` | — | `list_plugins_ok { plugins: PluginStatus[], faust: { available, version, reason } }` |
 | `reload_plugin` | `{ name }` (plugin directory name, `[a-z][a-z0-9_]*`) | `reload_plugin_ok { name }`, then `plugin_status` events |
@@ -52,20 +52,24 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `midi` | `{ notes: [ {note, on, velocity} ] }` batched ≤30 Hz, for keyboard highlighting |
 | `pattern` | `{ path, edited, pattern: Pattern }` — another client changed the current pattern (`set_pattern`) |
 | `devices` | `{ types: string[], current: AudioStatus, available: { type, names[], sampleRates: number[], bufferSizes: number[] }[], midiInputs: string[] }` |
-| `log` | `{ level, message }` |
+| `log` | `{ level, message, notify? }` — `notify: true` marks a problem the player must see (see *Wire details*) |
 | `plugin_status` | `{ plugin: PluginStatus }` — every plugin state change (see below) |
 
-`AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running, hasControlPanel }`
-(latencies are device-reported and include the buffer; `hasControlPanel`: `open_audio_panel` is available).
+`AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running, hasControlPanel, panelOpen }`
+(latencies are device-reported and include the buffer; `hasControlPanel`: `open_audio_panel` is available;
+`panelOpen`: the driver panel is showing right now).
 
 ### Audio latency (buffer size, ASIO control panel)
 - JUCE only applies a requested `buffer_size` (`set_audio_device`, `--asio-buffer`) when it is in the open device's
   `bufferSizes`; otherwise the driver's preferred size is used. Many ASIO drivers list only the size set in their own
   panel (the Yamaha Steinberg USB ASIO driver of the UR22C offers exactly one size, e.g. `[1024]`). Then the engine
-  answers `devices` followed by a `log { level: "warn" }` (no `id`) naming the offered sizes.
-- `open_audio_panel` shows the driver panel on the message thread (deferred: the reply goes out first; a modal panel
-  blocks engine message handling while open). After a modal panel the device is reopened with the driver's preferred
-  size. Non-modal panels (separate driver app) make the driver send a reset request when the buffer changes; the
+  answers `devices` followed by a `log { level: "warn", notify: true }` (no `id`) naming the offered sizes.
+- `open_audio_panel` shows the driver panel on the message thread (deferred: the reply goes out first). A modal
+  panel runs a nested message loop, so requests keep being handled while it is open: the engine first broadcasts
+  `devices` + `state` with `panelOpen: true`; until it closes `open_audio_panel` and `set_audio_device` answer
+  `error` `busy` and `list_devices` does not rescan drivers (the UI disables its panel/apply buttons). After a modal
+  panel the device it belonged to is reopened with the driver's preferred size (a failure is reported as
+  `log { level: "error", notify: true }`). Non-modal panels (separate driver app) make the driver send a reset request when the buffer changes; the
   device restarts. Every device (re)start re-prepares the engine (full graph rebuild) and then broadcasts `devices` +
   `state` to all clients, plus a `log { level: "info" }` when buffer/rate/device changed; the new size is saved in
   `userdata/settings.json`.
@@ -94,9 +98,11 @@ message, kind: "instrument"|"effect"|"", version, compileMs, cached }` (docs/PLU
   tabs?: { name, groups: string[] }[] }`. `tabs` bundles param groups into panel tabs (fm: one per operator; groups
   not listed get their own tab); modules with > 40 visible params are tabbed per group without it; `front` becomes
   the first tab of a tabbed panel.
-- `log` events with level `error`/`warn` are problems the player should see (failed sample loads, rejected buffer
-  size); the UI shows them as a toast. Module load failures (`Module::loadError`, e.g. a missing `.sfz`) are
-  reported once per module instance as `log { level: "error", message: "<type> (node N): …" }`.
+- `log` events with `notify: true` are problems the player should see; the UI shows only those as a toast (others,
+  e.g. a transient "module 'plugin:x' unavailable" warning while a plugin compiles, or plugin errors that the
+  `plugin_status` toast already shows, only go to the log). Flagged: module load failures (`Module::loadError`, e.g.
+  a missing `.sfz`; reported once per module instance as `log { level: "error", notify: true, message: "<type>
+  (node N): …" }`), a rejected buffer size, a failed device reopen after the driver panel.
 - `state.transport` has the same keys as the `transport` request (all present) plus `pattern_edited` (bool).
   `telemetry.cpu` is 0..1.
 - `telemetry.transport = { ppq, playing, step, bar }`: `step` = index of the last played step of the current pattern

@@ -67,6 +67,7 @@ private:
     std::atomic<unsigned long> mmcssError_{0};
     std::atomic<uint64_t> xrunBase_{0};
     std::atomic<bool> panelRequested_{false}, changed_{false};
+    std::atomic<bool> panelOpen_{false}; // message thread: inside showControlPanelNow (see there)
 };
 
 } // namespace ks

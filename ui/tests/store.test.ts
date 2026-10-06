@@ -280,4 +280,14 @@ describe('engine store', () => {
     await p;
     expect(ctx.store.getState().lastError).toBe('preset not found');
   });
+
+  it('only log events flagged notify become a toast; all are kept in the log', () => {
+    const st = ctx.store.getState();
+    st.handle({ type: 'log', level: 'warn', message: "module 'plugin:x' unavailable for node 3" });
+    st.handle({ type: 'log', level: 'error', message: 'plugin x: compile error' });
+    expect(ctx.store.getState().lastError).toBeNull();
+    st.handle({ type: 'log', level: 'warn', notify: true, message: 'the driver did not accept a buffer of 32 samples' });
+    expect(ctx.store.getState().lastError).toBe('the driver did not accept a buffer of 32 samples');
+    expect(ctx.store.getState().logs.map((l) => l.level)).toEqual(['warn', 'error', 'warn']);
+  });
 });

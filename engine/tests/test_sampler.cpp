@@ -358,8 +358,8 @@ TEST_CASE("sampler: failed loads surface as render warnings and session log erro
     engine.prepare(kSr, 64);
     Session s(engine, defaultRegistry(), AppPaths::discover());
     std::vector<std::string> logs;
-    s.log = [&](const std::string& level, const std::string& msg) {
-        if (level == "error") logs.push_back(msg);
+    s.log = [&](const std::string& level, const std::string& msg, bool notify) {
+        if (level == "error" && notify) logs.push_back(msg); // load failures are user-facing (UI toast)
     };
     s.setPatch(p);
     const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);

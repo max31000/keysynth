@@ -73,6 +73,22 @@ describe('mock engine round trip', () => {
     await expect(client.request({ type: 'load_preset', path: 'presets/nope.json' })).rejects.toMatchObject({ code: 'not_found' });
   });
 
+  it('audio: rejected buffer size toasts, the panel reports panelOpen and refuses a second open', async () => {
+    store.getState().clearError();
+    await store.getState().setAudioDevice('ASIO', 'Focusrite USB ASIO', 48000, 32);
+    await until(() => store.getState().lastError !== null);
+    expect(store.getState().lastError).toMatch(/did not accept a buffer of 32/);
+    expect(store.getState().audio?.bufferSize).toBe(256);
+    store.getState().clearError();
+
+    await store.getState().openAudioPanel();
+    await until(() => store.getState().audio?.panelOpen === true);
+    await expect(client.request({ type: 'open_audio_panel' })).rejects.toMatchObject({ code: 'busy' });
+    await until(() => store.getState().audio?.panelOpen === false && store.getState().audio?.bufferSize === 128);
+    await until(() => store.getState().logs.some((l) => l.level === 'info' && l.message.includes('buffer 128')));
+    expect(store.getState().lastError).toBeNull(); // info logs never toast
+  });
+
   it('save_preset adds a user preset', async () => {
     const path = await store.getState().savePreset('My Test Patch', 'Organ');
     expect(path).toBe('userdata/presets/my-test-patch.json');

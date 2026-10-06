@@ -139,10 +139,12 @@ int main(int argc, char** argv) {
     ks::ProtocolHandler handler(session);
     ks::ControlServer server(
         handler, [](std::function<void()> f) { juce::MessageManager::callAsync(std::move(f)); }, paths.uiDist);
-    session.log = [&server](const std::string& level, const std::string& msg) {
+    session.log = [&server](const std::string& level, const std::string& msg, bool notify) {
         std::printf("[%s] %s\n", level.c_str(), msg.c_str());
         std::fflush(stdout);
-        server.broadcast({{"type", "log"}, {"level", level}, {"message", msg}});
+        nlohmann::json ev = {{"type", "log"}, {"level", level}, {"message", msg}};
+        if (notify) ev["notify"] = true;
+        server.broadcast(std::move(ev));
     };
 
     // Plugins compile asynchronously; patches referencing them are rebuilt when they become available.
@@ -153,7 +155,7 @@ int main(int argc, char** argv) {
         plugins = std::make_unique<ks::plugins::PluginHost>(ks::defaultRegistry(), popt);
         plugins->onStatus = [&server, &session](const ks::plugins::PluginStatus& st) {
             if (st.state == "error" || st.state == "faulted")
-                session.log("error", "plugin " + st.name + ": " + st.message);
+                session.log("error", "plugin " + st.name + ": " + st.message, false); // shown by the plugin toast
             else if (st.state == "ok")
                 std::printf("[plugin] %s v%d ok (%s, %.0f ms%s)\n", st.name.c_str(), st.version,
                             st.source.c_str(), st.compileMs, st.cached ? ", cached" : "");
@@ -196,6 +198,7 @@ int main(int argc, char** argv) {
         opt.sampleRate = args.sampleRate;
         const std::string aerr = audioHost->start(opt);
         if (!aerr.empty()) std::fprintf(stderr, "audio: %s\n", aerr.c_str());
+        audioHost->onError = [&session](const std::string& msg) { session.log("error", "audio: " + msg, true); };
         session.setAudio(audioHost.get());
         const auto st = audioHost->status();
         printStatus(st, "audio");
@@ -215,7 +218,7 @@ int main(int argc, char** argv) {
                 char msg[256];
                 std::snprintf(msg, sizeof msg, "audio: %s, %.0f Hz, buffer %d samples, output latency %.1f ms",
                               now.name.c_str(), now.sampleRate, now.bufferSize, now.outputLatencyMs);
-                session.log("info", msg);
+                session.log("info", msg, false);
             }
             last = now;
             if (server.clientCount() == 0) return;

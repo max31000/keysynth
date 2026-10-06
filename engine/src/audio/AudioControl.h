@@ -19,6 +19,9 @@ struct AudioStatus {
     double outputLatencyMs = 0.0;
     bool running = false;
     bool hasControlPanel = false; // the driver has its own settings panel (ASIO): `open_audio_panel`
+    // The driver panel is showing (a modal one runs a nested message loop): open_audio_panel/set_audio_device
+    // are refused (`busy`) and list_devices does not rescan until it closes.
+    bool panelOpen = false;
 };
 
 nlohmann::json toJson(const AudioStatus& s);
@@ -52,6 +55,9 @@ public:
     // Message thread: the device (re)started or its settings changed outside a setDevice call (driver reset
     // request after a control-panel change, panel closed). Set by the app to re-report `devices` + `state`.
     std::function<void()> onChanged;
+    // Message thread: a user-facing problem outside a request (reopening the device after the control panel
+    // failed). The app forwards it as `log { level: "error", notify: true }`.
+    std::function<void(const std::string& msg)> onError;
 };
 
 class MidiControl {

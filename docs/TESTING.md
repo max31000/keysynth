@@ -18,9 +18,11 @@ module; `OFF` builds without it and the module is not registered).
 `KS_WITH_FAUST` (ON; Faust from `KS_FAUST_DIR`, default `<main checkout>/.tools/faust`, see `docs/PLUGINS.md`).
 Engine code builds with `/W4 /WX`; dependencies don't.
 `configure.ps1` configures with `FETCHCONTENT_FULLY_DISCONNECTED=ON` (no network, shared sources untouched) when every
-dependency source already exists in `.deps/` (`-Online` forces a connected configure, e.g. after a pin bump), holds an
-exclusive lock on `.deps/.configure.lock` so concurrent configures wait for each other, and treats cmake stderr
-warnings as output (only the exit code fails it).
+dependency source already exists in `.deps/` at its `KS_PIN_*` (cmake/Dependencies.cmake); a missing or off-pin
+source (pin bump) makes it online (`-Online` forces it). A cmake re-run (ZERO_CHECK) of a disconnected build dir
+after a pin bump stops with an error asking to re-run `configure.ps1`. It holds an exclusive lock on
+`.deps/.configure.lock` (the online/disconnected decision is made under it) so concurrent configures wait for each
+other, and treats cmake stderr warnings as output (only the exit code fails it).
 
 ## Launchers
 
@@ -30,7 +32,9 @@ scripts/start.ps1 -BuildDir build-int -Port 7351 -HttpPort 7350 -NoAudio -NoBrow
 scripts/start-dev.ps1          # UI work: engine --no-audio --no-midi + Vite dev server (:5173, ?engine=...)
 ```
 
-Both wait for the port, open the default browser (unless `-NoBrowser`) and stop everything on Ctrl+C.
+Both build `keysynth-engine` incrementally first when the build dir is configured (`-NoBuild`: use the exe as-is),
+fail at once if one of their ports is already taken (instead of attaching to another process), wait for the port,
+open the default browser (unless `-NoBrowser`) and stop everything on Ctrl+C.
 `-EngineArgs '--preset','<path>'` passes extra engine flags.
 
 ## Unit + render tests (Catch2)

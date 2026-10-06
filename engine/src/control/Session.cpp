@@ -165,7 +165,7 @@ nlohmann::json Session::patternJson() const {
 
 void Session::logWarnings(const std::vector<std::string>& w) {
     if (!log) return;
-    for (const auto& s : w) log("warn", s);
+    for (const auto& s : w) log("warn", s, false);
 }
 
 void Session::rebuild(bool reuse) {
@@ -332,7 +332,7 @@ int Session::pollModuleErrors() {
             if (err.empty()) continue;
             const auto it = reportedErrors_.find(n->module.get());
             if (it == reportedErrors_.end() || it->second != err) {
-                if (log) log("error", n->type + " (node " + std::to_string(n->node) + "): " + err);
+                if (log) log("error", n->type + " (node " + std::to_string(n->node) + "): " + err, true);
                 ++reported;
             }
             now.emplace(n->module.get(), std::move(err));

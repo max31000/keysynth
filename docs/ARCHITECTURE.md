@@ -252,9 +252,12 @@ Patch (data)                              RackGraph (live, audio thread)
   system default. Device type/name, sample rate, buffer size, output channels persisted in `userdata/settings.json`,
   switchable at runtime. Reports device-reported input/output latency + buffer to the UI.
   ASIO drivers may accept only the buffer size set in their own control panel; `open_audio_panel` shows it
-  (message thread). Any device restart (panel change → driver reset request, or setDevice) runs
+  (message thread). A modal panel runs a nested message loop, so requests are re-entrant meanwhile:
+  `AudioStatus::panelOpen` is set while it shows and the host refuses a second panel / device switch (`busy`) and
+  skips driver rescans. Any device restart (panel change → driver reset request, or setDevice) runs
   `audioDeviceAboutToStart` → Engine::prepare + rebuild, then asynchronously saves settings and fires
-  `AudioControl::onChanged` (app: broadcast `devices` + `state`). Details: PROTOCOL.md *Audio latency*.
+  `AudioControl::onChanged` (app: broadcast `devices` + `state`; setDevice reports itself instead).
+  Details: PROTOCOL.md *Audio latency*.
 - On the first callback `platform/` registers the audio thread with MMCSS (`AvSetMmThreadCharacteristicsW
   "Pro Audio"`) and disables power throttling for it (Intel hybrid P/E cores).
 - `MidiHub` opens all MIDI inputs, one SPSC per device; rescan on demand (protocol `rescan_midi`) and at startup.
