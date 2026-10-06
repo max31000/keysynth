@@ -68,7 +68,10 @@ public:
         const float d = dry_.next();
         const float w = wet_.next();
         const float depth = depth_.next();
-        if (w <= 0.0f && !wet_.isSmoothing()) return x * d;
+        if (w <= 0.0f && !wet_.isSmoothing()) {
+            lp_ = x; // keep the wet filter tracking so re-enabling starts without a step
+            return x * d;
+        }
         // Rounded triangle 0..1 (the stator plate geometry smooths the turnarounds).
         const float tri = 1.0f - std::fabs(2.0f * phase_ - 1.0f);
         const float shaped = 0.6f * tri + 0.4f * tri * tri * (3.0f - 2.0f * tri);

@@ -30,7 +30,7 @@ const ModuleInfo& RotaryFx::moduleInfo() {
         };
         i.params = {
             enumParam("speed", "Speed", {"Slow", "Fast", "Stop"}, 0, "Speed"),
-            boolParam("modwheel", "Mod Wheel = Fast", true, "Speed"),
+            boolParam("mod_wheel", "Mod Wheel = Fast", true, "Speed"),
             boolParam("sustain_toggle", "Sustain Toggles", false, "Speed"),
             linearParam("drive", "Drive", 0.0f, 1.0f, 0.15f, {}, "Amp"),
             linearParam("balance", "Horn/Drum", -1.0f, 1.0f, 0.0f, {}, "Amp"),
@@ -126,7 +126,6 @@ void RotaryFx::process(AudioBlock& io, MidiEventSpan /*events*/, const ProcessCo
     const float radPerRpm = dsp::kTwoPi / 60.0f / static_cast<float>(sr);
 
     const float drive = p.get(Drive);
-    const bool useDrive = drive > 0.001f;
     preamp_.setDrive(drive);
     mix_.setTarget(p.get(Mix));
     level_.setTarget(dsp::dbToGain(p.get(LevelDb)));
@@ -136,7 +135,7 @@ void RotaryFx::process(AudioBlock& io, MidiEventSpan /*events*/, const ProcessCo
     for (int i = 0; i < io.numSamples; ++i) {
         const float dryL = io.left[i], dryR = io.right[i];
         float x = 0.5f * (dryL + dryR);
-        if (useDrive) x = preamp_.process(x);
+        x = preamp_.process(x); // always on: no path switching when drive is automated
         float lo, hi;
         xover_.process(x, lo, hi);
         hi = hornCab_.tick(hi).lp;

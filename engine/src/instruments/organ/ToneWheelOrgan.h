@@ -85,6 +85,8 @@ private:
     std::array<float, kWheels + 1> keyed_{};
     std::array<std::array<uint8_t, kBars>, kKeys> wheelMap_{};
     std::array<Key, kKeys> keys_{};
+    std::array<bool, 128> noteDown_{};     // MIDI notes held (several fold onto one key)
+    std::array<uint8_t, kKeys> holds_{};   // held MIDI notes per manual key
     int keysDown_ = 0;
 
     // Block parameters.

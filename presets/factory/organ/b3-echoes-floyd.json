@@ -56,7 +56,7 @@
           "bypass": false,
           "params": {
             "speed": 0,
-            "modwheel": true,
+            "mod_wheel": true,
             "sustain_toggle": false,
             "drive": 0.15,
             "spread": 0.8,

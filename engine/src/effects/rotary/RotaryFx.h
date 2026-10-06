@@ -5,7 +5,8 @@
 //   (horn ~0.16 s / 0.32 s, drum ~4.1 s / 1.4 s, scaled by `inertia`). Per mic (L/R at +-spread): Doppler =
 //   modulated delay (horn r ~ 0.15 m -> +-0.44 ms), amplitude modulation and a directional low-pass (horn
 //   facing away = duller); the horn also has a cabinet reflection path (opposite side, later, quieter).
-//   Speed: param Slow/Fast/Stop (brake), optionally mod wheel >= 64 = fast, optionally sustain pedal toggles.
+//   Speed: param Slow/Fast/Stop (brake), optionally mod wheel >= 64 = fast, optionally sustain pedal toggles
+//   (uses the layer's sustain state, so it needs the layer zone's `sustain` enabled).
 //   Read-only `horn_rpm` / `drum_rpm` for the UI.
 
 #include "core/Module.h"

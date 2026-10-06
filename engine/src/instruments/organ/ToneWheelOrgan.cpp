@@ -145,6 +145,8 @@ void ToneWheelOrgan::prepare(double sampleRate, int /*maxBlock*/) {
 
 void ToneWheelOrgan::reset() {
     for (auto& k : keys_) k = Key{};
+    noteDown_.fill(false);
+    holds_.fill(0);
     cur_.fill(0.0f);
     target_.fill(0.0f);
     keysDown_ = 0;
@@ -222,9 +224,24 @@ void ToneWheelOrgan::keyUp(int k) noexcept {
 
 void ToneWheelOrgan::handleEvent(const MidiEvent& e) noexcept {
     switch (e.type) {
-    case MidiEventType::NoteOn: keyDown(foldNote(e.data1) - kLowNote); break;
-    case MidiEventType::NoteOff: keyUp(foldNote(e.data1) - kLowNote); break;
+    case MidiEventType::NoteOn: {
+        // Notes outside C2..C7 fold onto a manual key; the key stays down while any of its notes is held.
+        const int n = e.data1 & 127, k = foldNote(n) - kLowNote;
+        if (noteDown_[static_cast<size_t>(n)]) break;
+        noteDown_[static_cast<size_t>(n)] = true;
+        if (holds_[static_cast<size_t>(k)]++ == 0) keyDown(k);
+        break;
+    }
+    case MidiEventType::NoteOff: {
+        const int n = e.data1 & 127, k = foldNote(n) - kLowNote;
+        if (!noteDown_[static_cast<size_t>(n)]) break;
+        noteDown_[static_cast<size_t>(n)] = false;
+        if (--holds_[static_cast<size_t>(k)] == 0) keyUp(k);
+        break;
+    }
     case MidiEventType::AllNotesOff:
+        noteDown_.fill(false);
+        holds_.fill(0);
         for (int k = 0; k < kKeys; ++k) keyUp(k);
         break;
     case MidiEventType::AllSoundOff: reset(); break;
@@ -264,7 +281,7 @@ void ToneWheelOrgan::renderChunk(float* dst, int len) noexcept {
                 if (b == percBar_) keyed_[w] += v * percGain_ * percEnv_;
             }
         }
-        key.t += len;
+        key.t = std::min(key.t + len, 1 << 30);
         key.active = any;
         active += any ? 1 : 0;
     }
@@ -326,7 +343,6 @@ void ToneWheelOrgan::process(AudioBlock& out, MidiEventSpan events, const Proces
     }
     while (ev < events.size()) handleEvent(events[ev++]);
 
-    const bool drive = drive_ > 0.001f;
     for (int i = 0; i < out.numSamples; ++i) {
         float x = buf[i];
         if (clickEnv_ > 1e-6f) {
@@ -338,7 +354,7 @@ void ToneWheelOrgan::process(AudioBlock& out, MidiEventSpan events, const Proces
         x = scanner_.process(x);
         const float g = outGain_.next();
         // Preamp: drive works on the pre-volume signal (organ preamp sits before the swell pedal).
-        if (drive) x = preamp_.process(x * 0.25f) * 4.0f;
+        x = preamp_.process(x * 0.25f) * 4.0f; // always on (near-linear at drive 0): no path switch clicks
         buf[i] = x * g;
     }
     std::copy(out.left, out.left + out.numSamples, out.right);
