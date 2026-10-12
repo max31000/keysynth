@@ -529,8 +529,11 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
     `telemetry`, `midi`, `samples_progress` (the server may drop only those). Remote rates: telemetry ≤ 10 Hz,
     midi notes merged and flushed ≤ 15 Hz, `param` coalesced per (node,param) ≤ 20 Hz (latest value wins; the pump
     calls `ControlServer::tickRemote()` to flush). Telemetry/midi go nowhere when no remote controller is active;
-    paused controllers (hidden tab) are skipped (fan-out per cid instead of `*`). Frames > 1 MB are not sent; lossy
-    frames are dropped when the socket queue holds > 256 KB.
+    paused controllers (hidden tab) are skipped (fan-out per cid instead of `*`). Pending params are flushed before any
+    later non-lossy event (a `state` to everyone supersedes them). Lossy frames are dropped when the socket queue
+    holds > 256 KB; a non-lossy frame is never dropped silently: a reply > 1 MB becomes `error too_large` to its cid,
+    any other undeliverable frame (> 1 MB broadcast, 16 MB queue full) closes the socket → reconnect → controllers
+    re-`hello`. Late frames of a retired socket are ignored (generation counter), so no ghost clients remain.
 - **Web UI** (`ui/src/platform/`, `ui/src/store/cloudStore.ts`, `ui/src/components/cloud/`): one bundle, two
   modes picked at runtime (`platform/mode.ts`): *platform* (served from `https://mvv42.ru/keysynth/`, build
   `npm run build:platform`, base `/keysynth/`) and *local* (served by the engine at :7340 or the dev server, base

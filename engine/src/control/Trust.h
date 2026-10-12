@@ -29,7 +29,7 @@ bool hostAllowed(const std::string& host, int port);
 bool isLogicalPath(const std::string& p, const std::string& prefix);
 
 // For `web` sessions: "" when `msg` (a request with a string `type`) is allowed, else the reason (-> `forbidden`).
-std::string webRestriction(const nlohmann::json& msg);
+std::string webRestriction(const nlohmann::json& msg, const char* sessionKind = "web");
 // For `remote` sessions: webRestriction + deny cloud_link/unlink, audio device selection, samples_delete, plugins.
 std::string remoteRestriction(const nlohmann::json& msg);
 // Restriction for any trust ("" = allowed; `local` allows everything).

@@ -109,9 +109,25 @@ void RemoteRouter::broadcast(const json& msg, const std::string& except) {
         p.pending = true;
         return;
     }
-    if (type == "state")
-        for (auto& [k, p] : params_) p.pending = false; // the snapshot supersedes coalesced values
+    if (!isLossy(type)) {
+        // Keep order: a coalesced value must not arrive after a later event (fx removed, other preset...). A full
+        // snapshot to everyone supersedes them; anything else flushes them first.
+        if (type == "state" && except.empty())
+            for (auto& [k, p] : params_) p.pending = false;
+        else
+            flushParams(t, false);
+    }
     emit("*", except, isLossy(type), msg);
+}
+
+void RemoteRouter::flushParams(Clock::time_point t, bool onlyDue) {
+    for (auto& [k, p] : params_) {
+        if (!p.pending || (onlyDue && t - p.last < std::chrono::milliseconds(kParamIntervalMs))) continue;
+        p.pending = false;
+        p.last = t;
+        if (!p.except.empty() && ctl_.size() == 1 && ctl_.count(p.except)) continue;
+        emit("*", p.except, false, p.msg);
+    }
 }
 
 void RemoteRouter::flushMidi(Clock::time_point t) {
@@ -127,13 +143,7 @@ void RemoteRouter::flushMidi(Clock::time_point t) {
 void RemoteRouter::tick() {
     if (ctl_.empty()) return;
     const auto t = now();
-    for (auto& [k, p] : params_) {
-        if (!p.pending || t - p.last < std::chrono::milliseconds(kParamIntervalMs)) continue;
-        p.pending = false;
-        p.last = t;
-        if (!p.except.empty() && ctl_.size() == 1 && ctl_.count(p.except)) continue;
-        emit("*", p.except, false, p.msg);
-    }
+    flushParams(t, true);
     if (activeCount() == 0) midiNotes_ = json::array();
     else flushMidi(t);
 }

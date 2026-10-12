@@ -83,6 +83,7 @@ void RelayClient::stop() {
     {
         std::lock_guard<std::mutex> lk(m_);
         stop_ = true; // run() leaves its wait, closes and destroys the socket
+        if (opening_) opening_->abort(); // cancels a blocking handshake
     }
     cv_.notify_all();
     if (thread_.joinable()) thread_.join();
@@ -105,7 +106,7 @@ bool RelayClient::waitStop(int ms, bool wakeable) {
     return stop_;
 }
 
-void RelayClient::postToMessageThread(std::function<void(const Handlers&)> f) {
+void RelayClient::postLocked(std::function<void(const Handlers&)> f) {
     if (!post_) return;
     std::weak_ptr<bool> alive = alive_;
     const Handlers h = handlers_;
@@ -113,6 +114,13 @@ void RelayClient::postToMessageThread(std::function<void(const Handlers&)> f) {
         if (alive.expired()) return;
         f(h);
     });
+}
+
+void RelayClient::postFor(uint64_t gen, std::function<void(const Handlers&)> f) {
+    // Under m_: a frame of a connection that run() already retired (gen bumped + `cleared` posted) never posts.
+    std::lock_guard<std::mutex> lk(m_);
+    if (gen != gen_) return;
+    postLocked(std::move(f));
 }
 
 bool RelayClient::sendRaw(const json& j) {
@@ -125,12 +133,40 @@ bool RelayClient::send(const json& envelope, bool lossy) {
     const std::string text = envelope.dump(-1, ' ', false, json::error_handler_t::replace);
     if (text.size() > opt_.maxFrameBytes) {
         logLine("dropped a " + std::to_string(text.size()) + "-byte frame (over the relay cap)");
+        if (lossy) return false;
+        // A reply that cannot be delivered becomes an error reply; a lost broadcast would leave the controllers
+        // out of sync, so they are resynced by a reconnect (they re-hello).
+        const auto& m = envelope.value("msg", json::object());
+        const std::string to = envelope.value("to", std::string());
+        if (to != "*" && m.is_object() && m.contains("id")) {
+            send({{"t", "msg"},
+                  {"to", to},
+                  {"msg", {{"type", "error"}, {"id", m["id"]}, {"code", "too_large"},
+                           {"message", "reply exceeds the relay frame limit"}}}},
+                 false);
+            return false; // the reply itself was dropped
+        }
+        requestResync();
         return false;
     }
     std::lock_guard<std::mutex> lk(m_);
     if (!ws_ || closed_) return false;
     if (lossy && ws_->queuedBytes() > opt_.lossyQueueLimit) return false;
-    return ws_->send(text);
+    if (ws_->send(text)) return true;
+    if (!lossy) { // queue over its hard cap: only a reconnect brings the controllers back in sync
+        resync_ = true;
+        cv_.notify_all();
+    }
+    return false;
+}
+
+void RelayClient::requestResync() {
+    {
+        std::lock_guard<std::mutex> lk(m_);
+        if (!ws_) return;
+        resync_ = true;
+    }
+    cv_.notify_all();
 }
 
 void RelayClient::onText(uint64_t gen, std::string text) {
@@ -138,6 +174,7 @@ void RelayClient::onText(uint64_t gen, std::string text) {
         std::lock_guard<std::mutex> lk(m_);
         if (gen != gen_) return; // a previous connection
     }
+    auto postToMessageThread = [this, gen](std::function<void(const Handlers&)> f) { postFor(gen, std::move(f)); };
     lastRxMs_ = nowMs();
     json j = json::parse(text, nullptr, false);
     if (!j.is_object()) return;
@@ -211,6 +248,8 @@ void RelayClient::run() {
             if (stop_) break;
             gen = ++gen_;
             closed_ = false;
+            resync_ = false;
+            opening_ = ws.get();
         }
         platform::WsOpenResult res;
         if (ws) {
@@ -223,6 +262,11 @@ void RelayClient::run() {
                 [this, gen](int code, const std::string& reason) { onClose(gen, code, reason); });
         } else {
             res.error = "no WebSocket implementation";
+        }
+        {
+            std::lock_guard<std::mutex> lk(m_);
+            opening_ = nullptr;
+            if (stop_) break; // (ws destroyed on scope exit)
         }
         if (!res.ok) {
             ws.reset();
@@ -263,13 +307,20 @@ void RelayClient::run() {
             const int wait = static_cast<int>(std::clamp<int64_t>(untilPing, 1, opt_.linkPollMs));
             {
                 std::unique_lock<std::mutex> lk(m_);
-                cv_.wait_for(lk, std::chrono::milliseconds(wait), [&] { return stop_ || closed_ || woken_; });
+                cv_.wait_for(lk, std::chrono::milliseconds(wait),
+                             [&] { return stop_ || closed_ || woken_ || resync_; });
                 woken_ = false;
                 if (stop_) {
                     stopping = true;
                     break;
                 }
                 if (closed_) break;
+                if (resync_) {
+                    lk.unlock();
+                    logLine("a non-lossy frame could not be queued: reconnecting to resync the controllers");
+                    ws->close(platform::kWsCloseGoingAway, "resync");
+                    break;
+                }
             }
             const int64_t t = nowMs();
             if (client_.currentToken() != token) { // unlinked or re-linked: reconnect with the new identity
@@ -290,10 +341,11 @@ void RelayClient::run() {
             std::lock_guard<std::mutex> lk(m_);
             ws_ = nullptr;
             closed_ = true;
+            ++gen_; // late frames of this socket are ignored from here on (they would re-join ghosts)
+            postLocked([](const Handlers& h) {
+                if (h.cleared) h.cleared();
+            });
         }
-        postToMessageThread([](const Handlers& h) {
-            if (h.cleared) h.cleared();
-        });
         ws.reset(); // joins the socket threads
         if (stopping) break;
         if (nowMs() - openedAt >= opt_.stableMs) failures_ = 0;

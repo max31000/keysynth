@@ -21,7 +21,7 @@ public:
 
     static constexpr const char* kPrefix = "r:"; // ControlServer client id = kPrefix + cid
     static constexpr int kTelemetryIntervalMs = 100;
-    static constexpr int kMidiIntervalMs = 67;
+    static constexpr int kMidiIntervalMs = 66; // 2 pump ticks
     static constexpr int kParamIntervalMs = 50;
 
     static bool isRemoteId(const std::string& clientId);
@@ -61,6 +61,7 @@ private:
     void emit(const std::string& to, const std::string& except, bool lossy, const nlohmann::json& msg);
     void emitActive(bool lossy, const nlohmann::json& msg); // to "*" or each active cid
     void flushMidi(Clock::time_point t);
+    void flushParams(Clock::time_point t, bool onlyDue);
 
     Sink sink_;
     std::function<Clock::time_point()> clock_;

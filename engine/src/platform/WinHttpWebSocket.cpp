@@ -92,6 +92,13 @@ public:
         }
         const int t = hs.timeoutMs > 0 ? hs.timeoutMs : 10000;
         WinHttpSetTimeouts(session_, t, t, t, t);
+        if (secure) { // TLS 1.2+ (1.3 where the OS has it)
+            DWORD proto = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+            if (!WinHttpSetOption(session_, WINHTTP_OPTION_SECURE_PROTOCOLS, &proto, sizeof(proto))) {
+                proto = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
+                WinHttpSetOption(session_, WINHTTP_OPTION_SECURE_PROTOCOLS, &proto, sizeof(proto));
+            }
+        }
         connect_ = WinHttpConnect(session_, host.c_str(), uc.nPort, 0);
         if (!connect_) {
             r.error = lastError("WinHttpConnect");
@@ -103,9 +110,19 @@ public:
             r.error = lastError("WinHttpOpenRequest");
             return r;
         }
+        {
+            std::lock_guard<std::mutex> lk(handleM_);
+            if (aborted_) {
+                WinHttpCloseHandle(req);
+                r.error = "aborted";
+                return r;
+            }
+            req_ = req; // abort() closes it: cancels a blocking send/receive of the handshake
+        }
         auto closeReq = [&] {
-            if (req) WinHttpCloseHandle(req);
-            req = nullptr;
+            std::lock_guard<std::mutex> lk(handleM_);
+            if (req_) WinHttpCloseHandle(req_);
+            req_ = nullptr;
         };
         if (!WinHttpSetOption(req, WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET, nullptr, 0)) {
             r.error = lastError("WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET");
@@ -137,13 +154,20 @@ public:
         }
         DWORD idle = kIdleReceiveTimeoutMs;
         WinHttpSetOption(req, WINHTTP_OPTION_RECEIVE_TIMEOUT, &idle, sizeof(idle));
-        ws_ = WinHttpWebSocketCompleteUpgrade(req, 0);
+        HINTERNET ws = WinHttpWebSocketCompleteUpgrade(req, 0);
+        if (!ws) r.error = lastError("WinHttpWebSocketCompleteUpgrade");
         closeReq();
-        if (!ws_) {
-            r.error = lastError("WinHttpWebSocketCompleteUpgrade");
-            return r;
+        if (!ws) return r;
+        WinHttpSetOption(ws, WINHTTP_OPTION_RECEIVE_TIMEOUT, &idle, sizeof(idle));
+        {
+            std::lock_guard<std::mutex> lk(handleM_);
+            if (aborted_) {
+                WinHttpCloseHandle(ws);
+                r.error = "aborted";
+                return r;
+            }
+            ws_ = ws;
         }
-        WinHttpSetOption(ws_, WINHTTP_OPTION_RECEIVE_TIMEOUT, &idle, sizeof(idle));
         {
             std::lock_guard<std::mutex> lk(m_);
             open_ = true;
@@ -184,12 +208,18 @@ public:
         return queued_;
     }
 
+    void abort() override { abortHandle(); }
+
 private:
     void abortHandle() {
         std::lock_guard<std::mutex> lk(handleM_);
-        if (ws_ && !aborted_) {
-            aborted_ = true;
-            // Cancels a pending blocking receive/send on the other threads.
+        aborted_ = true;
+        // Closing a handle cancels the blocking call another thread makes on it (handshake / receive / send).
+        if (req_) {
+            WinHttpCloseHandle(req_);
+            req_ = nullptr;
+        }
+        if (ws_) {
             WinHttpCloseHandle(ws_);
             ws_ = nullptr;
         }
@@ -316,7 +346,7 @@ private:
 
     HINTERNET session_ = nullptr, connect_ = nullptr;
     std::mutex handleM_, sendM_;
-    HINTERNET ws_ = nullptr;
+    HINTERNET ws_ = nullptr, req_ = nullptr; // guarded by handleM_
     bool aborted_ = false;
     OnText onText_;
     OnClose onClose_;

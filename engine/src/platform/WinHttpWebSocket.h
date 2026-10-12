@@ -46,6 +46,9 @@ public:
     virtual bool send(std::string text) = 0;
     // Start the closing handshake (or abort a dead connection). onClose follows.
     virtual void close(int code = kWsCloseNormal, const std::string& reason = {}) = 0;
+    // Any thread: cancel a blocking open() or drop the connection without a closing handshake. onClose follows
+    // for an opened socket. Never invokes callbacks on the calling thread.
+    virtual void abort() = 0;
     // Bytes waiting in the send queue.
     virtual size_t queuedBytes() const = 0;
 };

@@ -119,7 +119,7 @@ std::string checkPatch(const json& p) {
 
 } // namespace
 
-std::string webRestriction(const json& msg) {
+std::string webRestriction(const json& msg, const char* sessionKind) {
     static const std::set<std::string> open = {
         "hello",      "get_catalog",   "set_param",     "get_patch",     "list_presets",   "add_layer",
         "remove_layer", "set_zone",    "set_instrument", "add_fx",       "remove_fx",      "move_fx",
@@ -151,7 +151,7 @@ std::string webRestriction(const json& msg) {
         const std::string e = checkPatch(*it);
         return e.empty() ? std::string() : "set_patch: " + e;
     }
-    return "'" + type + "' is not available to web sessions";
+    return "'" + type + "' is not available to " + sessionKind + " sessions";
 }
 
 std::string remoteRestriction(const json& msg) {
@@ -159,10 +159,7 @@ std::string remoteRestriction(const json& msg) {
                                                  "open_audio_panel", "samples_delete", "reload_plugin"};
     const std::string type = msg.value("type", std::string());
     if (denied.count(type)) return "'" + type + "' is not available to remote sessions";
-    std::string why = webRestriction(msg);
-    if (!why.empty() && why.find("is not available to web sessions") != std::string::npos)
-        why = "'" + type + "' is not available to remote sessions";
-    return why;
+    return webRestriction(msg, "remote");
 }
 
 std::string trustRestriction(Trust t, const json& msg) {

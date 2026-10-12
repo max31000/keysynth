@@ -81,7 +81,9 @@ private:
     void onText(uint64_t gen, std::string text);
     void onClose(uint64_t gen, int code, const std::string& reason);
     bool sendRaw(const nlohmann::json& j);
-    void postToMessageThread(std::function<void(const Handlers&)> f);
+    void postLocked(std::function<void(const Handlers&)> f);           // m_ held
+    void postFor(uint64_t gen, std::function<void(const Handlers&)> f); // only while `gen` is current
+    void requestResync();
     bool waitStop(int ms, bool wakeable); // true when stopping
 
     CloudClient& client_;
@@ -93,8 +95,9 @@ private:
 
     mutable std::mutex m_;
     std::condition_variable cv_;
-    bool stop_ = false, woken_ = false, closed_ = false;
-    platform::WebSocket* ws_ = nullptr; // the connected socket (owned by run())
+    bool stop_ = false, woken_ = false, closed_ = false, resync_ = false;
+    platform::WebSocket* ws_ = nullptr;      // the connected socket (owned by run())
+    platform::WebSocket* opening_ = nullptr; // during open() (stop() aborts it)
     uint64_t gen_ = 0;
     std::atomic<int64_t> lastRxMs_{0};
     std::thread thread_;

@@ -382,6 +382,18 @@ TEST_CASE("relay router: param coalescing per (node,param) <= 20 Hz, latest wins
     CHECK(f.count("param") == 1);
     CHECK(f.sent.back()["msg"]["type"] == "state");
 
+    // Any other non-lossy event (or a state that skips someone) flushes coalesced values first: order is kept.
+    for (const json& next : {json{{"type", "log"}}, json{{"type", "state"}}}) {
+        f.sent.clear();
+        f.advance(100ms);
+        f.r.broadcast(param(3, "cutoff", 5), "a");
+        f.r.broadcast(param(3, "cutoff", 6), "a"); // pending
+        f.r.broadcast(next, next["type"] == "state" ? "b" : "");
+        REQUIRE(f.sent.size() == 3);
+        CHECK(f.sent[1]["msg"]["value"] == 6);
+        CHECK(f.sent[2]["msg"]["type"] == next["type"]);
+    }
+
     // Others with only the sender connected: nothing to send.
     f.sent.clear();
     f.r.leave("b");
@@ -435,6 +447,7 @@ struct FakeSocket final : platform::WebSocket {
     platform::WsOpenResult open(const platform::WsHandshake& hs, OnText t, OnClose c) override;
     bool send(std::string text) override;
     void close(int code, const std::string& reason) override;
+    void abort() override { open_ = false; } // never blocks in open(); no callback on the caller's thread
     size_t queuedBytes() const override { return 0; }
     void serverSend(const json& j) {
         if (open_) onText(j.dump());
@@ -452,6 +465,7 @@ struct FakeHub {
     std::vector<std::string> frames; // client -> server
     FakeSocket* current = nullptr;
     int opened = 0, destroyed = 0;
+    std::atomic<bool> failSends{false}; // simulate a full send queue
 
     platform::WebSocketFactory factory() {
         return [this] { return std::make_unique<FakeSocket>(*this); };
@@ -511,7 +525,7 @@ platform::WsOpenResult FakeSocket::open(const platform::WsHandshake& hs, OnText 
 }
 
 bool FakeSocket::send(std::string text) {
-    if (!open_) return false;
+    if (!open_ || hub.failSends) return false;
     std::lock_guard<std::mutex> lk(hub.m);
     hub.frames.push_back(std::move(text));
     hub.cv.notify_all();
@@ -716,10 +730,51 @@ TEST_CASE("relay client: silence timeout and re-link reconnect", "[relay]") {
                f.hub.handshakes.back().headers[0].second == "Bearer " + test::kOtherToken && f.hub.current;
     }));
     // Unlink: socket closed, idle.
+    platform::WebSocket::OnText stale;
+    f.hub.withCurrent([&](FakeSocket& sock) { stale = sock.onText; });
     f.client.clearLink("");
     REQUIRE(f.hub.waitFor([&] { return f.hub.current == nullptr; }));
-    std::this_thread::sleep_for(50ms);
+    const auto end = std::chrono::steady_clock::now() + 3s;
+    while (f.relay->state() != cloud::RelayClient::State::Idle && std::chrono::steady_clock::now() < end)
+        std::this_thread::sleep_for(5ms);
     CHECK(f.relay->state() == cloud::RelayClient::State::Idle);
+    // A frame of the retired socket arriving late must not re-join a ghost controller after `cleared`.
+    f.posts.drain();
+    f.events.clear();
+    REQUIRE(stale);
+    stale(json{{"t", "msg"}, {"from", "ghost"}, {"msg", {{"type", "hello"}}}}.dump());
+    stale(json{{"t", "controller"}, {"cid", "ghost"}, {"joined", true}}.dump());
+    f.posts.drain();
+    CHECK(f.events.empty());
+}
+
+TEST_CASE("relay client: non-lossy overflow resyncs, oversized reply becomes an error", "[relay]") {
+    RelayFixture f;
+    REQUIRE(f.hub.waitFor([&] { return f.hub.opened == 1 && !f.hub.frames.empty(); }));
+    // Oversized reply to a cid with an id -> error too_large to that cid.
+    CHECK_FALSE(f.relay->send({{"t", "msg"},
+                               {"to", "c1"},
+                               {"msg", {{"type", "samples_list_ok"}, {"id", 5}, {"blob", std::string(1100000, 'x')}}}},
+                              false));
+    const auto msgs = f.hub.framesOfType("msg");
+    REQUIRE(msgs.size() == 1);
+    CHECK(msgs[0]["to"] == "c1");
+    CHECK(msgs[0]["msg"]["type"] == "error");
+    CHECK(msgs[0]["msg"]["code"] == "too_large");
+    CHECK(msgs[0]["msg"]["id"] == 5);
+    // A lossy frame that cannot be queued is just dropped ...
+    f.hub.failSends = true;
+    CHECK_FALSE(f.relay->send({{"t", "msg"}, {"to", "*"}, {"lossy", true}, {"msg", {{"type", "telemetry"}}}}, true));
+    std::this_thread::sleep_for(30ms);
+    CHECK(f.hub.opened == 1);
+    // ... a non-lossy one forces a reconnect (controllers re-hello and get a fresh state).
+    CHECK_FALSE(f.relay->send({{"t", "msg"}, {"to", "*"}, {"msg", {{"type", "state"}}}}, false));
+    f.hub.failSends = false;
+    REQUIRE(f.hub.waitFor([&] { return f.hub.opened == 2; }));
+    // An oversized broadcast cannot become an error reply: also a resync.
+    CHECK_FALSE(f.relay->send(
+        {{"t", "msg"}, {"to", "*"}, {"msg", {{"type", "state"}, {"blob", std::string(1100000, 'x')}}}}, false));
+    REQUIRE(f.hub.waitFor([&] { return f.hub.opened == 3; }));
 }
 
 TEST_CASE("relay client + server: remote request round trip through bindRelay", "[relay][protocol]") {
