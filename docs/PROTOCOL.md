@@ -174,6 +174,7 @@ ever processed.
 | `http://127.0.0.1:5173`, `http://localhost:5173` — **dev builds only** (no `installed.flag`) | `local` |
 | `https://mvv42.ru` (exact: no `www`, port or path) | `web` |
 | `null`, anything else | rejected |
+| — (controller relayed by the cloud hub: virtual client `r:<cid>`, no socket of its own; *Relay* below) | `remote` |
 
 Dev builds may add one extra `web` origin with `--web-origin <origin>` / `KS_WEB_ORIGIN` (staging tests); installed
 builds ignore it.
@@ -194,6 +195,10 @@ builds ignore it.
 Logical path (all sessions accept them; `web` sessions accept nothing else): relative, `/`-separated, no `..` segment,
 no `\`, `:`, leading `/` or control chars, starting with one of the prefixes above. `userdata/…` always means the
 **active profile** (below). The engine maps logical paths to disk via AppPaths (cloud-api spec *Local storage*).
+
+**`remote` sessions** (relayed controllers) = the `web` table above, minus `cloud_link`, `cloud_unlink`,
+`set_audio_device`, `open_audio_panel`, `samples_delete` (and `reload_plugin`, already forbidden) → `error`
+`forbidden`; default-deny for anything new. Their `hello` reply carries `trust: "remote"`; the UI hides denied features.
 
 ### Profiles
 Unlinked: the local profile (`userdata/presets`, `userdata/patterns`). Linked to account `<accountId>`:
@@ -339,3 +344,88 @@ When a patch is applied (`load_preset`, `set_patch`, `set_instrument`, any rebui
 6. Not in the (fresh) manifest → unchanged behaviour (missing-sfz `log { level: "error", notify: true }`).
 The UI shows `samples_missing` on the sampler panel («Сэмплы не скачаны», «Скачать сэмплы (N МБ)» → `samples_fetch
 { scope: "entry" }` when linked and the entry is in the catalog). `log` with `notify` below `error` is a neutral toast.
+
+## Relay (remote control through the cloud hub)
+
+Design: `docs/specs/2026-10-12-remote.md` (§10 wins). Hub: `server/src/Keysynth.Api/Relay/` (`RelayHub`,
+`RelayEndpoint`). Engine side: ARCHITECTURE §15 *Relay host*. The relay carries ordinary engine protocol messages
+(everything above) inside an envelope; the hub never looks into `msg` beyond "is a JSON object".
+
+### Endpoint, roles, auth
+`GET /api/relay?role=host|controller[&cid=<cid>]` (public `wss://mvv42.ru/keysynth/api/relay`), WebSocket upgrade.
+All checks run before the upgrade; a refusal is an HTTP status with `{"error":"<code>"}` (browsers only see a failed
+socket, the engine sees the status).
+
+| case | result |
+|---|---|
+| `role` missing / other | 400 `invalid_request` |
+| cookie **and** `Authorization` on one request | 400 `invalid_request` |
+| host: device bearer (`Authorization: Bearer ksd_…`, same checks as REST incl. `last_app_ok_at`) | ok; failures 401 `token_invalid` / `token_expired` / `reauth_required`, none 401 `unauthorized`, a cookie 403 `forbidden` |
+| controller: mvv42 cookie with the keysynth grant + `Origin` exactly in `Mvv42Auth:AllowedOrigins` (`https://mvv42.ru`) | ok; `Origin` missing / foreign or a bearer → 403 `forbidden`, no/invalid cookie → 401 `unauthorized`, no grant → 403 `forbidden` |
+| controller `cid` not `[A-Za-z0-9_-]{8,64}` | 400 `invalid_request` (missing `cid` → the server generates one) |
+| valid, but not a WebSocket request | 400 `websocket_required` |
+
+- **Host** = an engine; its `deviceId` is taken from the token (the `hello` value is ignored). **Controller** = a
+  browser tab, identified by its client-generated `cid` (UUID). **Room** = local user id: frames never cross users.
+- Controller sockets live ≤ 60 min (close 4002). At ~50 min the client refreshes its cookie (`getMe()`), opens a new
+  socket with the **same `cid`** and then closes the old one: a connecting known `cid` is a **resume** — the old
+  socket is closed with 4000, hosts see no `joined`/left (a paused state is reset with `resume`). The grant is
+  checked at the handshake only. Host tokens are re-checked every 5 min (deleted / expired / `reauth_required` →
+  close 4003); `DELETE /api/devices/{id}` and `/me` close that host at once and drop it from `hosts` (a handshake
+  authenticated just before the delete is caught by the next 5-min check).
+- A server-initiated close removes the socket from the room immediately (hosts list / `joined:false` / slot freed),
+  without waiting for the client's close reply; the socket is aborted 5 s later if the handshake has not finished.
+- A repeated `hello` only updates name/version (no second round of `controller` events).
+
+### Envelope (JSON text frames)
+```jsonc
+// host -> server
+{ "t": "hello", "host": { "deviceId": "…", "name": "MAX-PC", "version": "0.2.0" } }  // first; msg before it -> error hello_required
+{ "t": "msg", "to": "<cid>" | "*", "except": "<cid>" /*opt*/, "lossy": true /*opt*/, "msg": { …engine message… } }
+// server -> host
+{ "t": "controller", "cid": "<cid>", "joined": true | false }   // after hello: one joined:true per present controller
+{ "t": "msg", "from": "<cid>", "msg": { …engine request… } }
+{ "t": "pause" | "resume", "cid": "<cid>" }                     // hidden tab: skip telemetry for that cid
+// controller -> server
+{ "t": "msg", "host": "<deviceId>", "msg": { …engine request… } }
+{ "t": "pause" } { "t": "resume" }
+// server -> controller
+{ "t": "hosts", "hosts": [ { "deviceId": "…", "name": "MAX-PC", "version": "0.2.0", "online": true } ] }
+                                                                 // on connect and on every change
+{ "t": "msg", "host": "<deviceId>", "msg": { …engine reply / event… } }
+// both ways
+{ "t": "ping" } -> { "t": "pong" }
+{ "t": "error", "code": "bad_envelope" | "hello_required" | "host_offline", "host": "…"?, "id": …? }
+```
+- Routing: `to:"<cid>"` → that controller (unknown cid: dropped, the host gets `joined:false` anyway); `to:"*"` →
+  every controller of the room except `except`. `lossy:true` frames are also skipped for paused controllers.
+- `hosts` lists every host seen in this room since the API started; `online:false` once its socket is gone (a
+  replaced host goes `false` → `true` with its new `hello`; controllers re-`hello` the engine on offline → online).
+- `host_offline` answers a controller `msg` to a host that is not online; `id` echoes the inner request's `id`.
+- `bad_envelope`: not JSON / not an object, unknown `t`, wrong field types. The socket stays open.
+
+### Limits and close codes
+| item | limit |
+|---|---|
+| hosts / controllers per user | 4 / 8 (a host with the same deviceId replaces the old socket; a known cid resumes) |
+| inbound message (all fragments) | host 1 MB, controller 128 KB |
+| inbound rate (safety cap, burst = 1 s) | host 300 msg/s, controller 100 msg/s |
+| heartbeat | server `ping` every 20 s; any inbound frame is liveness; 45 s silence → close |
+| outgoing queue per socket | a lossy frame is dropped while ≥ 64 frames are queued or it would bring the queue over 1 MB; a non-lossy frame that would exceed 1024 frames / 8 MB → close 4008 |
+
+| code | meaning | client action |
+|---|---|---|
+| 1000 | normal | — |
+| 1001 | server shutdown | reconnect with backoff |
+| 1003 | binary frame | bug |
+| 1009 | inbound message over the cap | bug (engine: replies > 1 MB become `error too_large`) |
+| 4000 | replaced (same host deviceId / same cid connected again) | controller: none (the new socket wins); the engine reconnects with backoff (two engines sharing one token keep replacing each other) |
+| 4001 | heartbeat timeout | reconnect, re-`hello` |
+| 4002 | controller socket max age (60 min) | reconnect with a refreshed cookie, same cid |
+| 4003 | host token revoked / expired / reauth required | reconnect → the upgrade answers 401 → unlink |
+| 4008 | non-lossy frame did not fit the outgoing queue | reconnect, re-`hello` (resync) |
+| 4009 | too many hosts / controllers for this user | back off |
+| 4029 | inbound rate cap | back off, fix the client |
+
+Relayed controllers appear in the engine as virtual clients `r:<cid>` with trust `remote` (see *Sessions, Origin,
+Host*). The PC browser tab with a direct engine never uses the relay.

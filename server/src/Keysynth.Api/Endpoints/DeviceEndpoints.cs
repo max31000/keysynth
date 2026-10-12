@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Keysynth.Api.Auth;
 using Keysynth.Api.Http;
+using Keysynth.Api.Relay;
 using Keysynth.Core;
 
 namespace Keysynth.Api.Endpoints;
@@ -70,13 +71,15 @@ public static class DeviceEndpoints
         return Results.Ok(new ItemsDto<DeviceDto>(rows.Select(d => new DeviceDto(d.DeviceId, d.Name, d.CreatedAt, d.LastSeenAt, d.ExpiresAt)).ToList()));
     }
 
-    private static async Task<IResult> Delete(HttpContext ctx, string deviceId, IDeviceRepository devices)
+    private static async Task<IResult> Delete(HttpContext ctx, string deviceId, IDeviceRepository devices, RelayHub relay)
     {
         if (!DeviceIds.IsValid(deviceId))
             return Errors.NotFound;
-        return await devices.DeleteAsync(KeysynthAuth.RequireCookieUserId(ctx), deviceId, ctx.RequestAborted)
-            ? Results.NoContent()
-            : Errors.NotFound;
+        var userId = KeysynthAuth.RequireCookieUserId(ctx);
+        if (!await devices.DeleteAsync(userId, deviceId, ctx.RequestAborted))
+            return Errors.NotFound;
+        relay.DeviceRemoved(userId, deviceId);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> Me(HttpContext ctx, IDeviceRepository devices, IUserRepository users)
@@ -93,10 +96,11 @@ public static class DeviceEndpoints
         return Results.Ok(new DeviceMe(device.DeviceId, device.Name, AccountId(userId), user.Name, device.ExpiresAt));
     }
 
-    private static async Task<IResult> DeleteMe(HttpContext ctx, IDeviceRepository devices)
+    private static async Task<IResult> DeleteMe(HttpContext ctx, IDeviceRepository devices, RelayHub relay)
     {
         var (userId, deviceId) = KeysynthAuth.DevicePrincipal(ctx.User)!.Value;
         await devices.DeleteAsync(userId, deviceId, ctx.RequestAborted);
+        relay.DeviceRemoved(userId, deviceId);
         return Results.NoContent();
     }
 }
