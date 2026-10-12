@@ -16,6 +16,7 @@
   scripts/configure.ps1
   scripts/configure.ps1 -BuildDir build-va
   scripts/configure.ps1 -BuildDir build-asan -ExtraArgs '-DKS_RT_CHECKS=OFF'
+  scripts/configure.ps1 -Generator auto      # newest installed Visual Studio (17 2022 or 18 2026; CI runners)
 #>
 param(
     [string]$BuildDir = "build",
@@ -69,6 +70,16 @@ function Get-DepProblem([string]$dep) {
     return "not at $pin"
 }
 
+if ($Generator -eq "auto") {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    $vsVer = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion
+    $Generator = switch ([int]("$vsVer".Split('.')[0])) {
+        18 { "Visual Studio 18 2026" }
+        17 { "Visual Studio 17 2022" }
+        default { throw "no supported Visual Studio with C++ tools found (vswhere: '$vsVer')" }
+    }
+    Write-Host "Generator: $Generator (Visual Studio $vsVer)"
+}
 $cmakeArgs = @("-S", $repo, "-B", $buildPath, "-G", $Generator, "-A", "x64",
     "-DFETCHCONTENT_BASE_DIR=$depsCmake")
 

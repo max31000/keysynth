@@ -83,8 +83,19 @@ Api& api() {
     static Api a = [] {
         Api r;
         std::string err;
-        // 1) <faust>/lib/faust.dll (env or compile-time dir), 2) next to the executable (post-build copy).
+        // 1) $KS_FAUST_DIR/lib/faust.dll, 2) the installer's bundle: faust.dll + share/faust next to the exe,
+        // 3) <compile-time KS_FAUST_DIR>/lib/faust.dll, 4) faust.dll next to the exe (post-build copy) with the
+        // compile-time dir's share/faust.
+        const fs::path exeDir = platform::executableDir();
+        std::error_code bec;
+        const bool bundled = fs::is_regular_file(exeDir / "faust.dll", bec) &&
+                             fs::is_regular_file(exeDir / "share" / "faust" / "stdfaust.lib", bec);
+        if (bundled && std::getenv("KS_FAUST_DIR") == nullptr) {
+            r.lib = platform::openLibrary(exeDir / "faust.dll", err);
+            if (r.lib) r.root = exeDir;
+        }
         for (const fs::path& root : faustRootCandidates()) {
+            if (r.lib) break;
             std::error_code ec;
             const fs::path dll = root / "lib" / "faust.dll";
             if (!fs::is_regular_file(dll, ec)) continue;

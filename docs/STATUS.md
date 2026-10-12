@@ -3,6 +3,13 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Cloud WP-C (Windows desktop packaging, ARCHITECTURE §16): `keysynth-app` (windows-subsystem build of the engine,
+  log to `<data>/logs/engine.log`), tray icon + menu (open web/local UI with mvv42.ru health fallback, restart
+  audio, autostart toggle, quit), single instance (mutex + open/quit events, `--tray`, `--no-tray`, `--quit`,
+  `keysynth://`), version + icon resource (`KS_VERSION`, `assets/icon` from `scripts/make_icon.py`), bundled
+  Faust lookup, Inno Setup per-user installer (`installer/keysynth.iss`, ~16 MB), `scripts/build_installer.ps1`,
+  `.github/workflows/release-windows.yml`, `configure.ps1 -Generator auto`. 4 `[desktop]` tests; installer smoke
+  test (install, tray menu, second instance, protocol launch, upgrade over a running engine, uninstall) passed.
 - Cloud WP-B (engine): AppPaths installed/dev modes + logical paths + per-account profiles; Origin/Host session
   trust (`control/Trust`, web default-deny); CloudClient (JUCE/WinINet behind `HttpTransport`, DPAPI token in
   `cloud.json`, link/unlink/401 drop, `--cloud-api`); SampleService (manifest+ETag, jobs, 2 workers, Range/If-Range
@@ -83,6 +90,11 @@ Update when a chunk of work lands. Newest first inside each section.
   until the next store change); «Портал» menu link is `/` (dev server root under `dev:platform`); `keysynth://open`
   is untested from the shell iframe (hidden there). Not yet verified in real Chrome against mvv42.ru (LNA prompt,
   iframe permission) — needs WP-E deploy.
+- WP-C: the tray has no «Настройки звука…» item (spec §7): audio settings stay in the UI's audio dialog. Release
+  CI (`release-windows.yml`) has not run yet: the code was only built with VS 18 / MSVC 19.50 locally; the
+  runner picks VS 2022 or 2026 via `configure.ps1 -Generator auto`; Inno Setup from the image or choco 6.7.3.
+  Review notes not fixed: a health probe finishing after shutdown drops its browser launch (harmless); the release
+  exe still lists the CI's compile-time `KS_FAUST_DIR` as a last fallback (never exists on user machines).
 - WP-B review items not fixed (accepted for v1): a `web` session's `load_preset` does not re-check paths *inside* the
   preset file (synced presets are server-controlled; still bounded by AppPaths roots); `set_patch` from `web` may
   hand a state blob to an already installed `plugin:` DLL (`load_state`, guarded); WS refusals are a 4003 close after

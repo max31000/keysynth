@@ -48,7 +48,7 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll] [cloud] [sync] [samplecache]`. `[cloud]` tests
+[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll] [cloud] [sync] [samplecache] [desktop]`. `[cloud]` tests
 (trust rules, Host check, manifest path fuzz, DPAPI, link flow, sync algorithm, downloader/resume/delete, sampler
 auto-fetch) run against an in-memory fake API (`engine/tests/FakeCloud.h`, no network). Hidden `[.cloud-live]`
 (`ks-tests "[cloud-live]"`) uses the real HTTPS transport: `$env:KS_CLOUD_TOKEN` (device token) and optional
@@ -186,7 +186,13 @@ Cloud flags: `--no-cloud` (no link / sample cache / sync), `--cloud-api URL` (al
 `KS_CLOUD_API` / `KS_CLOUD_BASE`) and `--web-origin ORIGIN` (env `KS_WEB_ORIGIN`, an extra `web` origin) — the last
 two only in dev builds (no `installed.flag` next to the exe). `KS_DATA_DIR` moves the data root (settings,
 `cloud.json`, logs, sample cache, profiles) — use it for experiments so the repo's `userdata/` stays untouched.
-Installed mode is simulated by an empty `installed.flag` next to the exe (data root `%LOCALAPPDATA%\keysynth`).
+Installed mode is simulated by an empty `installed.flag` next to the exe (data root `%LOCALAPPDATA%\keysynth`);
+it also turns on desktop mode (tray, single instance, opens the browser) — add `--no-tray` for headless runs.
+
+Desktop flags (ARCHITECTURE §16): `--tray` (tray + single instance without opening the browser; also in dev),
+`--no-tray`, `--quit` (asks the running desktop instance to exit; exit code 1 if none), `keysynth://open`
+(protocol launch = `--tray`). `build/bin/Release/keysynth-engine.exe --tray --no-audio --no-midi` shows the tray in
+a dev build; the windows-subsystem variant is `build/bin/Release/app/keysynth-engine.exe` (target `keysynth-app`).
 
 ### Local cloud E2E (`scripts/dev_cloud_server.py`)
 
@@ -234,3 +240,38 @@ async def main():
         for _ in range(10): print(json.loads(await ws.recv())["type"])  # midi / telemetry events
 asyncio.run(main())
 ```
+
+## Release / installer
+
+Design: ARCHITECTURE §16. Needs Inno Setup 6 (`ISCC.exe` on PATH, in `Program Files (x86)\Inno Setup 6`, or a
+portable copy in `<main checkout>/.tools/innosetup`: run the official `innosetup-6.x.exe` with
+`/VERYSILENT /CURRENTUSER /PORTABLE=1 /DIR=<main>\.tools\innosetup`), Node (UI build) and Faust in `.tools/faust`.
+
+```powershell
+scripts/build_installer.ps1                          # build-release/ -> out/keysynth-setup-<ver>.exe + out/keysynth-setup.exe
+scripts/build_installer.ps1 -BuildDir build-desk -Version 0.2.0
+scripts/build_installer.ps1 -NoBuild -SkipUi         # restage + repackage only (exe must have the same version)
+python scripts/make_icon.py                          # regenerate assets/icon/* (Pillow) after changing the design
+```
+
+Version: `-Version`, else the exact tag `vX.Y.Z` on HEAD, else `project()` in CMakeLists.txt (configured as
+`-DKS_VERSION=<ver>` into the exe version resource and `hello`). Staging is `out/stage/{app,plugins}` (app = exe,
+`installed.flag`, faust.dll + `share/faust/*.lib`, VC++ runtime DLLs from the newest VS `VC\Redist\MSVC\*\x64`,
+`presets/factory|patterns`, `ui/dist` built with `--base=/`, licences; plugins = Faust examples). Installer ≈ 16 MB.
+
+Smoke test (per-user, into a temp dir; restores the machine afterwards):
+
+```powershell
+$dir = "$env:TEMP\ks-inst-test"
+out\keysynth-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /DIR="$dir" /TASKS=desktopicon,autostart
+# HKCU\Software\Classes\keysynth\shell\open\command, HKCU\...\Run\keysynth, Start menu + desktop keysynth.lnk
+& "$dir\keysynth-engine.exe" --tray --no-audio --no-midi --port 7381 --http-port 7380   # tray; log: %LOCALAPPDATA%\keysynth\logs\engine.log
+& "$dir\keysynth-engine.exe" --tray      # second instance: exits at once (exit 0)
+out\keysynth-setup.exe /VERYSILENT /CURRENTUSER /DIR="$dir"   # silent upgrade while running: quit first, restarted with --tray after
+& "$dir\unins000.exe" /VERYSILENT /DELETEDATA   # without /DELETEDATA %LOCALAPPDATA%\keysynth is kept
+```
+
+CI: `.github/workflows/release-windows.yml` on tags `v*` (and manual dispatch, artifact only): windows-latest,
+`.deps` + Faust cache, `scripts/configure.ps1 -Generator auto` (newest VS on the runner: 17 2022 or 18 2026),
+Release build, `ks-tests` default tier, `scripts/build_installer.ps1 -NoBuild`, uploads `keysynth-setup.exe` +
+`keysynth-setup-X.Y.Z.exe` to the GitHub Release of the tag. Unsigned: SmartScreen shows "More info → Run anyway".
