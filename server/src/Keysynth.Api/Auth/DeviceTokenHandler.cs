@@ -49,10 +49,8 @@ public sealed class DeviceTokenHandler(
             return Fail(TokenInvalid);
 
         var now = clock.UtcNow;
-        if (now >= device.ExpiresAt)
-            return Fail(TokenExpired);
-        if (now - device.LastAppOkAt > Limits.AppOkMaxAge)
-            return Fail(ReauthRequired);
+        if (Validity(device, now) is { } invalid)
+            return Fail(invalid);
 
         if (device.LastSeenAt is not { } seen || now - seen >= Limits.LastSeenWriteInterval)
             await devices.TouchAsync(device.Id, now, Context.RequestAborted);
@@ -64,6 +62,15 @@ public sealed class DeviceTokenHandler(
         ], KeysynthAuth.DeviceScheme);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
     }
+
+    /// <summary>
+    /// Time-dependent checks of a found token (<c>expires_at</c>, then <c>last_app_ok_at</c>): the error code, or null
+    /// when still valid. Shared with the relay's periodic host revalidation.
+    /// </summary>
+    public static string? Validity(DeviceAuth device, DateTime now) =>
+        now >= device.ExpiresAt ? TokenExpired
+        : now - device.LastAppOkAt > Limits.AppOkMaxAge ? ReauthRequired
+        : null;
 
     private AuthenticateResult Fail(string code)
     {

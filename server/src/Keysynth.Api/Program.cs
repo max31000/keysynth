@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Keysynth.Api.Auth;
 using Keysynth.Api.Endpoints;
 using Keysynth.Api.Http;
+using Keysynth.Api.Relay;
 using Keysynth.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
 
@@ -12,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddKeysynthAuth(builder.Configuration);
 builder.Services.AddKeysynthRateLimits();
+builder.Services.AddRelay(builder.Configuration);
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -46,6 +48,9 @@ app.UseStatusCodePages(async sc =>
 if (app.Environment.IsDevelopment())
     app.UseCors(DevCors);
 
+// Relay sockets (RelayEndpoint): app-level heartbeat, so no protocol keep-alive pings.
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.Zero });
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<UserProvisioningMiddleware>();
@@ -59,6 +64,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapDeviceEndpoints();
 app.MapSampleEndpoints();
 app.MapPresetEndpoints();
+app.MapRelayEndpoint();
 
 app.Run();
 

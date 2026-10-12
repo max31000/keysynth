@@ -7,6 +7,11 @@ relay answers trust "remote"; load_preset round trip (reply + state); a set_para
 stopped at the end (never uses the installed engine's ports 7340/7341).
 
   python scripts/dev_relay_e2e.py [--engine build-relay/bin/Release/keysynth-engine.exe] [--idle 50 --server-ping 1000]
+
+Against the real keysynth-api (in-memory test host on Kestrel, server/tests RelayEngineE2ETests, which passes these):
+  --server http://127.0.0.1:<port> --cookie "<name>=<jwt>" --origin https://mvv42.ru
+(no dev server is started; the device token is minted for the engine's deviceId with POST /api/devices and the
+controllers authenticate with the cookie + Origin, like the browser UI).
 Requires `python -m pip install websockets`.
 """
 import argparse
@@ -110,16 +115,40 @@ def check(cond, what):
     print("  ok:", what, flush=True)
 
 
+def api_base(a):
+    return a.server.rstrip("/") if a.server else f"http://127.0.0.1:{a.relay_port}/keysynth"
+
+
+def mint_token(a, device_id):
+    """POST /api/devices with the controller cookie (what the platform UI does when linking)."""
+    req = urllib.request.Request(api_base(a) + "/api/devices", method="POST",
+                                 data=json.dumps({"deviceId": device_id, "name": "E2E-PC"}).encode(),
+                                 headers={"Content-Type": "application/json", "Cookie": a.cookie, "Origin": a.origin})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())["token"]
+
+
+async def connect_controller(a, relay, cid):
+    headers = {}
+    if a.cookie:
+        headers["Cookie"] = a.cookie
+    if a.origin:
+        headers["Origin"] = a.origin
+    return await websockets.connect(f"{relay}?role=controller&cid={cid}", additional_headers=headers,
+                                    max_size=2 << 20)
+
+
 async def scenario(a):
-    relay = f"ws://127.0.0.1:{a.relay_port}/keysynth/api/relay"
+    relay = "ws" + api_base(a)[4:] + "/api/relay"
     local = Client(await websockets.connect(f"ws://127.0.0.1:{a.ws_port}"), "local")
     st = await local.request({"type": "hello", "client": "e2e", "version": "0"})
     check(st["type"] == "state" and st["trust"] == "local", "local hello")
-    r = await local.request({"type": "cloud_link", "token": TOKEN}, timeout=15)
-    check(r["type"] == "cloud_status" and r["linked"], "cloud_link to the dev server")
+    token = a.token or mint_token(a, st["cloud"]["deviceId"])
+    r = await local.request({"type": "cloud_link", "token": token}, timeout=15)
+    check(r["type"] == "cloud_status" and r["linked"], "cloud_link to " + api_base(a))
     device = r["deviceId"]
 
-    c1 = Client(await websockets.connect(relay + "?role=controller&cid=c1"), "c1", device)
+    c1 = Client(await connect_controller(a, relay, "e2e-ctl-1"), "c1", device)
     await c1.expect(lambda m: m.get("t") == "hosts" and any(h["deviceId"] == device and h["online"]
                                                              for h in m["hosts"]), 15, "host online")
     check(True, "engine registered as relay host (hello)")
@@ -139,7 +168,7 @@ async def scenario(a):
     await local.expect(lambda m: m.get("type") == "state" and m.get("presetPath") == target, 10, "local state")
     check(True, "local client sees the remote load_preset")
 
-    c2 = Client(await websockets.connect(relay + "?role=controller&cid=c2"), "c2", device)
+    c2 = Client(await connect_controller(a, relay, "e2e-ctl-2"), "c2", device)
     await c2.expect(lambda m: m.get("t") == "hosts", 5, "hosts")
     st2 = await c2.request({"type": "hello"})
     check(st2["presetPath"] == target, "second controller hello shows the same preset")
@@ -189,26 +218,35 @@ def main():
     ap.add_argument("--idle", type=float, default=0, help="extra idle seconds before a last request")
     ap.add_argument("--server-ping", type=float, default=5, help="dev server ping interval (1000 = rely on the "
                                                                   "engine's own 20 s heartbeat)")
+    ap.add_argument("--server", default="", help="external API root (no dev server), e.g. http://127.0.0.1:5021")
+    ap.add_argument("--token", default="", help="device token the engine links with (default: dev token, or minted "
+                                                "with --cookie on an external server)")
+    ap.add_argument("--cookie", default="", help="Cookie header for controllers (external server)")
+    ap.add_argument("--origin", default="", help="Origin header for controllers (external server)")
     a = ap.parse_args()
+    if not a.server and not a.token:
+        a.token = TOKEN
     if a.ws_port in (7340, 7341):
         sys.exit("ports 7340/7341 belong to the installed engine")
     data = tempfile.mkdtemp(prefix="ks-relay-e2e-")
     procs = []
     logs = []
     try:
-        slog = open(os.path.join(data, "relay.log"), "w")
-        logs.append(slog)
-        procs.append(subprocess.Popen([sys.executable, "-I", os.path.join(HERE, "dev_relay_server.py"),
-                                       "--port", str(a.relay_port), "--token", TOKEN, "--ping", str(a.server_ping)],
-                                      stdout=slog, stderr=subprocess.STDOUT))
-        wait_http(f"http://127.0.0.1:{a.relay_port}/keysynth/health")
+        if not a.server:
+            slog = open(os.path.join(data, "relay.log"), "w")
+            logs.append(slog)
+            procs.append(subprocess.Popen([sys.executable, "-I", os.path.join(HERE, "dev_relay_server.py"),
+                                           "--port", str(a.relay_port), "--token", a.token,
+                                           "--ping", str(a.server_ping)],
+                                          stdout=slog, stderr=subprocess.STDOUT))
+        wait_http(api_base(a) + "/health")
         env = dict(os.environ, KS_DATA_DIR=os.path.join(data, "engine"))
         env.pop("KS_CLOUD_API", None)
         elog = open(os.path.join(data, "engine.log"), "w")
         logs.append(elog)
         procs.append(subprocess.Popen([a.engine, "--no-audio", "--no-midi", "--no-plugins", "--no-tray",
                                        "--port", str(a.ws_port), "--http-port", "0",
-                                       "--cloud-api", f"http://127.0.0.1:{a.relay_port}/keysynth"],
+                                       "--cloud-api", api_base(a)],
                                       stdout=elog, stderr=subprocess.STDOUT, env=env, cwd=REPO))
         end = time.time() + 30
         while True:
