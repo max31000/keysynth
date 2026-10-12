@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "mock": "tsx mock/mock-engine.ts",
+    "relay-mock": "tsx mock/relay-mock.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

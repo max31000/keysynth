@@ -18,6 +18,12 @@ export interface WebSocketLike {
   onclose: ((ev: unknown) => void) | null;
   onerror: ((ev: unknown) => void) | null;
   onmessage: ((ev: { data: unknown }) => void) | null;
+  /**
+   * Only a reply carrying the request's `id` resolves it (no fallback by `expect` type for id-less messages).
+   * Set by transports that multiplex several engines/sessions (platform/relay.ts), where an id-less event of the
+   * expected type may belong to anyone.
+   */
+  readonly strictReplies?: boolean;
 }
 export type WebSocketFactory = (url: string) => WebSocketLike;
 
@@ -127,6 +133,26 @@ export class EngineClient {
     }
     this.failAll(new EngineError('closed', 'connection closed'));
     this.setStatus('closed');
+  }
+
+  /**
+   * The socket factory now points elsewhere (direct engine ⇄ relay, another relay host): drop the current socket,
+   * reject pending requests with `disconnected` and, when `connect`, open a new socket right away (no backoff).
+   */
+  switchTransport(connect: boolean): void {
+    this.wantOpen = connect;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) {
+      ws.onclose = ws.onerror = ws.onmessage = ws.onopen = null;
+      ws.close();
+    }
+    this.failAll(new EngineError('disconnected', 'transport changed'));
+    this.attempt = 0;
+    if (connect) this.open();
+    else this.setStatus('closed');
   }
 
   /** Delay before reconnect attempt n (1-based), without jitter. */
@@ -239,7 +265,7 @@ export class EngineClient {
     const id = (msg as { id?: number }).id;
     let key: number | undefined;
     if (typeof id === 'number' && this.pending.has(id)) key = id;
-    else if (id === undefined) {
+    else if (id === undefined && !this.ws?.strictReplies) {
       for (const [k, p] of this.pending) {
         if (!p.strict && p.expect === msg.type) {
           key = k;
