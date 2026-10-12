@@ -15,7 +15,7 @@
 
 namespace ks::test {
 
-inline const std::string kFakeBase = "https://fake.test/keysynth/api";
+inline const std::string kFakeBase = "https://fake.test/keysynth";
 inline const std::string kFakeToken = "ksd_" + std::string(43, 'A');
 inline const std::string kOtherToken = "ksd_" + std::string(43, 'B');
 

@@ -211,7 +211,7 @@ with revisions/tombstones; contract subset of `docs/specs/2026-10-12-cloud-api.m
 python scripts/dev_cloud_server.py --samples assets/samples --libs salamander --port 8765 --data renders/dev-presets.json
 #   prints:  device token: ksd_...   (or pass --token ksd_<43 chars>; POST /api/devices mints more)
 $env:KS_DATA_DIR = "$env:TEMP/ks-e2e"
-build/bin/Release/keysynth-engine.exe --no-audio --no-midi --cloud-api http://127.0.0.1:8765/keysynth/api
+build/bin/Release/keysynth-engine.exe --no-audio --no-midi --cloud-api http://127.0.0.1:8765/keysynth
 ```
 
 Then send `cloud_link { token }`, `samples_list`, `samples_fetch`, a `set_patch` whose sampler SFZ is only on the

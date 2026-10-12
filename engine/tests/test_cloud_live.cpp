@@ -1,6 +1,6 @@
 // [cloud-live]: real HTTPS (JUCE/WinINet) against a running API. Hidden; needs KS_CLOUD_API (default production
 // base) and KS_CLOUD_TOKEN (a device token). Works against scripts/dev_cloud_server.py too:
-//   $env:KS_CLOUD_API="http://127.0.0.1:8765/keysynth/api"; $env:KS_CLOUD_TOKEN="ksd_..."; ks-tests "[cloud-live]"
+//   $env:KS_CLOUD_API="http://127.0.0.1:8765/keysynth"; $env:KS_CLOUD_TOKEN="ksd_..."; ks-tests "[cloud-live]"
 
 #include "cloud/CloudClient.h"
 #include "cloud/HttpTransport.h"

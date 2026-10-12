@@ -2,7 +2,7 @@
 """Tiny local stand-in for the keysynth API (docs/specs/2026-10-12-cloud-api.md subset) for engine + UI E2E tests
 without the VDS. Standard library only. Not secure, not for production.
 
-Implements (base http://127.0.0.1:<port>/keysynth/api):
+Implements (service root http://127.0.0.1:<port>/keysynth; routes /api/...):
   POST   /api/devices            dev convenience: mints a device token (no cookie auth), body {deviceId, name}
   GET    /api/devices/me         DeviceMe            DELETE /api/devices/me
   GET    /api/samples/manifest   index.json + ETag / If-None-Match -> 304
@@ -11,7 +11,7 @@ Implements (base http://127.0.0.1:<port>/keysynth/api):
 
 Usage:
   python scripts/dev_cloud_server.py --samples assets/samples --libs salamander-lite --port 8765
-  keysynth-engine --no-audio --cloud-api http://127.0.0.1:8765/keysynth/api
+  keysynth-engine --no-audio --cloud-api http://127.0.0.1:8765/keysynth
   (the printed token goes into `cloud_link`; the UI's link flow can also POST /api/devices on this server)
 
 The index is read from --index FILE, or generated from --samples DIR: every sub-directory is a library, every file
@@ -31,7 +31,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PREFIX = "/keysynth/api"
+PREFIX = "/keysynth"
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
