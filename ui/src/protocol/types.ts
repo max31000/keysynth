@@ -248,12 +248,28 @@ export interface OpenAudioPanelMsg { type: 'open_audio_panel'; id?: number }
 /** Closes + reopens the audio device with the driver's current buffer/rate → `devices`, then `state` to all. */
 export interface RestartAudioMsg { type: 'restart_audio'; id?: number }
 
+// ── Cloud & samples (PROTOCOL.md "Cloud & samples") ──
+
+/** Device token from `POST /api/devices` (`ksd_` + 43 base64url chars). `replace` confirms switching accounts. */
+export interface CloudLinkMsg { type: 'cloud_link'; id?: number; token: string; replace?: boolean }
+export interface CloudUnlinkMsg { type: 'cloud_unlink'; id?: number }
+export interface SyncNowMsg { type: 'sync_now'; id?: number }
+export interface SamplesListMsg { type: 'samples_list'; id?: number }
+export type SampleScope = 'entry' | 'library' | 'all';
+/** `target` = entry id (`<lib>/<sfz path>`) or library id; omitted for `all`. */
+export interface SamplesFetchMsg { type: 'samples_fetch'; id?: number; scope: SampleScope; target?: string }
+/** `job` = job id (`"<scope>:<target>"` / `"all"`); omitted = cancel all jobs. */
+export interface SamplesCancelMsg { type: 'samples_cancel'; id?: number; job?: string }
+export interface SamplesDeleteMsg { type: 'samples_delete'; id?: number; scope: SampleScope; target?: string }
+
 export type ClientMsg =
   | HelloMsg | GetCatalogMsg | SetParamMsg | LoadPresetMsg | SavePresetMsg | ListPresetsMsg | GetPatchMsg
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
   | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
-  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg;
+  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg
+  | CloudLinkMsg | CloudUnlinkMsg | SyncNowMsg | SamplesListMsg | SamplesFetchMsg | SamplesCancelMsg
+  | SamplesDeleteMsg;
 
 export type ClientMsgType = ClientMsg['type'];
 
@@ -267,6 +283,10 @@ export interface StateEvent {
   dirty: boolean;
   audio: AudioStatus;
   transport: TransportState;
+  /** only in the reply to `hello` (see HelloStateFields) */
+  version?: string;
+  trust?: SessionTrust;
+  cloud?: CloudStatus;
 }
 export interface ParamEvent { type: 'param'; node: NodeId; param: string; value: number }
 export interface TelemetryEvent {
@@ -339,11 +359,151 @@ export interface GetPatternOk extends PatternSnapshot { type: 'get_pattern_ok'; 
 export interface SetPatternOk { type: 'set_pattern_ok'; id?: number; warnings?: string[] }
 export interface SavePatternOk { type: 'save_pattern_ok'; id?: number; path: string }
 
+// ── Cloud & samples (PROTOCOL.md "Cloud & samples") ──
+
+/** `web` = page from https://mvv42.ru (restricted message set); `local` = local UI / no Origin. */
+export type SessionTrust = 'local' | 'web';
+
+export interface CloudStatus {
+  linked: boolean;
+  /** keysynth account id (string); null when unlinked */
+  accountId: string | null;
+  accountName: string | null;
+  /** UUID v4, always set */
+  deviceId: string;
+  /** token expiry (ISO 8601 UTC); null when unlinked */
+  expiresAt: string | null;
+  /** last API call succeeded */
+  online: boolean;
+  /** last cloud error code (`offline`, `token_expired`, …) */
+  error: string | null;
+}
+/** Reply to `cloud_link` / `cloud_unlink` (with `id`) and broadcast on every change (no `id`). */
+export interface CloudStatusEvent extends CloudStatus {
+  type: 'cloud_status';
+  id?: number;
+  /** only in the reply to an account's first link on this PC */
+  merged?: { presets: number; patterns: number };
+}
+
+/** `state` reply to `hello` carries these extra fields (only that reply). */
+export interface HelloStateFields {
+  /** engine semver, no `v` */
+  version: string;
+  trust: SessionTrust;
+  cloud: CloudStatus;
+}
+export type HelloStateEvent = StateEvent & HelloStateFields;
+
+export type SyncState = 'disabled' | 'idle' | 'syncing' | 'offline' | 'error';
+export interface SyncConflict {
+  slug: string;
+  /** logical path of the kept local copy, `userdata/presets/<slug>.conflict-<ts>.json` */
+  file: string;
+  at: string;
+}
+export interface SyncStatusEvent {
+  type: 'sync_status';
+  state: SyncState;
+  lastSyncAt: string | null;
+  /** local preset changes not yet pushed */
+  pending: number;
+  conflicts: SyncConflict[];
+  error: string | null;
+}
+export interface SyncNowOk { type: 'sync_now_ok'; id?: number }
+
+export type SampleStatus = 'local' | 'cached' | 'partial' | 'missing';
+export interface SampleEntry {
+  /** `<lib>/<sfz path relative to the library dir>` */
+  id: string;
+  name: string;
+  /** logical path used in patches: `assets/samples/<id>` */
+  sfz: string;
+  bytes: number;
+  cachedBytes: number;
+  status: SampleStatus;
+  /** queued/running job covering this entry */
+  job: string | null;
+}
+export interface SampleLibrary {
+  id: string;
+  name: string;
+  licence: string;
+  author: string;
+  attribution: string;
+  bytes: number;
+  cachedBytes: number;
+  status: SampleStatus;
+  /** job of this library (or covering it) */
+  job: string | null;
+  entries: SampleEntry[];
+}
+export interface SampleGroup { id: string; name: string; libraries: SampleLibrary[] }
+export interface SamplesManifestState {
+  state: 'ok' | 'stale' | 'none';
+  etag: string | null;
+  fetchedAt: string | null;
+}
+export interface SamplesListOk {
+  type: 'samples_list_ok';
+  id?: number;
+  manifest: SamplesManifestState;
+  cacheBytes: number;
+  freeBytes: number;
+  groups: SampleGroup[];
+}
+export interface SamplesFetchOk { type: 'samples_fetch_ok'; id?: number; job: string; existing: boolean }
+export interface SamplesCancelOk { type: 'samples_cancel_ok'; id?: number; jobs: string[] }
+export interface SamplesDeleteOk { type: 'samples_delete_ok'; id?: number; freedBytes: number }
+
+export interface SampleJob {
+  /** `"<scope>:<target>"` or `"all"` */
+  id: string;
+  scope: SampleScope;
+  /** entry / library id, `""` for `all` */
+  target: string;
+  state: 'queued' | 'running';
+  bytesDone: number;
+  bytesTotal: number;
+  filesDone: number;
+  filesTotal: number;
+  /** bytes/s, average over the last 2 s */
+  rate: number;
+}
+/** ≤ 5 Hz while any job is queued/running. */
+export interface SamplesProgressEvent { type: 'samples_progress'; jobs: SampleJob[] }
+export interface SamplesDoneEvent {
+  type: 'samples_done';
+  job: string;
+  scope: SampleScope;
+  target: string;
+  cancelled: boolean;
+  /** entry ids now fully cached */
+  entries: string[];
+}
+export type SamplesErrorCode =
+  | 'not_linked' | 'offline' | 'unauthorized' | 'not_found' | 'http_error' | 'checksum_mismatch'
+  | 'disk_full' | 'bad_path' | 'io_error';
+export interface SamplesErrorEvent {
+  type: 'samples_error';
+  job: string;
+  scope: SampleScope;
+  target: string;
+  code: SamplesErrorCode | string;
+  message: string;
+  /** failing file `<lib>/<path>` */
+  path: string | null;
+  notify: true;
+}
+
 export type EngineMsg =
   | StateEvent | ParamEvent | TelemetryEvent | MidiEvent | DevicesEvent | LogEvent | ErrorReply
   | CatalogOk | LoadPresetOk | SavePresetOk | ListPresetsOk
   | PatternEvent | ListPatternsOk | GetPatternOk | SetPatternOk | SavePatternOk
-  | PluginStatusEvent | ListPluginsOk | ReloadPluginOk | OpenAudioPanelOk;
+  | PluginStatusEvent | ListPluginsOk | ReloadPluginOk | OpenAudioPanelOk
+  | CloudStatusEvent | SyncStatusEvent | SyncNowOk | SamplesListOk | SamplesFetchOk | SamplesCancelOk
+  | SamplesDeleteOk | SamplesProgressEvent | SamplesDoneEvent | SamplesErrorEvent;
 
 export type EngineMsgType = EngineMsg['type'];
 export type EngineMsgOf<T extends EngineMsgType> = Extract<EngineMsg, { type: T }>;

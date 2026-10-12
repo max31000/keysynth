@@ -3,6 +3,8 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Cloud WP0 contracts: PROTOCOL.md *Cloud & samples* (trust/Origin/Host, link, sync, samples jobs, auto-fetch),
+  `docs/specs/2026-10-12-cloud-api.md` (REST, DB, index/manifest, AppPaths, cache.json, cloud.json), TS types.
 - Audio robustness after driver-side buffer/rate changes (bug: UR22C buffer change broke sound until restart).
   Root cause (code reading, JUCE 8.0.15): `ASIOAudioIODevice::timerCallback` (reset request) ignores a failed
   reopen and restarts callbacks anyway → "playing" device with no callbacks; also reads the preferred size from the

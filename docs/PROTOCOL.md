@@ -42,6 +42,8 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `panic` | — | none (all notes off, reset tails) |
 | `list_plugins` | — | `list_plugins_ok { plugins: PluginStatus[], faust: { available, version, reason } }` |
 | `reload_plugin` | `{ name }` (plugin directory name, `[a-z][a-z0-9_]*`) | `reload_plugin_ok { name }`, then `plugin_status` events |
+| `cloud_link` / `cloud_unlink` / `sync_now` | see *Cloud & samples* | |
+| `samples_list` / `samples_fetch` / `samples_cancel` / `samples_delete` | see *Cloud & samples* | |
 
 ## Engine → client (events)
 
@@ -55,6 +57,7 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `devices` | `{ types: string[], current: AudioStatus, available: { type, names[], sampleRates: number[], bufferSizes: number[] }[], midiInputs: string[] }` |
 | `log` | `{ level, message, notify? }` — `notify: true` marks a problem the player must see (see *Wire details*) |
 | `plugin_status` | `{ plugin: PluginStatus }` — every plugin state change (see below) |
+| `cloud_status`, `sync_status`, `samples_progress`, `samples_done`, `samples_error` | see *Cloud & samples* |
 
 `AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running, hasControlPanel, panelOpen }`
 (latencies are device-reported and include the buffer; `hasControlPanel`: `open_audio_panel` is available;
@@ -122,7 +125,8 @@ message, kind: "instrument"|"effect"|"", version, compileMs, cached }` (docs/PLU
 - `note.velocity` is 0..127 (default 100); `on:false` or velocity 0 = note off. Virtual-keyboard notes are echoed in
   `midi` events like hardware notes. `transport` changes are echoed to other clients as a `state` snapshot.
 - WebSocket handshakes without an `Origin` header (non-browser clients: scripts, tests) are accepted; browser
-  origins must be `http://localhost|127.0.0.1` on the WS port, the static UI port (7340) or 5173.
+  origins must be `http://localhost|127.0.0.1` on the WS port, the static UI port (7340) or 5173 (dev builds only),
+  or `https://mvv42.ru` (a `web` session). Full rules: *Cloud & samples → Sessions, Origin, Host*.
 
 ### Rhythm (transport, drum sequencer)
 `transport` fields (all optional; omitted = unchanged):
@@ -148,3 +152,169 @@ otherwise to the others only. The drum kit of the sequencer is the `drums` modul
 kit?, tracks: { name, note, mute, steps: number[] /* 0 = off, 1..127 velocity */ }[], accent: number[] /* 0|1 */ }`.
 `set_pattern` validates and clamps (≤ 16 tracks, steps = bars × num × steps_per_beat ≤ 256; shorter arrays are padded).
 
+
+## Cloud & samples
+
+Design: `docs/specs/2026-10-12-cloud.md` (§11 wins). REST side, storage layout and file formats:
+`docs/specs/2026-10-12-cloud-api.md`. All timestamps are ISO 8601 UTC strings (`"2026-10-12T14:03:00Z"`), sizes are
+bytes, rates bytes/s. Request/reply conventions as above (`id`, `error { code, message }`).
+
+### Sessions, Origin, Host
+Checked on the WS (7341) and HTTP (7340) handshake; a failure is HTTP 403, no upgrade.
+- `Host` must be exactly `127.0.0.1:<port>` or `localhost:<port>` (`<port>` = the port listened on) — DNS-rebinding
+  guard. Both servers bind 127.0.0.1 only.
+- `Origin` decides the session's **trust**:
+
+| Origin | trust |
+|---|---|
+| absent (non-browser client: scripts, tests) | `local` |
+| `http://127.0.0.1:7340`, `http://localhost:7340`, `http://127.0.0.1:7341`, `http://localhost:7341` | `local` |
+| `http://127.0.0.1:5173`, `http://localhost:5173` — **dev builds only** (no `installed.flag`) | `local` |
+| `https://mvv42.ru` (exact: no `www`, port or path) | `web` |
+| `null`, anything else | rejected |
+
+Dev builds may add one extra `web` origin with `--web-origin <origin>` / `KS_WEB_ORIGIN` (staging tests); installed
+builds ignore it.
+
+**`web` sessions** (page served by mvv42.ru) are default-deny: only the messages below are accepted, anything else
+→ `error` `forbidden`.
+
+| allowed for `web` | restriction |
+|---|---|
+| `hello`, `get_catalog`, `set_param`, `get_patch`, `list_presets`, `add_layer`, `remove_layer`, `set_zone`, `set_instrument`, `add_fx`, `remove_fx`, `move_fx`, `set_fx_bypass`, `note`, `cc`, `panic`, `list_patterns`, `set_pattern`, `rescan_midi`, `list_devices`, `set_audio_device`, `open_audio_panel`, `restart_audio`, `list_plugins` | none (module typeIds incl. already registered `plugin:<name>` are fine) |
+| `save_preset`, `save_pattern` | none (they take a name; the engine slugifies) |
+| `load_preset` | `path` is a logical path under `presets/factory/` or `userdata/presets/` |
+| `get_pattern`, `transport` | `path` / `pattern` is a logical path under `presets/patterns/` or `userdata/patterns/` (or `""`) |
+| `set_patch` | every path inside the patch is logical: sampler `state.sfz` under `assets/samples/`, `rhythm.pattern` as above |
+| `cloud_link`, `cloud_unlink`, `sync_now`, `samples_list`, `samples_fetch`, `samples_cancel`, `samples_delete` | ids only (no paths in these messages) |
+| **forbidden**: `reload_plugin` and every message not listed here (incl. future ones until added to this table) | `error` `forbidden` |
+
+Logical path (all sessions accept them; `web` sessions accept nothing else): relative, `/`-separated, no `..` segment,
+no `\`, `:`, leading `/` or control chars, starting with one of the prefixes above. `userdata/…` always means the
+**active profile** (below). The engine maps logical paths to disk via AppPaths (cloud-api spec *Local storage*).
+
+### Profiles
+Unlinked: the local profile (`userdata/presets`, `userdata/patterns`). Linked to account `<accountId>`:
+`userdata/accounts/<accountId>/{presets,patterns}`, addressed on the wire still as `userdata/presets/…` /
+`userdata/patterns/…`. Switching profile (link, unlink, relink) broadcasts `state` (`presetPath` cleared if it pointed
+into the old profile); clients re-request `list_presets` / `list_patterns`.
+
+### Hello additions
+The `state` reply to `hello` (and only that reply) carries three extra fields:
+```json
+{ "type": "state", "id": 1, "patch": {}, "presetPath": null, "dirty": false, "audio": {}, "transport": {},
+  "version": "0.4.0",
+  "trust": "web",
+  "cloud": { "linked": true, "accountId": "17", "accountName": "Max", "deviceId": "3f0c7e9a-5b1d-4c2e-9a77-0e5d2c1b8f40",
+             "expiresAt": "2027-04-10T12:00:00Z", "online": true, "error": null } }
+```
+`version` = engine semver (no `v`). Right after that `state` the engine sends a `sync_status` (no `id`).
+
+`CloudStatus = { linked: bool, accountId: string|null, accountName: string|null, deviceId: string /* always set */,
+expiresAt: string|null, online: bool /* last API call succeeded */, error: string|null /* last cloud error code,
+e.g. "offline", "token_expired" */ }`. Unlinked: `accountId`, `accountName`, `expiresAt` are `null`.
+
+### Messages
+
+| type | payload | reply |
+|---|---|---|
+| `cloud_link` | `{ token, replace?: bool }` | `cloud_status` (with `id`; `merged` on an account's first link on this PC), also broadcast to others |
+| `cloud_unlink` | — | `cloud_status` (`linked: false`, with `id`), also broadcast |
+| `sync_now` | — | `sync_now_ok`, then `sync_status` events; `error` `not_linked` |
+| `samples_list` | — | `samples_list_ok` (below) |
+| `samples_fetch` | `{ scope: "entry"\|"library"\|"all", target? }` (entry / library id; omitted for `all`) | `samples_fetch_ok { job, existing }` |
+| `samples_cancel` | `{ job? }` (job id; omitted = all jobs) | `samples_cancel_ok { jobs: string[] }` (cancelled job ids) |
+| `samples_delete` | `{ scope: "entry"\|"library"\|"all", target? }` | `samples_delete_ok { freedBytes }` |
+
+| event (to all sessions, no `id`) | payload |
+|---|---|
+| `cloud_status` | `CloudStatus` fields at top level — on every change (link, unlink, online ⇄ offline, token dropped) |
+| `sync_status` | `{ state, lastSyncAt, pending, conflicts, error }` — on every change, ≤ 2 Hz |
+| `samples_progress` | `{ jobs: SampleJob[] }` — ≤ 5 Hz while any job is queued/running; lists all of them |
+| `samples_done` | `{ job, scope, target, cancelled, entries: string[] }` — job ended (`entries`: entry ids now fully cached) |
+| `samples_error` | `{ job, scope, target, code, message, path, notify: true }` — job failed and ended |
+
+#### `cloud_link`
+1. Token format must be `ksd_` + 43 base64url chars, else `error` `bad_request`.
+2. `GET /api/devices/me` with the token. Network failure → `error` `offline`; 401 → `error` `token_invalid`. Nothing
+   is stored on failure.
+3. Already linked to a *different* account and `replace` is not `true` → `error` `account_mismatch` (message names the
+   current account; nothing changes). The UI asks the user, then resends with `replace: true`.
+4. Token (DPAPI) + account go to `cloud.json`, the profile switches. On the account's first link on this PC (no
+   `userdata/accounts/<id>/` yet) the local profile's presets and patterns are copied into it and the reply carries
+   `"merged": { "presets": 12, "patterns": 3 }`. Sync starts. Re-linking the same account (re-minted token) is silent.
+
+`cloud_unlink`: `DELETE /api/devices/me` (best effort; offline ignored), token deleted, local profile active.
+When any API call answers 401 (`token_expired`, `token_invalid`, `reauth_required`) the engine drops the token itself
+and broadcasts `cloud_status { linked: false, error: "<code>" }`; a logged-in page re-mints and re-links (same account
+→ silent). The page also re-mints when `expiresAt` is less than 30 days away.
+
+#### `sync_status`
+```json
+{ "type": "sync_status", "state": "idle", "lastSyncAt": "2026-10-12T14:03:00Z", "pending": 0,
+  "conflicts": [ { "slug": "warm-rhodes", "file": "userdata/presets/warm-rhodes.conflict-20261012T140300Z.json",
+                   "at": "2026-10-12T14:03:00Z" } ],
+  "error": null }
+```
+`state`: `disabled` (not linked) | `idle` | `syncing` | `offline` | `error` (`error` holds the code). `lastSyncAt`:
+last successful full sync or `null`. `pending`: local preset changes not yet pushed. `conflicts`: conflict files
+present in the profile (ordinary local presets: listed by `list_presets`, never synced; the user deletes or renames
+them). Triggers: link, every 60 s, any local preset change, `sync_now`. Only presets sync in v1.
+
+#### `samples_list_ok`
+```json
+{ "type": "samples_list_ok", "id": 5,
+  "manifest": { "state": "ok", "etag": "\"9c1f0a2b3c4d5e6f\"", "fetchedAt": "2026-10-12T14:00:00Z" },
+  "cacheBytes": 1234567890, "freeBytes": 98765432100,
+  "groups": [ { "id": "piano", "name": "Piano", "libraries": [
+    { "id": "salamander", "name": "Salamander Grand Piano V3", "licence": "CC-BY-3.0", "author": "Alexander Holm",
+      "attribution": "Salamander Grand Piano by Alexander Holm, CC BY 3.0. …",
+      "bytes": 1960000000, "cachedBytes": 0, "status": "missing", "job": null,
+      "entries": [
+        { "id": "salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz",
+          "name": "SalamanderGrandPiano-V3+20200602",
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz",
+          "bytes": 1960000000, "cachedBytes": 0, "status": "missing", "job": null } ] } ] } ] }
+```
+- Library id = manifest library id. **Entry id = `<lib>/<sfz path relative to the library dir>`**; `sfz` = the logical
+  path a patch uses = `assets/samples/<entry id>`. A sampler's `state.sfz` maps to an entry by stripping
+  `assets/samples/`.
+- Entry `status`: `local` (resolved from the repo `assets/` or `KS_ASSETS_DIR`; read-only: never downloaded or deleted)
+  | `cached` (all files in the cache) | `partial` | `missing`. Library `status`: `local` if any entry is local, else
+  `cached` if all entries are, `missing` if no file is cached, else `partial`. `job`: id of the queued/running job
+  covering it, else `null`. `bytes` = sum of the unique files of the entry / library; `cachedBytes` likewise for
+  cached files.
+- `manifest.state`: `ok` (fresh), `stale` (cached copy; refresh failed or not linked), `none` (never fetched →
+  `groups: []`, `etag`/`fetchedAt` `null`). When linked the engine revalidates the manifest (`If-None-Match`) before
+  replying, 5 s timeout. Order of groups/libraries/entries = manifest order.
+- `cacheBytes`: bytes of the sample cache dir; `freeBytes`: free space on its volume.
+
+#### Jobs
+- Job id = `"<scope>:<id>"` (`"entry:salamander/…sfz"`, `"library:salamander"`, `"all"`). Payload fields are `target` / `job`, never
+  `id` (the envelope request id). Fetching a target whose job is already queued/running returns that job with
+  `existing: true`. Overlapping jobs share files (each file downloads
+  once and counts for both).
+- `samples_fetch` errors: `not_linked`, `not_found` (unknown id or no manifest), `bad_request`.
+- `SampleJob = { id, scope, target /* entry/library id, "" for all */, state: "queued"|"running", bytesDone,
+  bytesTotal, filesDone, filesTotal, rate }`. Totals = what this job must download (already cached files excluded),
+  fixed at job start; `rate` = average over the last 2 s (0 while queued).
+- Queue: FIFO, auto-fetch jobs go to the front; 2 files download in parallel engine-wide; a file is retried 3× with
+  backoff before its job fails. Files finished before a cancel/failure stay cached.
+- After `samples_cancel` the job ends with `samples_done { cancelled: true }` (no `samples_error`).
+- `samples_error.code`: `not_linked`, `offline`, `unauthorized` (token dropped, see above), `not_found` (HTTP 404),
+  `http_error` (other status, in `message`), `checksum_mismatch`, `disk_full`, `bad_path` (manifest path failed
+  validation), `io_error`. `path` = failing file as `<lib>/<path>`, or `null`.
+- `samples_delete` removes the target's files that no other cached entry still references, then its empty dirs.
+  Errors: `in_use` (a sampler in the current patch uses the entry — unload it first), `read_only` (`local` entry),
+  `not_found`. Jobs covering the target are cancelled first.
+
+#### Auto-fetch on patch load
+When a patch is applied (`load_preset`, `set_patch`, `set_instrument`, any rebuild) and a sampler's `state.sfz`
+(`assets/samples/<entry id>`) resolves nowhere locally:
+1. Linked and the entry is in the manifest → enqueue `entry:<entry id>` at the queue front (or reuse its job). No
+   missing-sfz `log`. The sampler stays silent with its ReadOnly param `loading` = 1 (in `telemetry.readouts`) while
+   the job runs; normal `samples_progress` events cover it (the UI maps `state.sfz` → entry id → `job`).
+2. `samples_done` → every sampler waiting for that entry loads it (`loading` stays 1 during the load, then 0).
+3. `samples_error` → the sampler ends in its normal load-error state (`loading` = 0); its missing-sfz `log` is
+   suppressed (the `samples_error` toast is the one notification).
+4. Not linked, or not in the manifest → unchanged behaviour (missing-sfz `log { level: "error", notify: true }`).
