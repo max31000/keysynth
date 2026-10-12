@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { actions, useEngine } from '../store';
+import { actions, useCloud, useEngine } from '../store';
+import { canSend } from '../platform/trust';
 import { LATENCY_WARN_MS, bufferMs, latencyHint, latencyTooHigh } from '../lib/latency';
 
 const SAMPLE_RATES = [44100, 48000, 88200, 96000];
@@ -14,6 +15,9 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
   const [sr, setSr] = useState(48000);
   const [bs, setBs] = useState(128);
   const [busy, setBusy] = useState(false);
+  // remote (relay) sessions may not change the device or open the driver panel
+  const canDevice = useCloud((s) => canSend(s.trust, 'set_audio_device'));
+  const canPanel = useCloud((s) => canSend(s.trust, 'open_audio_panel'));
 
   useEffect(() => {
     const d = ref.current;
@@ -69,6 +73,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
             <span>Device type</span>
             <select
               className="select"
+              disabled={!canDevice}
               value={type}
               onChange={(e) => {
                 setType(e.target.value);
@@ -82,7 +87,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
           </label>
           <label className="field">
             <span>Device</span>
-            <select className="select" value={name} onChange={(e) => setName(e.target.value)}>
+            <select className="select" disabled={!canDevice} value={name} onChange={(e) => setName(e.target.value)}>
               {names.map((n) => (
                 <option key={n}>{n}</option>
               ))}
@@ -92,7 +97,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
           <div className="field-row">
             <label className="field">
               <span>Sample rate</span>
-              <select className="select" value={sr} onChange={(e) => setSr(Number(e.target.value))}>
+              <select className="select" disabled={!canDevice} value={sr} onChange={(e) => setSr(Number(e.target.value))}>
                 {SAMPLE_RATES.map((r) => (
                   <option key={r} value={r}>
                     {r.toLocaleString()} Hz
@@ -102,7 +107,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
             </label>
             <label className="field">
               <span>Buffer size</span>
-              <select className="select" value={bs} onChange={(e) => setBs(Number(e.target.value))}>
+              <select className="select" disabled={!canDevice} value={bs} onChange={(e) => setBs(Number(e.target.value))}>
                 {bufferChoices.map((b) => (
                   <option key={b} value={b}>
                     {b} samples
@@ -134,7 +139,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
               {offered && offered.length <= 1 && (
                 <> This driver only offers {offered[0]} samples here; its own panel sets the size.</>
               )}
-              {audio.hasControlPanel && (
+              {audio.hasControlPanel && canPanel && (
                 <button type="button" className="btn primary small" onClick={() => void actions().openAudioPanel()} disabled={panelOpen}>
                   Open ASIO panel
                 </button>
@@ -145,10 +150,13 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
             Selected buffer <b className="mono">{latencyMs.toFixed(2)} ms</b>
             {audio && <span className="muted"> · device in/out {audio.inputLatencyMs.toFixed(1)} / {audio.outputLatencyMs.toFixed(1)} ms</span>}
           </div>
+          {!canDevice && <p className="hint">Устройство выбирается на ПК.</p>}
           <div className="row gap">
-            <button type="button" className="btn primary" disabled={!changed || busy || !name || panelOpen} onClick={() => void apply()}>
-              {busy ? 'Applying…' : 'Apply'}
-            </button>
+            {canDevice && (
+              <button type="button" className="btn primary" disabled={!changed || busy || !name || panelOpen} onClick={() => void apply()}>
+                {busy ? 'Applying…' : 'Apply'}
+              </button>
+            )}
             <button type="button" className="btn" onClick={() => void actions().listDevices()}>
               Rescan devices
             </button>
@@ -161,7 +169,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
             >
               Restart audio
             </button>
-            {audio?.hasControlPanel && !slow && (
+            {audio?.hasControlPanel && !slow && canPanel && (
               <button type="button" className="btn" onClick={() => void actions().openAudioPanel()} disabled={panelOpen}>
                 Open ASIO panel
               </button>

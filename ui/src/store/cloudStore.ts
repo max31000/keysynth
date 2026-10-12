@@ -370,6 +370,7 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
           granted: s.me.granted,
           owner: s.link.owner,
           now: now(),
+          remote: s.trust === 'remote',
         });
       },
 

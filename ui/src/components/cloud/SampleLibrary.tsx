@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { cloudActions, useCloud, useEngine } from '../../store';
+import { canSend } from '../../platform/trust';
 import type { SampleEntry, SampleJob, SampleLibrary as Lib, SampleScope, SampleStatus } from '../../protocol/types';
 import {
   ALL_JOB,
@@ -61,6 +62,7 @@ function Actions({
   inUse: boolean;
 }) {
   const a = cloudActions();
+  const canDelete = useCloud((s) => canSend(s.trust, 'samples_delete'));
   if (status === 'local') return <span className="hint">из assets/</span>;
   const own = job && job.id === (scope === 'entry' ? `entry:${target}` : `library:${target}`);
   return (
@@ -84,7 +86,7 @@ function Actions({
           </button>
         )
       )}
-      {cachedBytes > 0 && !job && (
+      {cachedBytes > 0 && !job && canDelete && (
         <button
           type="button"
           className="icon-btn"

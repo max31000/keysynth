@@ -362,8 +362,11 @@ export interface SavePatternOk { type: 'save_pattern_ok'; id?: number; path: str
 
 // ── Cloud & samples (PROTOCOL.md "Cloud & samples") ──
 
-/** `web` = page from https://mvv42.ru (restricted message set); `local` = local UI / no Origin. */
-export type SessionTrust = 'local' | 'web';
+/**
+ * `web` = page from https://mvv42.ru (restricted message set); `local` = local UI / no Origin; `remote` = a
+ * controller reaching the engine through the relay (web set minus the remote deny list, platform/trust.ts).
+ */
+export type SessionTrust = 'local' | 'web' | 'remote';
 
 export interface CloudStatus {
   linked: boolean;

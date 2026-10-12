@@ -5,6 +5,7 @@ import { requestLogin } from '@mvv42/kit/platform';
 import { cloudActions, useCloud } from '../../store';
 import { MODE, PLATFORM_URL, SERVICE_ID } from '../../platform/mode';
 import { formatTime } from './SyncPill';
+import { canSend } from '../../platform/trust';
 
 const SYNC_LABEL: Record<string, string> = {
   disabled: 'выключена',
@@ -20,6 +21,9 @@ export function AccountCard() {
   const link = useCloud((s) => s.link);
   const me = useCloud((s) => s.me);
   const plan = useCloud((s) => s.plan().kind);
+  // through the relay the host's link is fixed (cloud_link / cloud_unlink are denied for remote sessions)
+  const canLink = useCloud((s) => canSend(s.trust, 'cloud_link'));
+  const canUnlink = useCloud((s) => canSend(s.trust, 'cloud_unlink'));
   const a = cloudActions();
   const platform = MODE.mode === 'platform';
 
@@ -50,7 +54,7 @@ export function AccountCard() {
     body = (
       <>
         <p>{link.busy ? 'Привязка…' : link.held ? 'Отвязан. Пресеты только на этом ПК.' : 'Не привязан.'}</p>
-        {!link.busy && (
+        {!link.busy && canLink && (
           <button type="button" className="btn primary" onClick={() => void a.retryLink()}>
             Привязать к аккаунту{me.name ? ` «${me.name}»` : ''}
           </button>
@@ -122,17 +126,19 @@ export function AccountCard() {
           <button type="button" className="btn small" disabled={sync?.state === 'syncing'} onClick={() => void a.syncNow()}>
             Синхронизировать
           </button>
-          <button
-            type="button"
-            className="btn small ghost"
-            disabled={link.busy}
-            onClick={() => {
-              if (window.confirm('Отвязать движок от аккаунта? Синхронизация остановится, пресеты останутся на ПК.'))
-                void a.unlink();
-            }}
-          >
-            Отвязать
-          </button>
+          {canUnlink && (
+            <button
+              type="button"
+              className="btn small ghost"
+              disabled={link.busy}
+              onClick={() => {
+                if (window.confirm('Отвязать движок от аккаунта? Синхронизация остановится, пресеты останутся на ПК.'))
+                  void a.unlink();
+              }}
+            >
+              Отвязать
+            </button>
+          )}
         </div>
       </>
     );
@@ -144,7 +150,7 @@ export function AccountCard() {
         <span className="panel-label">Аккаунт и синхронизация</span>
       </div>
       {body}
-      {link.error && (
+      {link.error && canLink && (
         <p className="note bad" role="alert">
           {link.error}{' '}
           <button type="button" className="btn small" onClick={() => void a.retryLink()}>

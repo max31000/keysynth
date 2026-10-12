@@ -11,7 +11,7 @@ export const REMINT_BEFORE_MS = 30 * 24 * 3600 * 1000;
 export type Owner = 'unknown' | 'mine' | 'foreign';
 
 export type LinkPlan =
-  | { kind: 'idle'; reason: 'local-mode' | 'no-engine' | 'auth-loading' | 'auth-unavailable' }
+  | { kind: 'idle'; reason: 'local-mode' | 'no-engine' | 'auth-loading' | 'auth-unavailable' | 'remote' }
   | { kind: 'login' }
   | { kind: 'no-access' }
   /** engine not linked → mint + cloud_link */
@@ -32,11 +32,14 @@ export interface PlanInput {
   granted: boolean;
   owner: Owner;
   now: number;
+  /** connected through the relay (trust `remote`): the host is linked already and may not be re-linked */
+  remote?: boolean;
 }
 
 export function planLink(i: PlanInput): LinkPlan {
   if (i.mode !== 'platform') return { kind: 'idle', reason: 'local-mode' };
   if (!i.connected || !i.cloud) return { kind: 'idle', reason: 'no-engine' };
+  if (i.remote) return { kind: 'idle', reason: 'remote' };
   if (i.meStatus === 'loading') return { kind: 'idle', reason: 'auth-loading' };
   if (i.meStatus === 'unavailable') return { kind: 'idle', reason: 'auth-unavailable' };
   if (i.meStatus === 'anonymous') return { kind: 'login' };
