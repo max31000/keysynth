@@ -104,6 +104,15 @@ export class EngineClient {
     this.open();
   }
 
+  /** Connect now, skipping a pending backoff delay (user pressed «retry»). No-op while a socket exists. */
+  retryNow(): void {
+    this.wantOpen = true;
+    if (this.ws) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.open();
+  }
+
   close(): void {
     this.wantOpen = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);

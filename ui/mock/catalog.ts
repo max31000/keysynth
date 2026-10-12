@@ -149,6 +149,20 @@ const fx = (typeId: string, name: string, category: string, params: ParamSpec[])
   params,
 });
 
+/** SFZ sampler (engine `sampler`): `state.sfz` = logical path; ReadOnly `loading` while samples load/download. */
+const sampler: ModuleInfo = {
+  typeId: 'sampler',
+  name: 'Sampler',
+  kind: 'instrument',
+  category: 'Piano',
+  params: [
+    p('volume', 'Volume', 'Output', { min: -48, max: 6, def: 0, unit: 'dB' }),
+    p('release', 'Release', 'Amp', { min: 1, max: 4000, def: 300, scale: 'log', unit: 'ms', skew: 300 }),
+    p('tune', 'Tune', 'Pitch', { min: -100, max: 100, def: 0, unit: 'ct' }),
+    bool('loading', 'Loading', 'Status'),
+  ].map((s) => (s.id === 'loading' ? { ...s, flags: 1 } : s)),
+};
+
 const effects: ModuleInfo[] = [
   fx('chorus', 'Chorus', 'Modulation', [
     p('mode', 'Mode', 'Main', { choices: ['I', 'II', 'I+II'] }),
@@ -248,7 +262,7 @@ const drums: ModuleInfo = {
   ],
 };
 
-export const CATALOG: ModuleInfo[] = [va, organ, combo, epiano, drums, ...effects];
+export const CATALOG: ModuleInfo[] = [va, organ, combo, epiano, sampler, drums, ...effects];
 export const catalogMap: Record<string, ModuleInfo> = Object.fromEntries(CATALOG.map((m) => [m.typeId, m]));
 
 export function defaultParams(typeId: string): Record<string, number> {

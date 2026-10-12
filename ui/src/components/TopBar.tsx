@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { actions, useEngine } from '../store';
+import { actions, useCloud, useEngine } from '../store';
 import { live, onFrame } from '../store/liveBus';
 import type { ParamSpec } from '../protocol/types';
 import { LATENCY_WARN_MS, bufferMs, latencyHint, latencyTooHigh } from '../lib/latency';
 import { Knob } from './Knob';
+import { SyncPill } from './cloud/SyncPill';
+import { AccountButton } from './cloud/AccountButton';
+import { jobFraction } from '../lib/samples';
 
 const METRO_SPEC: ParamSpec = {
   id: 'metronome_volume',
@@ -127,7 +130,26 @@ function TempoField() {
   );
 }
 
-export function TopBar({ onAudioSettings }: { onAudioSettings: () => void }) {
+/** Opens the cloud drawer; shows overall download progress while sample jobs run. */
+function SamplesButton({ onOpen }: { onOpen: () => void }) {
+  const jobs = useCloud((s) => s.jobs);
+  const list = Object.values(jobs);
+  const done = list.reduce((a, j) => a + j.bytesDone, 0);
+  const total = list.reduce((a, j) => a + j.bytesTotal, 0);
+  const f = list.length ? jobFraction({ bytesDone: done, bytesTotal: total }) : 0;
+  return (
+    <button type="button" className={`samples-btn ${list.length ? 'active' : ''}`} onClick={onOpen} title="Библиотека сэмплов" aria-label="Сэмплы">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
+        <path d="M2 4h12M2 8h12M2 12h7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      <span>Сэмплы</span>
+      {list.length > 0 && <span className="mono samples-pct">{Math.round(f * 100)}%</span>}
+      {list.length > 0 && <i className="samples-btn-bar" style={{ transform: `scaleX(${f.toFixed(3)})` }} />}
+    </button>
+  );
+}
+
+export function TopBar({ onAudioSettings, onCloud }: { onAudioSettings: () => void; onCloud: () => void }) {
   const audio = useEngine((s) => s.audio);
   const stats = useEngine((s) => s.stats);
   const t = useEngine((s) => s.transport);
@@ -232,6 +254,12 @@ export function TopBar({ onAudioSettings }: { onAudioSettings: () => void }) {
       <button type="button" className="panic" disabled={!open} onClick={() => actions().panic()} title="All notes off, reset tails">
         Panic
       </button>
+
+      <div className="cloud-zone">
+        <SamplesButton onOpen={onCloud} />
+        <SyncPill onOpen={onCloud} />
+        <AccountButton />
+      </div>
     </header>
   );
 }

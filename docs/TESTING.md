@@ -206,6 +206,20 @@ the server indexes every file of each `<lib>/` dir (sha256 at startup — use `-
 every `.sfz` an entry referencing all files of its library. Note: sfizz does not load `sample=` paths with
 non-ASCII characters (the cache and download path handle them; a library using them would fail in sfizz itself).
 
+### Web UI in platform mode (`npm run dev:platform`)
+
+`npm run dev:platform` (in `ui/`) serves the UI at `http://127.0.0.1:5173/keysynth/` (base `/keysynth/`, platform
+mode) with stubs for the platform endpoints (`ui/dev/platformStub.ts`): `/auth/api/me|refresh|logout`,
+`/keysynth/api/devices` (fake `ksd_` tokens) and the GitHub latest-release query. Run `npm run mock` next to it (the
+mock engine accepts the tokens; "OTHER" in a token = another account). Stub controls: `/__stub/login`,
+`/__stub/logout`, `/__stub/account?id=other|me`, `/__stub/latest?v=0.2.0` (update banner; `v=` clears),
+`/__stub/state`. `?lna=ignore` skips the Local Network Access permission query (embedded test browsers report
+`denied` for every permission). States to check: download card (no engine; click «Подключить движок»), connecting,
+not running, connected + linked, account mismatch (log in as `other`), samples drawer with progress, auto-fetch
+toast (load «jRhodes Stereo» / «Salamander Grand»), update banner — at 1440 and 1280 px. `npm run build:platform`
+writes `ui/dist-platform/` (deployed by `.github/workflows/frontend.yml`); `npm run build` (`ui/dist/`, base `/`) is
+the engine's offline UI.
+
 Quick protocol smoke test (Python, `python -m pip install websockets`):
 
 ```python

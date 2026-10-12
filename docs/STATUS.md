@@ -55,6 +55,12 @@ Update when a chunk of work lands. Newest first inside each section.
   2 factory presets. 39 Catch2 test cases pass (+ full render tier).
 - Architecture rev 2 (after review #1). Protocol and preset format drafts.
 
+- WP-D web UI for the platform (ARCHITECTURE §15 *Web UI*): `build:platform` (base `/keysynth/`) + runtime mode
+  detection, `@mvv42/kit/platform` (useMe/apiJson/requestLogin/shell READY; no Mantine), engine discovery with LNA
+  states + download/install card, automatic account link + mismatch confirmation + unlink hold, cloud card, sync
+  pill, sample library drawer (download/cancel/delete, progress), auto-fetch toast + preset-row progress, update
+  banner (GitHub latest), `.github/workflows/frontend.yml` (inline copy of infra deploy-static), dev platform stub;
+  Vitest for discovery, link (against the mock engine), samples reducers, version compare.
 - Phase 1 UI: generated module panels, rack/zones, FX chain, keyboard, audio dialog, mock engine. Reviewed, fixed.
 - Sample libraries (core set ~3.5 GB, assets/samples.json) and Faust 2.88 (.tools/faust).
 

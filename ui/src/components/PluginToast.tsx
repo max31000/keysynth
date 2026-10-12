@@ -2,7 +2,7 @@
 // ok and removed auto-hide; errors and faults stay until dismissed and offer a reload.
 
 import { useEffect } from 'react';
-import { actions, useEngine } from '../store';
+import { actions, useCloud, useEngine } from '../store';
 import type { PluginStatus } from '../protocol/types';
 
 const LABEL: Record<PluginStatus['state'], string> = {
@@ -15,6 +15,8 @@ const LABEL: Record<PluginStatus['state'], string> = {
 
 export function PluginToast() {
   const p = useEngine((s) => s.pluginNotice);
+  // `reload_plugin` is forbidden for pages from mvv42.ru (PROTOCOL.md "Sessions, Origin, Host")
+  const canReload = useCloud((s) => s.trust !== 'web');
   useEffect(() => {
     if (!p || (p.state !== 'ok' && p.state !== 'removed')) return;
     const t = setTimeout(() => actions().dismissPluginNotice(), 3500);
@@ -33,7 +35,7 @@ export function PluginToast() {
         <span className="plugin-toast-name">{p.name}</span>
         <span className="plugin-toast-state">{LABEL[p.state]}</span>
         {detail && <span className="plugin-toast-detail">{detail}</span>}
-        {bad && (
+        {bad && canReload && (
           <button type="button" className="plugin-toast-btn" onClick={() => void actions().reloadPlugin(p.name)}>
             Reload
           </button>
