@@ -54,6 +54,8 @@ export interface EngineState {
   selectedModule: NodeId | null;
   logs: LogEvent[];
   lastError: string | null;
+  /** `log` with notify below error level (e.g. samples not downloaded): a neutral toast */
+  notice: string | null;
   /** current drum pattern (engine snapshot + optimistic step edits) */
   pattern: PatternSnapshot | null;
   patterns: PatternEntry[];
@@ -224,6 +226,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       selectedModule: null,
       logs: [],
       lastError: null,
+      notice: null,
       pattern: null,
       patterns: [],
       plugins: {},
@@ -302,7 +305,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
             set({ logs: [...get().logs.slice(-49), msg] });
             // Only problems the engine flags for the player (`notify`) become a toast; transient warnings (a
             // plugin module unavailable while it compiles) and plugin errors (plugin toast) stay in the log.
-            if (msg.notify) set({ lastError: msg.message });
+            if (msg.notify) set(msg.level === 'error' ? { lastError: msg.message } : { notice: msg.message });
             break;
           case 'error':
             if (msg.id === undefined) set({ lastError: `${msg.code}: ${msg.message}` });
@@ -544,7 +547,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       openAudioPanel: () => structural(() => client.request({ type: 'open_audio_panel' }, { expect: 'open_audio_panel_ok' })),
       restartAudio: () =>
         structural(() => client.request({ type: 'restart_audio' }, { expect: 'devices', timeoutMs: 15000 })),
-      clearError: () => set({ lastError: null }),
+      clearError: () => set({ lastError: null, notice: null }),
       refreshPlugins: () => structural(() => client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' })),
       reloadPlugin: (name) =>
         structural(() => client.request({ type: 'reload_plugin', name }, { expect: 'reload_plugin_ok' })),

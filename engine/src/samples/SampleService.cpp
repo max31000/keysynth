@@ -111,6 +111,11 @@ std::string SampleService::refreshManifest(int timeoutMs) {
     if (!etag.empty()) req.headers.emplace_back("If-None-Match", etag);
     const cloud::HttpResponse r = client_.api(req);
     std::lock_guard<std::mutex> lk(m_);
+    // Samplers waiting for the catalog (or offline) re-check their entry: poll() reports it like an ended job.
+    manifestAttempted_ = true;
+    retryPosted_ = false;
+    offlineWaiters_.clear();
+    jobsEnded_ = true;
     if (r.status == 304 && manifest_) {
         manifestFresh_ = true;
         index_.manifestFetchedAt = nowIso8601();
@@ -424,6 +429,8 @@ SampleFetchState SampleService::autoFetch(const std::string& entryId, bool fresh
     if (!split) return SampleFetchState::Unavailable;
     std::lock_guard<std::mutex> lk(m_);
     if (!coveringJob(split->first, entryId).empty()) return SampleFetchState::Waiting;
+    // Offline: no new attempt until the catalog retry (wantsManifestRetry, every 30 s) clears the set.
+    if (offlineWaiters_.count(entryId) && client_.linked()) return SampleFetchState::Offline;
     if (fresh) {
         autoFailed_.erase(entryId);
         autoCancelled_.erase(entryId);
@@ -431,8 +438,21 @@ SampleFetchState SampleService::autoFetch(const std::string& entryId, bool fresh
         if (autoFailed_.count(entryId)) return SampleFetchState::Failed;
         if (autoCancelled_.count(entryId)) return SampleFetchState::Unavailable;
     }
-    if (!manifest_ || !manifest_->entry(entryId) || !client_.linked()) return SampleFetchState::Unavailable;
     if (isLocal(split->first, split->second)) return SampleFetchState::Unavailable;
+    // A cached catalog without the entry: it does not exist on the server either.
+    const bool unknown = manifest_ && !manifest_->entry(entryId);
+    if (!client_.linked()) return unknown ? SampleFetchState::Unavailable : SampleFetchState::NotLinked;
+    if (!manifest_) {
+        // First catalog fetch still running: wait silently (refreshManifest() ends with resourcesChanged).
+        if (!manifestAttempted_) return SampleFetchState::Waiting;
+        offlineWaiters_.insert(entryId); // wantsManifestRetry() retries the catalog
+        return SampleFetchState::Offline;
+    }
+    if (unknown) {
+        if (manifestFresh_) return SampleFetchState::Unavailable;
+        offlineWaiters_.insert(entryId); // a stale catalog may just predate the entry
+        return SampleFetchState::Offline;
+    }
     if (const auto le = manifest_->entry(entryId); index_.entryStatus(*le->first, *le->second) == EntryStatus::Cached)
         return SampleFetchState::Unavailable; // complete: nothing to wait for
     Job j;
@@ -443,6 +463,14 @@ SampleFetchState SampleService::autoFetch(const std::string& entryId, bool fresh
     j.entries = {entryId};
     startJobLocked(std::move(j), true);
     return jobs_.count("entry:" + entryId) ? SampleFetchState::Waiting : SampleFetchState::Unavailable;
+}
+
+bool SampleService::wantsManifestRetry() {
+    std::lock_guard<std::mutex> lk(m_);
+    if (offlineWaiters_.empty() || retryPosted_ || !client_.linked()) return false;
+    if (Clock::now() - lastManifestCheck_ < std::chrono::seconds(30)) return false;
+    retryPosted_ = true;
+    return true;
 }
 
 void SampleService::endJob(const std::string& jobId, bool cancelled, const std::string& code, const std::string& message,
@@ -462,8 +490,11 @@ void SampleService::endJob(const std::string& jobId, bool cancelled, const std::
         }
     }
     if (!code.empty()) {
+        // An automatic download that failed for lack of network is retried with the catalog (the sampler shows
+        // the friendly offline notice instead of an error toast); other failures are final until a new load.
+        const bool offline = j.autoFetch && code == "offline";
         if (j.autoFetch)
-            for (const auto& e : j.entries) autoFailed_.insert(e);
+            for (const auto& e : j.entries) (offline ? offlineWaiters_ : autoFailed_).insert(e);
         events_.push_back({{"type", "samples_error"},
                            {"job", j.id},
                            {"scope", j.scope},
@@ -471,7 +502,7 @@ void SampleService::endJob(const std::string& jobId, bool cancelled, const std::
                            {"code", code},
                            {"message", message},
                            {"path", nullable(path)},
-                           {"notify", true}});
+                           {"notify", !offline}});
     } else {
         if (cancelled && j.autoFetch)
             for (const auto& e : j.entries) autoCancelled_.insert(e);

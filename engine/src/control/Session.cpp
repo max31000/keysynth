@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -362,12 +363,28 @@ nlohmann::json Session::devicesJson() {
     return {{"type", "devices"}, {"types", types}, {"current", toJson(st)}, {"available", available}, {"midiInputs", midi}};
 }
 
+std::string Session::missingSamplesMessage(const std::string& presetName, const std::string& reason) {
+    const std::string what = presetName.empty() ? std::string("Сэмплы") : "Сэмплы для «" + presetName + "»";
+    return reason == "offline" ? what + " не скачаны: нет связи с сервером, повторю позже"
+                               : what + " не скачаны — привяжите движок к аккаунту на mvv42.ru (кнопка «Подключить»)";
+}
+
 int Session::pollModuleErrors() {
     std::map<const Module*, std::string> now;
     int reported = 0;
     if (RackGraph* g = engine_.latestGraph()) {
         for (ModuleNode* n : g->allModuleNodes()) {
             if (!n->module) continue;
+            if (const auto miss = n->module->missingResource()) {
+                if (notifiedMissing_.insert(miss->reason + "|" + miss->id).second) {
+                    std::printf("[samples] %s (node %u): %s not downloaded (%s): %s\n", n->type.c_str(), n->node,
+                                miss->id.c_str(), miss->reason.c_str(), miss->detail.c_str());
+                    std::fflush(stdout);
+                    if (log) log("warn", missingSamplesMessage(model_.patch().meta.name, miss->reason), true);
+                    ++reported;
+                }
+                continue;
+            }
             std::string err = n->module->loadError();
             if (err.empty()) continue;
             const auto it = reportedErrors_.find(n->module.get());

@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -67,6 +68,16 @@ public:
     // Control thread: non-empty when loading the module's resources failed (bad state path, asynchronous sample
     // load that produced nothing). Session reports it once as a `log` error; OfflineRenderer as a warning.
     virtual std::string loadError() const { return {}; }
+
+    // Control thread: a resource that is missing for a non-error reason (sampler: samples not downloaded because
+    // the engine is not linked / the server is unreachable; ARCHITECTURE §15). Session notifies once per
+    // (reason, id) with a friendly `log` warn (code "samples_missing"); `detail` goes to the engine log only.
+    struct MissingResource {
+        std::string id;     // sample entry id
+        std::string reason; // "not_linked" | "offline"
+        std::string detail; // technical text (searched paths)
+    };
+    virtual std::optional<MissingResource> missingResource() const { return std::nullopt; }
 
     // Heavy resources (samples, ...) loaded asynchronously after prepare(): false while still loading (the module
     // renders silence meanwhile). Any thread. OfflineRenderer waits until every module is ready (ARCHITECTURE §5.2).

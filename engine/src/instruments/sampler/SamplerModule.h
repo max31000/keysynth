@@ -20,6 +20,7 @@
 #include <atomic>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -43,7 +44,9 @@ public:
     bool isReady() const override;
     void setOfflineMode(bool offline) override;
 
-    enum P { VolumeDb, Pan, Transpose, Tune, Polyphony, VelocityCurve, Loading, LoadedRegions, Count };
+    enum P { VolumeDb, Pan, Transpose, Tune, Polyphony, VelocityCurve, Loading, LoadedRegions, SamplesMissing, Count };
+    // `samples_missing` readout (hidden): why the SFZ is missing without being an error (PROTOCOL.md "Auto-fetch").
+    enum Missing : int { MissingNone = 0, MissingNotLinked = 1, MissingOffline = 2 };
     static constexpr int kMaxPolyphony = 256;
     static constexpr int kPreloadFrames = 16384; // per sample, ~0.34 s at 48 kHz; the rest streams from disk
 
@@ -55,6 +58,8 @@ public:
     std::string lastError() const;     // control thread
     // "" while waiting for a download, or when the download failure was already reported (samples_error).
     std::string loadError() const override;
+    // Not linked / offline: the friendly "samples not downloaded" notice instead of loadError().
+    std::optional<MissingResource> missingResource() const override;
     // A missing SFZ may be in the sample cache now (download finished / failed): load it or settle the state.
     void resourcesChanged() override;
     bool waitingForDownload() const noexcept; // control thread (tests)
@@ -88,6 +93,7 @@ private:
     bool offline_ = false;
     bool missing_ = false;       // control thread: the SFZ did not resolve at prepare()
     bool errorReported_ = false; // control thread: its auto-fetch failed (samples_error was the notification)
+    int missingReason_ = MissingNone; // control thread: NotLinked / Offline from the fetch hook
     double sampleRate_ = 0.0;
     int maxBlock_ = 0;
 

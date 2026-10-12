@@ -1982,6 +1982,22 @@ code {
   z-index: 100;
   animation: rise 160ms ease-out;
 }
+.toast.notice {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+.samples-missing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--warn);
+  background: rgba(240, 180, 60, 0.07);
+  font-size: 13px;
+}
 @keyframes rise {
   from {
     transform: translateY(8px);

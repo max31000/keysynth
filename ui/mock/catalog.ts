@@ -160,7 +160,9 @@ const sampler: ModuleInfo = {
     p('release', 'Release', 'Amp', { min: 1, max: 4000, def: 300, scale: 'log', unit: 'ms', skew: 300 }),
     p('tune', 'Tune', 'Pitch', { min: -100, max: 100, def: 0, unit: 'ct' }),
     bool('loading', 'Loading', 'Status'),
-  ].map((s) => (s.id === 'loading' ? { ...s, flags: 1 } : s)),
+    // 0 / 1 = not downloaded, engine not linked / 2 = not downloaded, server unreachable (ReadOnly | Hidden)
+    p('samples_missing', 'Samples missing', 'Status', { min: 0, max: 2, def: 0, scale: 'int' }),
+  ].map((s) => (s.id === 'loading' ? { ...s, flags: 1 } : s.id === 'samples_missing' ? { ...s, flags: 1 | 2 | 4 } : s)),
 };
 
 const effects: ModuleInfo[] = [

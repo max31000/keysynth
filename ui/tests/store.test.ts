@@ -288,8 +288,12 @@ describe('engine store', () => {
     st.handle({ type: 'log', level: 'warn', message: "module 'plugin:x' unavailable for node 3" });
     st.handle({ type: 'log', level: 'error', message: 'plugin x: compile error' });
     expect(ctx.store.getState().lastError).toBeNull();
+    // below error level: a neutral notice (e.g. samples not downloaded), not the red error toast
     st.handle({ type: 'log', level: 'warn', notify: true, message: 'the driver did not accept a buffer of 32 samples' });
-    expect(ctx.store.getState().lastError).toBe('the driver did not accept a buffer of 32 samples');
-    expect(ctx.store.getState().logs.map((l) => l.level)).toEqual(['warn', 'error', 'warn']);
+    expect(ctx.store.getState().lastError).toBeNull();
+    expect(ctx.store.getState().notice).toBe('the driver did not accept a buffer of 32 samples');
+    st.handle({ type: 'log', level: 'error', notify: true, message: 'device lost' });
+    expect(ctx.store.getState().lastError).toBe('device lost');
+    expect(ctx.store.getState().logs.map((l) => l.level)).toEqual(['warn', 'error', 'warn', 'error']);
   });
 });

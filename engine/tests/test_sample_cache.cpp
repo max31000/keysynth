@@ -359,4 +359,87 @@ TEST_CASE("sample cache: sampler auto-fetches a missing SFZ on patch load", "[cl
     std::error_code ec;
     fs::remove_all(root, ec);
 }
+
+TEST_CASE("sample cache: missing samples while not linked / offline are a notice, not an error", "[cloud][samplecache][sampler]") {
+    const fs::path root = fs::temp_directory_path() / ("ks-notlinked-" + std::to_string(std::random_device{}()));
+    fs::remove_all(root);
+    fs::create_directories(root / "presets" / "factory");
+    auto fake = std::make_shared<test::FakeCloud>();
+    Lib lib{"autolib", {{"inst.sfz", "<region> sample=tone.wav lokey=0 hikey=127 pitch_keycenter=60\n"}, {"tone.wav", wavBytes()}},
+            {{"inst.sfz", {0, 1}}}};
+    for (const auto& [p, b] : lib.files) fake->files["autolib/" + p] = b;
+    fake->manifest = manifestOf({lib});
+    {
+        Engine engine;
+        engine.prepare(48000.0, 64);
+        Session session(engine, defaultRegistry(), AppPaths::fromRoot(root));
+        session.rebuild(false);
+        std::vector<std::pair<std::string, std::string>> logs;
+        session.log = [&](const std::string& level, const std::string& msg, bool) { logs.emplace_back(level, msg); };
+        cloud::CloudServices::Options o;
+        o.baseUrl = test::kFakeBase;
+        o.http = fake;
+        o.retryBaseMs = 1;
+        o.syncIntervalMs = 3600000;
+        cloud::CloudServices svc(session, o);
+        svc.start(); // not linked
+
+        json patch = {{"format", 2},
+                      {"meta", {{"name", "Auto Piano"}}},
+                      {"layers", {{{"instrument", {{"type", "sampler"}, {"state", {{"sfz", "assets/samples/autolib/inst.sfz"}}}}}}}}};
+        std::vector<std::string> w;
+        auto load = [&] { session.setPatch(patchFromJson(patch, &w), "", false); };
+        auto sampler = [&]() -> SamplerModule* {
+            for (ModuleNode* n : engine.latestGraph()->allModuleNodes())
+                if (auto* s = dynamic_cast<SamplerModule*>(n->module.get())) return s;
+            return nullptr;
+        };
+        load();
+        REQUIRE(sampler());
+        CHECK(sampler()->loadError().empty()); // no raw "sfz not found ... searched" error
+        REQUIRE(sampler()->missingResource());
+        CHECK(sampler()->missingResource()->reason == "not_linked");
+        CHECK(sampler()->params().get(SamplerModule::SamplesMissing) == 1.0f);
+        session.pollModuleErrors();
+        load(); // the same preset again: deduplicated
+        session.pollModuleErrors();
+        REQUIRE(logs.size() == 1);
+        CHECK(logs[0].first == "warn");
+        CHECK(logs[0].second == Session::missingSamplesMessage("Auto Piano", "not_linked"));
+        CHECK(logs[0].second.find("searched") == std::string::npos);
+
+        // Linked, the server unreachable: offline notice (once), no error
+        std::string err;
+        REQUIRE(svc.client().storeLink(test::kFakeToken, {"17", "Max", ""}, err));
+        fake->offline = true;
+        svc.samples().refreshManifest(200);
+        load();
+        REQUIRE(sampler()->missingResource());
+        CHECK(sampler()->missingResource()->reason == "offline");
+        CHECK(sampler()->params().get(SamplerModule::SamplesMissing) == 2.0f);
+        CHECK(sampler()->loadError().empty());
+        session.pollModuleErrors();
+        session.pollModuleErrors();
+        REQUIRE(logs.size() == 2);
+        CHECK(logs[1].second == Session::missingSamplesMessage("Auto Piano", "offline"));
+
+        // Back online: the catalog retry wakes the sampler, it downloads and loads (no error at any point)
+        fake->offline = false;
+        svc.samples().refreshManifest(1000);
+        bool done = false;
+        for (int i = 0; i < 1000 && !(done && sampler()->regionCount() > 0); ++i) {
+            for (auto& a : svc.poll()) done = done || a.out.message["type"] == "samples_done";
+            session.pollModuleErrors();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        CHECK(done);
+        CHECK(sampler()->regionCount() > 0);
+        CHECK(sampler()->params().get(SamplerModule::SamplesMissing) == 0.0f);
+        for (const auto& [level, msg] : logs) CHECK(level != "error");
+        svc.stop();
+        setSampleCacheDir(AppPaths::discover().sampleCache);
+    }
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
 #endif

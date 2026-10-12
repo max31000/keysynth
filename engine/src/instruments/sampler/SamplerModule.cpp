@@ -176,6 +176,9 @@ const ModuleInfo& SamplerModule::moduleInfo() {
         loading.flags = ParamFlags::ReadOnly | ParamFlags::NonAutomatable;
         ParamSpec regions = intParam("loaded_regions", "Regions", 0, 100000, 0, {}, "Status");
         regions.flags = ParamFlags::ReadOnly | ParamFlags::NonAutomatable;
+        // 0 = no, 1 = not downloaded / engine not linked, 2 = not downloaded / server unreachable (retrying)
+        ParamSpec missing = intParam("samples_missing", "Samples missing", 0, 2, 0, {}, "Status");
+        missing.flags = ParamFlags::ReadOnly | ParamFlags::Hidden | ParamFlags::NonAutomatable;
         i.params = {
             linearParam("volume_db", "Volume", -60.0f, 12.0f, 0.0f, "dB", "Output"),
             linearParam("pan", "Pan", -1.0f, 1.0f, 0.0f, {}, "Output"),
@@ -186,6 +189,7 @@ const ModuleInfo& SamplerModule::moduleInfo() {
             linearParam("velocity_curve", "Velocity Curve", -1.0f, 1.0f, 0.0f, {}, "Voice"),
             loading,
             regions,
+            missing,
         };
         i.uiHints = {{"groupOrder", {"Output", "Pitch", "Voice", "Status"}},
                      {"front", {"volume_db", "pan", "transpose", "velocity_curve"}}};
@@ -249,6 +253,8 @@ void SamplerModule::prepare(double sampleRate, int maxBlock) {
     c->wantPolyphony.store(static_cast<int>(params().get(Polyphony)));
     missing_ = false;
     errorReported_ = false;
+    missingReason_ = MissingNone;
+    params().setRaw(SamplesMissing, 0.0f);
     if (!sfz_.empty()) {
         SamplePathResult r = resolveSamplePath(sfz_, repoRoot());
         if (r.path && cacheIncomplete(*r.path, true)) {
@@ -290,7 +296,17 @@ void SamplerModule::applyFetchState(Core& c, bool fresh) {
     const auto entry = sampleEntryIdOf(sfz_);
     const SampleFetchState fs = entry ? querySampleFetch(*entry, fresh) : SampleFetchState::Unavailable;
     errorReported_ = fs == SampleFetchState::Failed; // the samples_error toast already told the player
+    missingReason_ = fs == SampleFetchState::NotLinked ? MissingNotLinked
+                     : fs == SampleFetchState::Offline ? MissingOffline
+                                                       : MissingNone;
+    params().setRaw(SamplesMissing, static_cast<float>(missingReason_));
     c.state.store(fs == SampleFetchState::Waiting ? Core::Waiting : Core::Failed);
+}
+
+std::optional<Module::MissingResource> SamplerModule::missingResource() const {
+    const auto entry = sampleEntryIdOf(sfz_);
+    if (!core_ || !entry || missingReason_ == MissingNone || core_->state.load() != Core::Failed) return std::nullopt;
+    return MissingResource{*entry, missingReason_ == MissingNotLinked ? "not_linked" : "offline", lastError()};
 }
 
 void SamplerModule::resourcesChanged() {
@@ -303,6 +319,8 @@ void SamplerModule::resourcesChanged() {
         return;
     }
     if (cacheIncomplete(*r.path, false)) {
+        missingReason_ = MissingNone;
+        params().setRaw(SamplesMissing, 0.0f);
         core_->state.store(Core::Waiting);
         return;
     }
@@ -310,6 +328,8 @@ void SamplerModule::resourcesChanged() {
     if (loader_.joinable()) loader_.join();
     missing_ = false;
     errorReported_ = false;
+    missingReason_ = MissingNone;
+    params().setRaw(SamplesMissing, 0.0f);
     core_->setError({});
     core_->path = *r.path;
     core_->state.store(Core::Loading);
@@ -319,7 +339,7 @@ void SamplerModule::resourcesChanged() {
 }
 
 std::string SamplerModule::loadError() const {
-    if (!core_ || errorReported_ || core_->state.load() == Core::Waiting) return {};
+    if (!core_ || errorReported_ || missingReason_ != MissingNone || core_->state.load() == Core::Waiting) return {};
     return lastError();
 }
 

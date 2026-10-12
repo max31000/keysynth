@@ -248,6 +248,8 @@ std::vector<AddressedOutgoing> CloudServices::poll() {
     bool jobsEnded = false;
     for (auto& e : samples_->poll(jobsEnded)) q.push_back({{}, {Outgoing::Target::Broadcast, std::move(e)}});
     if (jobsEnded) session_.notifyResourcesChanged();
+    // A sampler waits for samples while the server is unreachable: retry the catalog (then its download).
+    if (samples_->wantsManifestRetry()) client_->post([this] { samples_->refreshManifest(10000); });
 
     if (const uint64_t v = client_->statusVersion(); v != lastCloudVersion_) {
         lastCloudVersion_ = v;

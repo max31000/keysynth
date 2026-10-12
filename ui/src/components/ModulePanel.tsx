@@ -4,6 +4,7 @@ import { findModule } from '../store/patchOps';
 import { FRONT_TAB, groupParams, panelTabs, type ParamGroup } from '../lib/panelLayout';
 import type { ModuleInfo, ParamSpec } from '../protocol/types';
 import { ParamControl } from './Controls';
+import { SamplesMissing } from './SamplesMissing';
 
 // Selected tab per module type, kept for the session (switching presets keeps you on "Op 3").
 const lastTab = new Map<string, string>();
@@ -91,6 +92,7 @@ export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) 
         </span>
         <span className="module-node mono">#{node}</span>
       </header>
+      {type === 'sampler' && <SamplesMissing node={node} />}
       {tabs && current ? (
         <>
           <div className="module-tabs" role="tablist" aria-label={`${info.name} sections`}>

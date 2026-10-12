@@ -26,9 +26,11 @@ std::filesystem::path sampleCacheDir();
 // Auto-fetch of a missing `assets/samples/<entry id>` (PROTOCOL.md "Auto-fetch on patch load"). The hook is set by
 // the sample service (message thread); the sampler asks it from prepare() (fresh = true) and resourcesChanged().
 enum class SampleFetchState {
-    Unavailable, // not linked / unknown entry: normal missing-sfz error
-    Waiting,     // a download job covers it: stay silent with `loading` = 1
-    Failed       // its download failed and was reported (samples_error): error state, no extra `log`
+    Unavailable, // unknown entry (not in the manifest, local-only id): normal missing-sfz error
+    Waiting,     // a download job covers it (or the manifest is being fetched): stay silent with `loading` = 1
+    Failed,      // its download failed and was reported (samples_error): error state, no extra `log`
+    NotLinked,   // a downloadable entry, but the engine is not linked to an account: friendly notice, no error
+    Offline      // linked, but the catalog is unreachable: friendly notice; retried, resourcesChanged() when back
 };
 using SampleFetchHook = std::function<SampleFetchState(const std::string& entryId, bool fresh)>;
 void setSampleFetchHook(SampleFetchHook hook);

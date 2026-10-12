@@ -17,15 +17,17 @@ import { identityRejected } from './platform/identity';
 
 function Toast() {
   const err = useEngine((s) => s.lastError);
+  const notice = useEngine((s) => s.notice);
+  const text = err ?? notice;
   useEffect(() => {
-    if (!err) return;
-    const t = setTimeout(() => actions().clearError(), 5000);
+    if (!text) return;
+    const t = setTimeout(() => actions().clearError(), err ? 5000 : 8000);
     return () => clearTimeout(t);
-  }, [err]);
-  if (!err) return null;
+  }, [text, err]);
+  if (!text) return null;
   return (
-    <div className="toast" role="alert" onClick={() => actions().clearError()}>
-      {err}
+    <div className={`toast ${err ? '' : 'notice'}`} role={err ? 'alert' : 'status'} onClick={() => actions().clearError()}>
+      {text}
     </div>
   );
 }

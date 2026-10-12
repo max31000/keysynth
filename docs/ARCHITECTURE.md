@@ -160,6 +160,7 @@ class Module {
   virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
   virtual bool loadStateWroteParams() const { return false; } // loadState wrote params (fm .syx voice)
   virtual std::string loadError() const { return {}; }    // control thread: failed resource load (bad sfz/syx)
+  virtual std::optional<MissingResource> missingResource() const; // control thread: missing for a non-error reason
   virtual bool isReady() const { return true; }           // false while heavy resources load asynchronously
   virtual void setOfflineMode(bool) {}                    // control thread, after prepare: faster-than-RT render
   virtual void resourcesChanged() {}                      // control thread: a missing resource may exist now
@@ -183,6 +184,9 @@ class Module {
   dirty) and the built node already carries the new state, so the next build reuses the module.
 - **Load errors** (`loadError`): polled by `Session::pollModuleErrors` on the 30 Hz pump and reported once per module
   instance as a `log` error event (PROTOCOL.md); `OfflineRenderer` adds them to its warnings (ks-render prints them).
+  `missingResource` (`{ id, reason: "not_linked" | "offline", detail }`, sampler only: samples that can be downloaded
+  but are not, §15) replaces the error with one friendly `log` warn notice per (reason, entry) per run; the detail
+  (searched paths) only goes to stdout / engine.log.
 
 - `ProcessContext`: sampleRate, numSamples, sampleTime, transport (tempo, ppq position, playing), and per-layer
   `ChannelState` {pitchBend (-1..1), modWheel, aftertouch, cc64 sustain, cc66 sostenuto, cc67 soft, expression}

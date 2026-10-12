@@ -330,4 +330,12 @@ When a patch is applied (`load_preset`, `set_patch`, `set_instrument`, any rebui
 2. `samples_done` → every sampler waiting for that entry loads it (`loading` stays 1 during the load, then 0).
 3. `samples_error` → the sampler ends in its normal load-error state (`loading` = 0); its missing-sfz `log` is
    suppressed (the `samples_error` toast is the one notification).
-4. Not linked, or not in the manifest → unchanged behaviour (missing-sfz `log { level: "error", notify: true }`).
+4. Not linked → no error: the sampler's hidden ReadOnly `samples_missing` readout = 1 and one `log { level: "warn",
+   notify: true }` per entry and run: «Сэмплы для «<preset>» не скачаны — привяжите движок к аккаунту на mvv42.ru
+   (кнопка «Подключить»)». After `cloud_link` the catalog refresh wakes the sampler, which then auto-fetches (1.).
+5. Linked but the server is unreachable (no catalog, or the download failed with `offline`) → `samples_missing` = 2,
+   one notice «… не скачаны: нет связи с сервером, повторю позже»; the `samples_error` of such an automatic job has
+   `notify: false`. The engine retries the catalog every 30 s; when it answers, waiting samplers fetch again.
+6. Not in the (fresh) manifest → unchanged behaviour (missing-sfz `log { level: "error", notify: true }`).
+The UI shows `samples_missing` on the sampler panel («Сэмплы не скачаны», «Скачать сэмплы (N МБ)» → `samples_fetch
+{ scope: "entry" }` when linked and the entry is in the catalog). `log` with `notify` below `error` is a neutral toast.

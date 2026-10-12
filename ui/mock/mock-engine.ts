@@ -846,6 +846,13 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     for (const l of patch.layers) {
       const e = energy.get(l.node!) ?? 0;
       if (l.instrument.type === 'va') readouts[String(l.instrument.node)] = { active_voices: Math.min(16, held.size) };
+      if (l.instrument.type === 'sampler') {
+        // like the engine: a downloadable entry that is not cached and no job covers it → not linked (1)
+        const sfz = (l.instrument.state as { sfz?: string } | undefined)?.sfz ?? '';
+        const e = allEntries().find((x) => `assets/samples/${x.id}` === sfz);
+        const missing = !!e && !e.local && e.cachedBytes < e.bytes && !link && !jobs.some((j) => j.id === `entry:${e.id}`);
+        readouts[String(l.instrument.node)] = { loading: 0, samples_missing: missing ? 1 : 0 };
+      }
       for (const f of [...l.fx, ...patch.master.fx]) {
         if (f.type === 'compressor') {
           const over = toDb(e) - (f.params.threshold ?? -18);
