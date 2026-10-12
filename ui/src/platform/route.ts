@@ -13,6 +13,8 @@ export interface RouteInput {
   discovery: { seen: boolean; started: boolean };
   /** dev aid (`?remote=1|0`) */
   force?: Route | null;
+  /** route now: a `/me` re-read (loading, or unavailable on a network blip) does not leave the relay */
+  current?: Route;
 }
 
 export function decideRoute(i: RouteInput): Route {
@@ -20,5 +22,6 @@ export function decideRoute(i: RouteInput): Route {
   if (i.force) return i.force;
   // a PC tab with a local engine never opens the relay
   if (i.discovery.seen || i.discovery.started) return 'direct';
+  if (i.current === 'relay' && (i.me.status === 'loading' || i.me.status === 'unavailable')) return 'relay';
   return i.me.status === 'authenticated' && i.me.granted ? 'relay' : 'direct';
 }

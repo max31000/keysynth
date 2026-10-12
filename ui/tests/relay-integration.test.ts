@@ -106,13 +106,17 @@ describe('controller through the relay mock', () => {
   });
 
   it('host offline → pending rejects; back online → resync (hello) on the same host', async () => {
+    hub.setOnline('mock-2', false);
+    await until(() => link.getState().hosts.filter((h) => h.online).length === 1);
     const helloBefore = hub.lastMsgs.filter((m) => m.type === 'hello').length;
     const p = remote.request({ type: 'get_catalog' }, { timeoutMs: 3000 });
     hub.setOnline('mock-1', false);
     await expect(p).rejects.toMatchObject({ code: 'disconnected' });
     await until(() => remote.status === 'reconnecting');
+    expect(link.getState().hostId).toBe('mock-1'); // kept while offline («не в сети»)
     hub.setOnline('mock-1', true);
     await until(() => remote.status === 'open' && store.getState().identity === 'mock');
     expect(hub.lastMsgs.filter((m) => m.type === 'hello').length).toBe(helloBefore + 1);
+    expect(link.getState().hostId).toBe('mock-1');
   });
 });

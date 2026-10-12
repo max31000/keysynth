@@ -124,6 +124,8 @@ export interface CloudDeps {
   onProfileChanged?: () => void;
   /** GET /api/devices timeout */
   apiTimeoutMs?: number;
+  /** connected through the relay (route): never plan a link, whatever `hello.trust` says */
+  isRemote?: () => boolean;
 }
 
 export type CloudStore = StoreApi<CloudState>;
@@ -370,7 +372,7 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
           granted: s.me.granted,
           owner: s.link.owner,
           now: now(),
-          remote: s.trust === 'remote',
+          remote: s.trust === 'remote' || !!deps.isRemote?.(),
         });
       },
 

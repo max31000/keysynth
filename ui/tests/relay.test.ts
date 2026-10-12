@@ -53,6 +53,9 @@ describe('pickHost (§10.14)', () => {
     expect(pickHost([H1, H2], null, 'h2')).toBe('h2');
     expect(pickHost([H1, H2], 'h1', 'h2')).toBe('h1');
     expect(pickHost([{ ...H1, online: false }, H2], 'h1', null)).toBe('h2');
+    // the chosen host went offline and nothing else is online: keep it (it comes back, «не в сети» meanwhile)
+    expect(pickHost([{ ...H1, online: false }], 'h1', null)).toBe('h1');
+    expect(pickHost([{ ...H1, online: false }, H2, { deviceId: 'h3', name: 'C', online: true }], 'h1', null)).toBe('h1');
     expect(pickHost([], 'h1', 'h1')).toBeNull();
   });
 
@@ -239,6 +242,7 @@ describe('RelayLink + EngineClient', () => {
     relay().drop();
     expect(sockets).toHaveLength(1);
     link.setVisible(true);
+    await flush(); // session refresh, then the socket (no backoff)
     expect(sockets).toHaveLength(2);
     // a socket opened while hidden pauses at once
     link.setVisible(false);
@@ -249,8 +253,8 @@ describe('RelayLink + EngineClient', () => {
     expect(sockets[2]!.sent[0]).toEqual({ t: 'pause' });
   });
 
-  it('a frozen tab with a silent socket reconnects when it becomes visible', () => {
-    const { link, relay, sockets } = setup();
+  it('a frozen tab with a silent socket reconnects when it becomes visible', async () => {
+    const { link, relay, sockets, refresh } = setup();
     link.start();
     relay().open();
     relay().receive({ t: 'hosts', hosts: [H1] });
@@ -259,6 +263,71 @@ describe('RelayLink + EngineClient', () => {
     link.setVisible(true);
     expect(sockets[0]!.readyState).toBe(3);
     expect(link.getState().status).toBe('reconnecting');
+    await flush();
+    expect(refresh).toHaveBeenCalled();
+    expect(sockets).toHaveLength(2); // at once, not after the backoff
+  });
+
+  it('the hub closes the old socket before the renewal even opened: the renewal is adopted', async () => {
+    const { link, client, sockets, relay } = setup();
+    link.start();
+    client.connect();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: 'hosts', hosts: [H1] });
+    await flush();
+    for (let i = 0; i < 150; i++) {
+      vi.advanceTimersByTime(20_000);
+      sockets[0]!.receive({ t: 'ping' });
+    }
+    await flush();
+    expect(sockets).toHaveLength(2);
+    sockets[0]!.drop(); // 4000 before the renewal's onopen
+    expect(link.getState().status).toBe('open');
+    expect(client.status).toBe('open');
+    expect(relay()).toBe(sockets[1]);
+    sockets[1]!.open();
+    const p = client.request({ type: 'get_catalog' });
+    expect(sockets[1]!.sent.at(-1)).toMatchObject({ t: 'msg', msg: { type: 'get_catalog' } });
+    sockets[1]!.receive({ t: 'msg', host: 'h1', msg: { type: 'catalog_ok', id: 1, modules: [] } });
+    await expect(p).resolves.toMatchObject({ type: 'catalog_ok' });
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('close codes: 4000 (cid replaced) does not reconnect; 4029 backs off to the maximum', async () => {
+    const a = setup();
+    a.link.start();
+    a.relay().open();
+    a.relay().receive({ t: 'hosts', hosts: [H1] });
+    a.relay().onclose?.({ code: 4000 });
+    vi.advanceTimersByTime(60_000);
+    await flush();
+    expect(a.sockets).toHaveLength(1);
+    a.link.retryNow(); // «Повторить» resumes
+    await flush();
+    expect(a.sockets).toHaveLength(2);
+
+    const b = setup();
+    b.link.start();
+    b.relay().open();
+    b.relay().receive({ t: 'hosts', hosts: [H1] });
+    b.relay().onclose?.({ code: 4029 });
+    vi.advanceTimersByTime(29_999);
+    await flush();
+    expect(b.sockets).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(b.sockets).toHaveLength(2);
+  });
+
+  it('a socket stuck connecting is abandoned after 10 s', async () => {
+    const { link, sockets } = setup();
+    link.start();
+    vi.advanceTimersByTime(10_000);
+    expect(sockets[0]!.readyState).toBe(3);
+    expect(link.getState().status).toBe('reconnecting');
+    vi.advanceTimersByTime(1000);
+    await flush();
+    expect(sockets).toHaveLength(2);
   });
 
   it('renewal at ~50 min: refresh, same cid, make-before-break without touching the transport', async () => {

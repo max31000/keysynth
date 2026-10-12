@@ -41,6 +41,7 @@ export const cloudStore = createCloudStore({
   acceptMock: MODE.dev,
   api: { mint: mintDevice, listDevices },
   storage: safeLocalStorage,
+  isRemote: () => remote?.isDirect() === false,
   onProfileChanged: () => {
     void engineStore.getState().refreshPresets();
     void engineStore.getState().refreshPatterns();

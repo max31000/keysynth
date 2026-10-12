@@ -13,8 +13,11 @@
 // - `set_param` is coalesced to ≤ 30 Hz per transport (latest value per node/param wins; flushed before any other
 //   message so the order of edits is kept).
 // - Heartbeat: `{t:"ping"}` every 20 s (RTT from the `pong`), answer server pings, reconnect after 45 s silence.
-// - Renewal (§10.2): ~50 min after a socket opened, refresh the session (getMe) and open a second socket with the
-//   same `cid`; once it delivers `hosts` it replaces the old one (make-before-break; the transport stays open).
+// - Renewal (§10.2): ~50 min after a socket opened, refresh the session (getMe), then open a second socket with
+//   the same `cid`; once it delivers `hosts` (or the hub closes the old one with 4000) it replaces the old one
+//   (make-before-break; the transport stays open).
+// - Reconnects (backoff 1 s → 30 s; max at once after 4009/4029) refresh the session first; a socket that does not
+//   open within 10 s is abandoned. 4000 on the current socket = the same cid connected elsewhere: no reconnect.
 // - Hidden tab → `{t:"pause"}` (host skips telemetry), visible → `{t:"resume"}`, and a dead socket reconnects
 //   at once instead of waiting for the backoff (iPad Safari freezes background tabs).
 
@@ -46,10 +49,15 @@ export interface RelayState {
 
 export const LAST_HOST_KEY = 'keysynth.relayHost';
 
-/** One online → it; the current one while it stays online; else the last chosen one if online; else none. */
+/**
+ * The current host while online, or while offline and listed unless exactly one other host is online (it comes
+ * back: same host, «X не в сети» meanwhile); else the only online host; else the user's last choice if online;
+ * else none (switcher).
+ */
 export function pickHost(hosts: RelayHost[], current: string | null, lastChosen: string | null): string | null {
   const online = hosts.filter((h) => h.online);
-  if (current && online.some((h) => h.deviceId === current)) return current;
+  const cur = current ? hosts.find((h) => h.deviceId === current) : undefined;
+  if (cur && (cur.online || online.length !== 1)) return cur.deviceId;
   if (online.length === 1) return online[0]!.deviceId;
   if (lastChosen && online.some((h) => h.deviceId === lastChosen)) return lastChosen;
   return null;
@@ -102,6 +110,10 @@ export interface RelayOptions {
 
 const WS_OPEN = 1;
 const HEARTBEAT_TICK_MS = 5000;
+const CONNECT_TIMEOUT_MS = 10_000;
+/** close codes (docs/PROTOCOL.md *Relay*) */
+const CLOSE_REPLACED = 4000;
+const CLOSE_BACK_OFF = new Set([4009, 4029]);
 const RENEW_RETRY_MS = 60_000;
 
 function uuid(): string {
@@ -125,6 +137,8 @@ export class RelayLink {
   /** the current socket delivered `hosts` */
   private ready = false;
   private wantOpen = false;
+  /** a session refresh before an open is in flight */
+  private opening = false;
   private attempt = 0;
   private visible = true;
   private lastRx = 0;
@@ -170,7 +184,7 @@ export class RelayLink {
 
   start(): void {
     this.wantOpen = true;
-    if (this.ws || this.reconnectTimer) return;
+    if (this.ws || this.reconnectTimer || this.opening) return;
     this.open();
   }
 
@@ -187,12 +201,12 @@ export class RelayLink {
     this.set({ status: 'idle', hosts: [], hostId: null, rtt: null, error: null, failures: 0 });
   }
 
-  /** Skip a pending backoff delay. */
+  /** Skip a pending backoff delay (refreshes the session first: the cookie may have expired meanwhile). */
   retryNow(): void {
-    if (!this.wantOpen || this.ws) return;
+    if (!this.wantOpen || this.ws || this.opening) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
-    this.open();
+    this.openAfterRefresh();
   }
 
   /** User picked a host in the switcher (remembered for the next visit). */
@@ -212,8 +226,10 @@ export class RelayLink {
     if (!this.ws) this.retryNow();
     // a frozen tab's socket may look open but be dead: check silence now and probe with a ping
     else if (this.ws.readyState === WS_OPEN) {
-      if (this.o.now() - this.lastRx > this.o.silenceMs) this.socketLost(this.ws);
-      else this.ping();
+      if (this.o.now() - this.lastRx > this.o.silenceMs) {
+        this.socketLost(this.ws);
+        this.retryNow(); // no backoff on becoming visible (§10.13)
+      } else this.ping();
     }
   }
 
@@ -287,12 +303,21 @@ export class RelayLink {
     } catch {
       return null;
     }
-    ws.onopen = () => this.onOpen(ws);
+    const timeout = setTimeout(() => {
+      if (ws.readyState !== WS_OPEN) this.socketLost(ws);
+    }, CONNECT_TIMEOUT_MS);
+    ws.onopen = () => {
+      clearTimeout(timeout);
+      this.onOpen(ws);
+    };
     ws.onmessage = (ev) => this.onFrame(ws, ev.data);
     ws.onerror = () => {
       /* onclose follows */
     };
-    ws.onclose = () => this.socketLost(ws);
+    ws.onclose = (ev) => {
+      clearTimeout(timeout);
+      this.socketLost(ws, (ev as { code?: unknown } | null)?.code);
+    };
     return ws;
   }
 
@@ -364,11 +389,10 @@ export class RelayLink {
     this.ready = true;
     if (first) {
       this.attempt = 0;
-      this.set({ status: 'open', failures: 0, error: null });
+      this.set({ status: 'open', failures: 0 });
     }
     const hostId = pickHost(hosts, this.state.hostId, this.lastChosen());
-    if (hostId && hostId !== this.state.hostId) this.remember(hostId);
-    this.set({ hosts, hostId });
+    this.set({ hosts, hostId, error: null });
     this.syncTransport();
   }
 
@@ -402,29 +426,45 @@ export class RelayLink {
     if (!this.visible) this.sendFrame({ t: 'pause' });
   }
 
-  private socketLost(ws: WebSocketLike): void {
+  private socketLost(ws: WebSocketLike, code?: unknown): void {
     if (ws === this.renewing) {
+      this.retire(ws);
       this.renewing = null;
       if (this.ws) this.scheduleRenew(RENEW_RETRY_MS);
       return;
     }
     if (ws !== this.ws) return;
     this.retire(ws);
-    // the server may close the old socket before the renewal delivered `hosts`: keep going on the new one
-    if (this.renewing && this.renewing.readyState === WS_OPEN) {
-      this.ws = this.renewing;
+    // the hub closes the old socket (4000) as soon as the renewal connects, maybe before it opened or delivered
+    // `hosts`: keep going on the new one (transport and host state stay)
+    const next = this.renewing;
+    if (next && next.readyState <= WS_OPEN) {
+      this.ws = next;
       this.renewing = null;
-      this.lastRx = this.o.now();
-      this.startTimers();
+      this.pingSentAt = null;
+      if (next.readyState === WS_OPEN) {
+        this.lastRx = this.o.now();
+        this.startTimers();
+        if (!this.visible) this.sendFrame({ t: 'pause' });
+      } else if (this.heartbeat) {
+        clearInterval(this.heartbeat); // re-armed by onOpen
+        this.heartbeat = null;
+      }
       return;
     }
-    this.retire(this.renewing);
+    this.retire(next);
     this.renewing = null;
     this.ws = null;
     this.ready = false;
     this.clearTimers();
     this.pingSentAt = null;
     this.dropTransport();
+    if (code === CLOSE_REPLACED) {
+      // this cid connected again elsewhere: the newer socket wins (visibility / «Повторить» may resume)
+      this.set({ status: 'reconnecting', failures: this.state.failures + 1 });
+      return;
+    }
+    if (CLOSE_BACK_OFF.has(code as number)) this.attempt = Math.max(this.attempt, 16); // too many sockets / rate cap
     if (this.wantOpen) this.scheduleReconnect();
     else this.set({ status: 'idle' });
   }
@@ -437,13 +477,19 @@ export class RelayLink {
     const delay = base * (1 - jitter * Math.random());
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      // the 10-min session cookie may have expired while away: refresh first (errors → try anyway)
-      void this.refresh()
-        .catch(() => undefined)
-        .then(() => {
-          if (this.wantOpen && !this.ws && !this.reconnectTimer) this.open();
-        });
+      this.openAfterRefresh();
     }, delay);
+  }
+
+  /** The 10-min session cookie may have expired while away: refresh first (errors → try anyway). */
+  private openAfterRefresh(): void {
+    this.opening = true;
+    void this.refresh()
+      .catch(() => undefined)
+      .then(() => {
+        this.opening = false;
+        if (this.wantOpen && !this.ws && !this.reconnectTimer) this.open();
+      });
   }
 
   private ping(): void {

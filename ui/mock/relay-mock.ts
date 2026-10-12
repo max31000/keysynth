@@ -153,7 +153,7 @@ export function startRelayMock(opts: RelayMockOptions): Promise<RelayMock> {
   const onController = (ws: WebSocket, cid: string) => {
     const old = controllers.get(cid);
     // resume (same cid, e.g. a renewal): the new socket takes over the bridges, the old one is closed
-    const c: Controller = { cid, ws, paused: old?.paused ?? false, bridges: old?.bridges ?? new Map() };
+    const c: Controller = { cid, ws, paused: false, bridges: old?.bridges ?? new Map() }; // resume resets pause
     controllers.set(cid, c);
     if (old) old.ws.close(4000, 'resumed elsewhere');
     log(old ? 'controller resumed' : 'controller joined', cid);

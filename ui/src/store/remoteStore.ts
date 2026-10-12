@@ -49,16 +49,18 @@ export function createRemote(deps: RemoteDeps): Remote {
 
   const apply = () => {
     const s = cloud.getState();
-    const route: Route = relay ? decideRoute({ mode: deps.mode, me: s.me, discovery: s.discovery, force: deps.force ?? null }) : 'direct';
-    if (route === store.getState().route) return;
+    const current = store.getState().route;
+    const route: Route = relay ? decideRoute({ mode: deps.mode, me: s.me, discovery: s.discovery, force: deps.force ?? null, current }) : 'direct';
+    if (route === current) return;
     store.setState({ route });
     if (route === 'relay') {
       relay!.start();
       client.switchTransport(true);
     } else {
-      relay?.stop();
-      // back to the local engine: connect only if discovery runs (no unasked Local Network Access prompt)
+      // back to the local engine: connect only if discovery runs (no unasked Local Network Access prompt). The
+      // client lets go of the relay transport first, so its close does not reach discovery as a failed attempt.
       client.switchTransport(s.discovery.started);
+      relay?.stop();
     }
   };
   cloud.subscribe(apply);

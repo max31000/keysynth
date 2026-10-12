@@ -30,6 +30,14 @@ describe('decideRoute (§6, §10.12)', () => {
     expect(decideRoute(input({ force: 'relay', discovery: { seen: true, started: true } }))).toBe('relay');
     expect(decideRoute(input({ force: 'direct' }))).toBe('direct');
   });
+
+  it('a /me re-read (loading / unavailable) does not leave the relay; sign-out does', () => {
+    expect(decideRoute(input({ current: 'relay', me: { status: 'unavailable', granted: false } }))).toBe('relay');
+    expect(decideRoute(input({ current: 'relay', me: { status: 'loading', granted: false } }))).toBe('relay');
+    expect(decideRoute(input({ current: 'relay', me: { status: 'anonymous', granted: false } }))).toBe('direct');
+    expect(decideRoute(input({ current: 'relay', me: { status: 'authenticated', granted: false } }))).toBe('direct');
+    expect(decideRoute(input({ current: 'direct', me: { status: 'unavailable', granted: false } }))).toBe('direct');
+  });
 });
 
 describe('remote trust (§10.3)', () => {
@@ -105,10 +113,19 @@ describe('route controller', () => {
     expect(relay.transport).toHaveBeenCalledTimes(1);
     expect(direct).toHaveBeenCalledTimes(1);
 
-    // «Движок на этом ПК»: discovery started → direct, connect
+    // a network blip on /me keeps the relay
+    cloud.setState({ me: { status: 'unavailable', granted: false, name: null } });
+    expect(r.store.getState().route).toBe('relay');
+    cloud.setState({ me: { status: 'authenticated', granted: true, name: 'Max' } });
+
+    // «Движок на этом ПК»: discovery started → direct, connect; the client drops the relay transport before
+    // the relay stops (its close must not reach discovery)
+    const order: string[] = [];
+    client.switchTransport.mockImplementation(() => void order.push('switch'));
+    relay.stop.mockImplementation(() => void order.push('stop'));
     cloud.setState({ discovery: { ...cloud.getState().discovery, started: true } });
     expect(r.store.getState().route).toBe('direct');
-    expect(relay.stop).toHaveBeenCalled();
+    expect(order).toEqual(['switch', 'stop']);
     expect(client.switchTransport).toHaveBeenLastCalledWith(true);
   });
 
