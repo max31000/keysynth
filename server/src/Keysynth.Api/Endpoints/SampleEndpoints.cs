@@ -35,7 +35,7 @@ public static class SampleEndpoints
 
     private static IResult File(
         HttpContext ctx, string lib, string? path, ISampleIndexProvider provider, IConfiguration config,
-        IOptions<KeysynthOptions> options)
+        IOptions<KeysynthOptions> options, IHostEnvironment env)
     {
         // Route values arrive URL-decoded. Validate before the lookup (defence in depth: the index itself only holds
         // valid paths), then require exact membership in the loaded index.
@@ -48,14 +48,20 @@ public static class SampleEndpoints
 
         ctx.Response.Headers.CacheControl = "private, no-store";
 
-        if (config[DevServeFilesKey] == "1")
+        // Dev only (never in Production: it would bypass nginx limits). Testing = the integration tests.
+        if (config[DevServeFilesKey] == "1" && (env.IsDevelopment() || env.IsEnvironment("Testing")))
         {
             var root = Path.GetFullPath(options.Value.SamplesRoot);
             var full = Path.GetFullPath(Path.Combine(root, lib, path!.Replace('/', Path.DirectorySeparatorChar)));
             if (!full.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
                 || !System.IO.File.Exists(full))
                 return Errors.NotFound;
-            return TypedResults.PhysicalFile(full, "application/octet-stream", enableRangeProcessing: true);
+            // ETag like nginx's (mtime-size) so If-Range resume behaves the same as in production.
+            var info = new FileInfo(full);
+            var etag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue(
+                $"\"{new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds():x}-{info.Length:x}\"");
+            return TypedResults.PhysicalFile(full, "application/octet-stream", lastModified: info.LastWriteTimeUtc,
+                entityTag: etag, enableRangeProcessing: true);
         }
 
         // nginx (internal location /keysynth/_files/) serves the bytes with Range/If-Range/ETag. No Content-Type here:

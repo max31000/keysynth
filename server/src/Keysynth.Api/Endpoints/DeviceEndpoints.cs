@@ -31,7 +31,7 @@ public static class DeviceEndpoints
     private static async Task<IResult> Mint(HttpContext ctx, IDeviceRepository devices, IClock clock)
     {
         var me = KeysynthAuth.GrantedCookieUser(ctx.User)!;
-        var userId = KeysynthAuth.RequireUserId(ctx);
+        var userId = KeysynthAuth.RequireCookieUserId(ctx);
 
         var (doc, error) = await Bodies.ReadJsonAsync(ctx.Request, Limits.MaxRequestBodyBytes);
         if (error is not null)
@@ -58,7 +58,7 @@ public static class DeviceEndpoints
         if (outcome == MintOutcome.TooManyDevices)
             return Errors.Of(409, "too_many_devices");
 
-        var accountName = me.Name.Length > Limits.MaxUserNameLength ? me.Name[..Limits.MaxUserNameLength] : me.Name;
+        var accountName = KeysynthAuth.Truncate(me.Name, Limits.MaxUserNameLength);
         var body = new DeviceMinted(deviceId, token, expiresAt, AccountId(userId), accountName);
         ctx.Response.Headers.CacheControl = "no-store";
         return Results.Json(body, statusCode: outcome == MintOutcome.Created ? 201 : 200);
@@ -66,7 +66,7 @@ public static class DeviceEndpoints
 
     private static async Task<IResult> List(HttpContext ctx, IDeviceRepository devices)
     {
-        var rows = await devices.ListAsync(KeysynthAuth.RequireUserId(ctx), ctx.RequestAborted);
+        var rows = await devices.ListAsync(KeysynthAuth.RequireCookieUserId(ctx), ctx.RequestAborted);
         return Results.Ok(new ItemsDto<DeviceDto>(rows.Select(d => new DeviceDto(d.DeviceId, d.Name, d.CreatedAt, d.LastSeenAt, d.ExpiresAt)).ToList()));
     }
 
@@ -74,7 +74,7 @@ public static class DeviceEndpoints
     {
         if (!DeviceIds.IsValid(deviceId))
             return Errors.NotFound;
-        return await devices.DeleteAsync(KeysynthAuth.RequireUserId(ctx), deviceId, ctx.RequestAborted)
+        return await devices.DeleteAsync(KeysynthAuth.RequireCookieUserId(ctx), deviceId, ctx.RequestAborted)
             ? Results.NoContent()
             : Errors.NotFound;
     }
@@ -85,7 +85,11 @@ public static class DeviceEndpoints
         var device = await devices.GetAsync(userId, deviceId, ctx.RequestAborted);
         var user = await users.GetAsync(userId, ctx.RequestAborted);
         if (device is null || user is null)
-            return Errors.Of(401, DeviceTokenHandler.TokenInvalid); // deleted between auth and here
+        {
+            // deleted between auth and here
+            ctx.Response.Headers.WWWAuthenticate = $"Bearer error=\"{DeviceTokenHandler.TokenInvalid}\"";
+            return Errors.Of(401, DeviceTokenHandler.TokenInvalid);
+        }
         return Results.Ok(new DeviceMe(device.DeviceId, device.Name, AccountId(userId), user.Name, device.ExpiresAt));
     }
 

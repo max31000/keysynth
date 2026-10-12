@@ -3,7 +3,8 @@
 # INLINE copy of max31000/mvv42-infra .github/workflows/deploy-dotnet-api.yml (commit 9f5332b, 2026-10-11),
 # because this repo is public and cannot call the private infra repo's reusable workflows
 # (docs/specs/2026-10-12-cloud.md §11). Re-sync by hand when the infra workflow changes.
-# Differences: inputs are fixed values below; tests run in a separate job (also on PRs, without deploy).
+# Differences: inputs are fixed values below; tests run in a separate job (also on PRs, without deploy);
+# deploy only from main; no volume chown (read-only samples volume).
 #
 # Container env: non-secret lines in PLAIN_ENV, secret lines assembled from repo secrets into the env file
 # /etc/mvv42/env/keysynth-api.env (mode 600; never on a command line). NOTE (as in infra): appleboy/ssh-action
@@ -33,7 +34,9 @@ env:
   NETWORK: cashpulse-network
   HEALTH_PATH: /health
   HEALTH_TIMEOUT: 60
-  VOLUME_OWNER: '1654:1654'
+  # No chown: /var/lib/keysynth is written by the sample upload (deploy user) and only read here (:ro);
+  # files must be world-readable (uid 1654 in the container, nginx on the host).
+  VOLUME_OWNER: ''
   VOLS: '/var/lib/keysynth:/data:ro'
 
 jobs:
@@ -53,7 +56,8 @@ jobs:
 
   build-deploy:
     needs: test
-    if: github.event_name != 'pull_request'
+    # Only main deploys (also for manual runs).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

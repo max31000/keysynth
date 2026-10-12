@@ -105,6 +105,35 @@ public sealed class AuthTests(KeysynthFactory factory) : IClassFixture<KeysynthF
     }
 
     [Fact]
+    public async Task CookieOfAPlusBearerOfBCannotDriveCookieEndpoints()
+    {
+        var victim = await factory.LinkAsync();
+        var attacker = factory.CookieClient().WithBearer(victim.Token);
+        await (await attacker.GetAsync("/api/devices")).ShouldBe(HttpStatusCode.Forbidden, "forbidden");
+        await (await attacker.PostAsJsonAsync("/api/devices", new { deviceId = KeysynthFactory.NewDeviceId(), name = "X" }))
+            .ShouldBe(HttpStatusCode.Forbidden, "forbidden");
+        await (await attacker.DeleteAsync($"/api/devices/{victim.DeviceId}")).ShouldBe(HttpStatusCode.Forbidden, "forbidden");
+        var list = await victim.Cookie.GetFromJsonAsync<JsonElement>("/api/devices");
+        list.GetProperty("items").GetArrayLength().Should().Be(1);
+        (await victim.Bearer.GetAsync("/api/devices/me")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task UnauthorizedFileRequestsCarryNoXAccel()
+    {
+        foreach (var client in new[] { factory.CreateClient(), factory.CookieClient(apps: []), factory.BearerClient("ksd_bad") })
+        {
+            var res = await client.GetAsync("/api/samples/files/salamander/Sal/48khz24bit/A0v1.flac");
+            ((int)res.StatusCode).Should().BeOneOf(401, 403);
+            res.Headers.Contains("X-Accel-Redirect").Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task HealthIgnoresBearer() =>
+        (await factory.BearerClient("ksd_bad").GetAsync("/health")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+    [Fact]
     public async Task CookieWriteWithForeignOriginIsRejectedBySdk()
     {
         var client = factory.CookieClient();

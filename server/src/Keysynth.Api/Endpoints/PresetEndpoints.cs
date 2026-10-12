@@ -36,6 +36,17 @@ public static class PresetEndpoints
     private static IResult Mismatch(PresetRow? current) =>
         Results.Json(new { error = "revision_mismatch", current = current is null ? null : PresetMeta.Of(current) }, statusCode: 412);
 
+    /// <summary>
+    /// <c>If-Match</c> → revision to match: <c>"&lt;n&gt;"</c>, or <c>*</c> = the current revision of an existing row
+    /// (RFC 9110). Anything else (weak tags, lists) never matches.
+    /// </summary>
+    private static async Task<uint?> ExpectedRevisionAsync(string header, long userId, string slug, IPresetRepository presets, HttpContext ctx)
+    {
+        if (header.Trim() == "*")
+            return (await presets.GetAsync(userId, slug, ctx.RequestAborted))?.Revision;
+        return ETags.ParseRevision(header);
+    }
+
     private static async Task<IResult> List(HttpContext ctx, IPresetRepository presets)
     {
         var rows = await presets.ListAsync(UserId(ctx), ctx.RequestAborted);
@@ -99,7 +110,7 @@ public static class PresetEndpoints
         }
         else
         {
-            if (ETags.ParseRevision(ifMatch.ToString()) is not { } expected)
+            if (await ExpectedRevisionAsync(ifMatch.ToString(), userId, slug, presets, ctx) is not { } expected)
                 return Mismatch(await presets.GetAsync(userId, slug, ctx.RequestAborted));
             result = await presets.UpdateAsync(userId, slug, expected, patch, now, ctx.RequestAborted);
         }
@@ -121,7 +132,7 @@ public static class PresetEndpoints
             return Errors.PreconditionRequired;
 
         var userId = UserId(ctx);
-        if (ETags.ParseRevision(ifMatch.ToString()) is not { } expected)
+        if (await ExpectedRevisionAsync(ifMatch.ToString(), userId, slug, presets, ctx) is not { } expected)
         {
             var current = await presets.GetAsync(userId, slug, ctx.RequestAborted);
             return current is null ? Errors.NotFound : Mismatch(current);

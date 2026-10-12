@@ -13,6 +13,10 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.4.0" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Dev settings (local DB password placeholder) stay out of the published image. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Keysynth.Core\Keysynth.Core.csproj" />
     <ProjectReference Include="..\Keysynth.Infrastructure\Keysynth.Infrastructure.csproj" />
   </ItemGroup>

@@ -107,6 +107,21 @@ public sealed class PresetEndpointTests(KeysynthFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task IfMatchStarMatchesAnyExistingRow()
+    {
+        var c = (await factory.LinkAsync()).Bearer;
+        await (await c.SendAsync(Put("star", Body(), ifMatch: "*"))).ShouldBe(HttpStatusCode.PreconditionFailed, "revision_mismatch");
+        (await c.SendAsync(Put("star", Body(), ifNoneMatch: "*"))).EnsureSuccessStatusCode();
+        var upd = await c.SendAsync(Put("star", Body(), ifMatch: "*"));
+        upd.StatusCode.Should().Be(HttpStatusCode.OK);
+        upd.Headers.ETag!.Tag.Should().Be("\"2\"");
+        (await c.SendAsync(Delete("star", "*"))).StatusCode.Should().Be(HttpStatusCode.OK);
+        await (await c.SendAsync(Delete("never", "*"))).ShouldBe(HttpStatusCode.NotFound, "not_found");
+        // tag lists are not supported: never match
+        await (await c.SendAsync(Put("star", Body(), ifMatch: "\"3\", \"4\""))).ShouldBe(HttpStatusCode.PreconditionFailed, "revision_mismatch");
+    }
+
+    [Fact]
     public async Task PreconditionHeaders()
     {
         var c = (await factory.LinkAsync()).Bearer;

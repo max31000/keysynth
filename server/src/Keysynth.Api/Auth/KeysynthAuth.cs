@@ -34,7 +34,13 @@ public static class KeysynthAuth
 
     public static IServiceCollection AddKeysynthAuth(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddMvv42Auth(AppId, o => configuration.GetSection("Mvv42Auth").Bind(o));
+        services.AddMvv42Auth(AppId, o =>
+        {
+            var section = configuration.GetSection("Mvv42Auth");
+            if (section.GetSection("AllowedOrigins").Exists())
+                o.AllowedOrigins.Clear(); // Bind appends to the SDK default list
+            section.Bind(o);
+        });
         services.AddAuthentication()
             .AddScheme<AuthenticationSchemeOptions, DeviceTokenHandler>(DeviceScheme, _ => { });
 
@@ -46,7 +52,8 @@ public static class KeysynthAuth
                 .RequireAssertion(ctx => accept(ctx.User))
                 .Build();
 
-            o.AddPolicy(CookiePolicy, Build(HasGrantedCookieUser));
+            // A device identity on a cookie-only request is rejected: a bearer must never steer cookie endpoints.
+            o.AddPolicy(CookiePolicy, Build(u => HasGrantedCookieUser(u) && !HasDevice(u)));
             o.AddPolicy(DevicePolicy, Build(HasDevice));
             o.AddPolicy(AnyUserPolicy, Build(u => HasDevice(u) || HasGrantedCookieUser(u)));
             // New endpoints are protected unless they opt out explicitly (only /health does).
@@ -91,8 +98,20 @@ public static class KeysynthAuth
     public static long? UserId(HttpContext ctx) =>
         DevicePrincipal(ctx.User)?.UserId ?? (ctx.Items.TryGetValue(UserIdItem, out var v) && v is long id ? id : null);
 
-    public static long RequireUserId(HttpContext ctx) =>
-        UserId(ctx) ?? throw new InvalidOperationException("authorized request without a local user");
+    /// <summary>Local user of the granted mvv42 cookie only (cookie-only endpoints).</summary>
+    public static long RequireCookieUserId(HttpContext ctx) =>
+        ctx.Items.TryGetValue(UserIdItem, out var v) && v is long id
+            ? id
+            : throw new InvalidOperationException("cookie endpoint without a provisioned user");
+
+    /// <summary>Truncates to at most <paramref name="max"/> UTF-16 units without splitting a surrogate pair.</summary>
+    public static string Truncate(string s, int max)
+    {
+        if (s.Length <= max)
+            return s;
+        var cut = char.IsHighSurrogate(s[max - 1]) ? max - 1 : max;
+        return s[..cut];
+    }
 }
 
 /// <summary>

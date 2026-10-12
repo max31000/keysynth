@@ -22,7 +22,7 @@ public sealed class UserProvisioning(IUserRepository users, ProvisioningCache ca
     public async Task<long> EnsureAsync(Mvv42User me, CancellationToken ct)
     {
         var now = clock.UtcNow;
-        var name = me.Name.Length > Limits.MaxUserNameLength ? me.Name[..Limits.MaxUserNameLength] : me.Name;
+        var name = KeysynthAuth.Truncate(me.Name, Limits.MaxUserNameLength);
         if (cache.Entries.TryGetValue(me.TelegramId, out var e)
             && e.AuthUserId == me.AuthUserId && e.Name == name
             && now - e.WrittenAt < Limits.AppOkWriteInterval && now >= e.WrittenAt)

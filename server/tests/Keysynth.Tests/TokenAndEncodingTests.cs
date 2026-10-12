@@ -90,3 +90,14 @@ public class ETagsTests
     [InlineData("\"1\", \"2\"", null)]
     public void ParseRevision(string header, uint? expected) => ETags.ParseRevision(header).Should().Be(expected);
 }
+
+public class TruncateTests
+{
+    [Fact]
+    public void NeverSplitsSurrogatePairs()
+    {
+        Keysynth.Api.Auth.KeysynthAuth.Truncate("ab🎹", 3).Should().Be("ab");
+        Keysynth.Api.Auth.KeysynthAuth.Truncate("ab🎹", 4).Should().Be("ab🎹");
+        Keysynth.Api.Auth.KeysynthAuth.Truncate("abcdef", 3).Should().Be("abc");
+    }
+}
