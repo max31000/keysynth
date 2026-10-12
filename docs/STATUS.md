@@ -3,6 +3,10 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Cloud live (2026-10-12): `https://mvv42.ru/keysynth/` (frontend.yml), `keysynth-api` on 127.0.0.1:5020
+  (backend.yml), release v0.1.0 with `keysynth-setup.exe` (release-windows.yml, first run green on the GitHub
+  runner), nginx app conf + `_files` X-Accel location (mvv42-infra PR #1), DB `keysynth`, secrets synced, auth app
+  row (`invite`, anonymous), samples uploaded to `/var/lib/keysynth/samples` (11 644 files, 3.62 GB, index.json).
 - Cloud WP-C (Windows desktop packaging, ARCHITECTURE §16): `keysynth-app` (windows-subsystem build of the engine,
   log to `<data>/logs/engine.log`), tray icon + menu (open web/local UI with mvv42.ru health fallback, restart
   audio, autostart toggle, quit), single instance (mutex + open/quit events, `--tray`, `--no-tray`, `--quit`,
@@ -72,9 +76,15 @@ Update when a chunk of work lands. Newest first inside each section.
 - Sample libraries (core set ~3.5 GB, assets/samples.json) and Faust 2.88 (.tools/faust).
 
 ## In progress
-- (none)
+- Shell tile: registry entry merged in portal-shell, but shell deploys fail on a flaky admin test; fix in
+  portal-shell PR #11 (owner merges).
 
 ## Next
+- Owner E2E on real hardware: download from the site → install → tray → «Подключить движок» (Chrome Local Network
+  Access prompt) → automatic account link → preset with samples auto-downloads → play. Also inside the shell iframe
+  (LNA permission may need an iframe `allow` attribute) and `keysynth://open` from the page.
+- Plugin sync (deferred for security: needs local confirmation + hash pinning).
+- macOS port (separate task on the owner's MacBook).
 - Test on real hardware: ASIO panel button with UR22C, buffer change in the Yamaha driver app while playing
   (check `userdata/logs/audio.log`), play-feel per engine on the P-143.
 - Ideas from preset work: wah, Binson Echorec-style drum echo, step sequencer/arpeggiator, pitch-bend envelope for
