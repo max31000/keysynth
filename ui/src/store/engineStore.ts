@@ -8,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   type AudioStatus,
   type DevicesEvent,
+  type EngineIdentity,
   type EngineMsg,
   type LogEvent,
   type ModuleInfo,
@@ -25,6 +26,7 @@ import {
 import { normalizePattern, setTimeSig } from '../lib/stepGrid';
 import { applyBypass, applyMoveFx, applyParam, applyZone, findLayer, findModule } from './patchOps';
 import { clearNotes, pushMidi, pushTelemetry } from './liveBus';
+import { checkIdentity, type IdentityCheck } from '../platform/identity';
 
 export interface Stats {
   cpu: number;
@@ -34,6 +36,10 @@ export interface Stats {
 
 export interface EngineState {
   connection: { status: ConnectionStatus; attempt: number; url: string };
+  /** who answered `hello` on this connection (platform/identity.ts); 'pending' while not connected */
+  identity: IdentityCheck;
+  /** `engine` from the hello reply (pid for the «not keysynth» notice), null if absent */
+  engineInfo: EngineIdentity | null;
   catalog: ModuleInfo[];
   catalogMap: Record<string, ModuleInfo>;
   patch: Patch | null;
@@ -202,6 +208,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
 
     return {
       connection: { status: client.status, attempt: 0, url: client.url },
+      identity: 'pending',
+      engineInfo: null,
       catalog: [],
       catalogMap: {},
       patch: null,
@@ -553,8 +561,9 @@ export function bindClient(store: EngineStore, client: EngineClient): () => void
   const offStatus = client.onStatus((status, attempt) => {
     store.getState().connectionChanged(status);
     store.setState({ connection: { status, attempt, url: client.url } });
+    if (status !== 'open') store.setState({ identity: 'pending', engineInfo: null });
     if (status === 'open') {
-      void bootstrap(client).catch((e) => store.setState({ lastError: String(e) }));
+      void bootstrap(client, (identity, engineInfo) => store.setState({ identity, engineInfo })).catch((e) => store.setState({ lastError: String(e) }));
     } else if (status === 'reconnecting' || status === 'closed') {
       clearNotes();
     }
@@ -565,8 +574,22 @@ export function bindClient(store: EngineStore, client: EngineClient): () => void
   };
 }
 
-async function bootstrap(client: EngineClient): Promise<void> {
-  await client.request({ type: 'hello', client: 'ui', version: PROTOCOL_VERSION }, { expect: 'state' });
+async function bootstrap(
+  client: EngineClient,
+  onIdentity: (c: IdentityCheck, info: EngineIdentity | null) => void,
+): Promise<void> {
+  let reply: unknown;
+  try {
+    reply = await client.request({ type: 'hello', client: 'ui', version: PROTOCOL_VERSION }, { expect: 'state' });
+  } catch {
+    // an error reply / no reply: whatever listens there does not speak the keysynth protocol
+    if (client.status === 'open') onIdentity('foreign', null);
+    return;
+  }
+  const identity = checkIdentity(reply);
+  const info = (reply as { engine?: EngineIdentity }).engine;
+  onIdentity(identity, info && typeof info === 'object' ? info : null);
+  if (identity === 'foreign') return; // never drive an unknown program
   await Promise.all([
     client.request({ type: 'get_catalog' }, { expect: 'catalog_ok' }),
     client.request({ type: 'list_presets' }, { expect: 'list_presets_ok' }),

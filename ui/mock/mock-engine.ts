@@ -1,7 +1,8 @@
-// Mock keysynth engine: implements docs/PROTOCOL.md over ws://127.0.0.1:7341 with a fake catalog, presets and
-// telemetry, so the UI can be developed and tested without the C++ engine.
+// Mock keysynth engine: implements docs/PROTOCOL.md over ws://127.0.0.1:7441 (NOT the engine's 7341, so a leftover
+// mock can never take the real engine's port) with a fake catalog, presets and telemetry; hello reports
+// `engine.kind: "mock"`, so production pages refuse it (src/platform/identity.ts). UI without the C++ engine:
 //
-//   npm run mock               (port 7341)
+//   npm run mock               (port 7441; then `npm run dev:mock` = Vite pointed at it)
 //   npm run mock -- --demo     (also plays a slow chord loop so meters/keyboard move)
 //   npm run mock -- --port 7400 --latency 20
 
@@ -44,7 +45,7 @@ export interface MockEngine {
   readonly patch: Patch;
 }
 
-const ALLOWED_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):(7341|5173|4173)$/;
+const ALLOWED_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):(7340|7341|7440|7441|5173|4173)$/;
 /** PROTOCOL.md "Sessions, Origin, Host": the platform page gets a `web` session (default-deny allow-list). */
 const WEB_ORIGIN = 'https://mvv42.ru';
 const WEB_ALLOWED = new Set([
@@ -55,12 +56,15 @@ const WEB_ALLOWED = new Set([
   'sync_now', 'samples_list', 'samples_fetch', 'samples_cancel', 'samples_delete',
 ]);
 const MOCK_VERSION = '0.1.0';
+/** Default mock port (the real engine: 7341). */
+export const MOCK_PORT = 7441;
 /** Mock cloud: any `ksd_` + 43 base64url token links; tokens containing "BAD" are rejected, "OTHER" = account 42. */
 const TOKEN_RE = /^ksd_[A-Za-z0-9_-]{43}$/;
 
 const DEVICE_TYPES: { type: string; names: string[] }[] = [
-  { type: 'ASIO', names: ['Focusrite USB ASIO', 'ASIO4ALL v2'] },
-  { type: 'Windows Audio', names: ['Speakers (Realtek(R) Audio)', 'Headphones (Scarlett 2i2)'] },
+  // long and Cyrillic names on purpose (layout of the audio dialog)
+  { type: 'ASIO', names: ['Focusrite USB ASIO', 'ASIO4ALL v2', 'Yamaha Steinberg USB ASIO (UR22mkII, 64-bit driver 2.1.4)'] },
+  { type: 'Windows Audio', names: ['Speakers (Realtek(R) Audio)', 'Headphones (Scarlett 2i2)', 'Динамики (Устройство с поддержкой High Definition Audio)'] },
   { type: 'Windows Audio (Exclusive Mode)', names: ['Speakers (Realtek(R) Audio)'] },
 ];
 /** The mock ASIO driver only accepts these; another request falls back to its preferred size, like JUCE does. */
@@ -343,7 +347,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   // ─────────────── server ───────────────
   const wss = new WebSocketServer({
     host,
-    port: opts.port ?? 7341,
+    port: opts.port ?? MOCK_PORT,
     verifyClient: (info: { origin?: string }) => !info.origin || ALLOWED_ORIGIN.test(info.origin) || info.origin === WEB_ORIGIN,
   });
 
@@ -389,7 +393,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     }
     switch (m.type) {
       case 'hello':
-        send(ws, { ...stateMsg(id), version: MOCK_VERSION, trust: trustOf.get(ws) ?? 'local', cloud: cloudStatus() });
+        send(ws, { ...stateMsg(id), version: MOCK_VERSION, engine: { product: 'keysynth', kind: 'mock', version: MOCK_VERSION, pid: process.pid }, trust: trustOf.get(ws) ?? 'local', cloud: cloudStatus() });
         send(ws, syncStatus());
         return;
       case 'cloud_link': {
@@ -905,7 +909,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     wss.once('error', reject);
     wss.once('listening', () => {
       const addr = wss.address();
-      const port = typeof addr === 'object' && addr ? addr.port : (opts.port ?? 7341);
+      const port = typeof addr === 'object' && addr ? addr.port : (opts.port ?? MOCK_PORT);
       log(`listening on ws://${host}:${port}${opts.demo ? ' (demo)' : ''}`);
       resolve({
         port,
@@ -935,7 +939,7 @@ if (isMain) {
     return i >= 0 ? args[i + 1] : undefined;
   };
   startMockEngine({
-    port: Number(val('--port') ?? 7341),
+    port: Number(val('--port') ?? MOCK_PORT),
     demo: args.includes('--demo'),
     latencyMs: Number(val('--latency') ?? 0),
   }).catch((e) => {

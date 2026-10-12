@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <thread>
 
@@ -19,7 +20,9 @@ void reportFatal(const std::string& message);
 
 class UiOpener {
 public:
-    UiOpener(std::string localUrl, bool localAvailable) : localUrl_(std::move(localUrl)), localAvailable_(localAvailable) {}
+    // `localAvailable`: the static UI server is running now (it may bind later, after a port conflict).
+    UiOpener(std::string localUrl, std::function<bool()> localAvailable)
+        : localUrl_(std::move(localUrl)), localAvailable_(std::move(localAvailable)) {}
     ~UiOpener();
     UiOpener(const UiOpener&) = delete;
     UiOpener& operator=(const UiOpener&) = delete;
@@ -32,7 +35,7 @@ public:
 
 private:
     std::string localUrl_;
-    bool localAvailable_;
+    std::function<bool()> localAvailable_;
     std::thread worker_;
     std::atomic<bool> busy_{false};
 };

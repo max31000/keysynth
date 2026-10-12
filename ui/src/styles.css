@@ -150,6 +150,12 @@ code {
 /* ───────── generic controls ───────── */
 
 .btn {
+  /* fixed height: a label must never wrap to a second line (it would spill out of the button) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
   height: 28px;
   padding: 0 12px;
   border-radius: 3px;
@@ -506,6 +512,17 @@ code {
 .conn-open {
   color: var(--text-2);
 }
+.conn-open.conn-mock {
+  /* dev builds only: connected to ui/mock/mock-engine.ts, not the real engine */
+  padding: 3px 6px;
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  color: var(--warn);
+}
+.conn-open.conn-mock .led {
+  background: var(--warn);
+  box-shadow: none;
+}
 .conn-reconnecting .led,
 .conn-connecting .led {
   background: var(--warn);
@@ -535,7 +552,30 @@ code {
   border-color: var(--line);
   background: var(--panel);
 }
+.audio-info {
+  overflow: hidden; /* last resort on a crowded bar: clip, never draw over the CPU meter */
+}
+@media (max-width: 1599px) {
+  .topbar:has(.latency-badge) .audio-dev {
+    display: none;
+  }
+}
+@media (max-width: 1439px) {
+  .topbar {
+    gap: 10px;
+  }
+  .audio-dev,
+  .latency-badge-words,
+  .cpu-bar {
+    display: none; /* the CPU percentage stays */
+  }
+}
+.audio-info > .chip,
+.audio-info > .led {
+  flex: none; /* only the device name shrinks (ellipsis); chips never overlap the CPU meter */
+}
 .audio-dev {
+  min-width: 0;
   color: var(--text-2);
   max-width: 200px;
   white-space: nowrap;
@@ -1769,7 +1809,8 @@ code {
 /* ───────── dialog / toast / banner ───────── */
 
 .dialog {
-  width: min(720px, 92vw);
+  width: min(800px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1793,16 +1834,38 @@ code {
   font: 600 16px/1 var(--font-label);
   letter-spacing: 0.04em;
 }
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
 .dialog-body {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 24px;
   padding: 16px;
+  overflow: auto; /* short windows: the body scrolls, the header stays */
+  min-height: 0;
 }
 .dialog-body section {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+}
+.dialog-body .select {
+  width: 100%;
+  text-overflow: ellipsis; /* long ASIO / WASAPI device names */
+}
+.dialog-body .row.gap {
+  flex-wrap: wrap;
+}
+.dialog-body section > .btn {
+  align-self: flex-start;
+}
+@media (max-width: 860px) {
+  .dialog-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .field {
   display: flex;

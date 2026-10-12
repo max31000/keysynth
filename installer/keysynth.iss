@@ -65,14 +65,14 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 [CustomMessages]
 en.TaskDesktop=Create a &desktop shortcut
 ru.TaskDesktop=Создать значок на &рабочем столе
-en.TaskAutostart=Start keysynth with &Windows (tray, no browser window)
-ru.TaskAutostart=Запускать keysynth вместе с &Windows (в трее, без окна браузера)
+en.TaskAutostart=Start with &Windows (tray)
+ru.TaskAutostart=Автозапуск с &Windows (в трее)
 en.TaskGroup=Additional shortcuts:
 ru.TaskGroup=Дополнительно:
 en.LaunchNow=Launch keysynth
 ru.LaunchNow=Запустить keysynth
-en.DeleteData=Also delete your keysynth data (presets, settings, downloaded samples, logs) in%n%1?%n%nChoose "No" to keep it for a later install.
-ru.DeleteData=Удалить также ваши данные keysynth (пресеты, настройки, скачанные сэмплы, журналы) в%n%1?%n%nВыберите «Нет», чтобы сохранить их для будущей установки.
+en.DeleteData=Delete keysynth data (presets, settings, samples, logs) in%n%1?
+ru.DeleteData=Удалить данные keysynth (пресеты, настройки, сэмплы, журналы) в%n%1?
 en.ProtocolName=URL:keysynth
 ru.ProtocolName=URL:keysynth
 

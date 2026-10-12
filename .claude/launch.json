@@ -8,10 +8,16 @@
       "port": 5173
     },
     {
+      "name": "ui-dev-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "ui", "run", "dev:mock"],
+      "port": 5173
+    },
+    {
       "name": "ui-mock",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "ui", "run", "mock"],
-      "port": 7341
+      "port": 7441
     }
   ]
 }

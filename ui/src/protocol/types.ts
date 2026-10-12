@@ -285,6 +285,7 @@ export interface StateEvent {
   transport: TransportState;
   /** only in the reply to `hello` (see HelloStateFields) */
   version?: string;
+  engine?: EngineIdentity;
   trust?: SessionTrust;
   cloud?: CloudStatus;
 }
@@ -387,9 +388,19 @@ export interface CloudStatusEvent extends CloudStatus {
 }
 
 /** `state` reply to `hello` carries these extra fields (only that reply). */
+/** Who answers on the engine port (PROTOCOL.md "Hello additions"); checked by `platform/identity.ts`. */
+export interface EngineIdentity {
+  product: 'keysynth';
+  kind: 'engine' | 'mock';
+  version: string;
+  pid: number;
+}
+
 export interface HelloStateFields {
   /** engine semver, no `v` */
   version: string;
+  /** absent in engines before 0.1.1 */
+  engine?: EngineIdentity;
   trust: SessionTrust;
   cloud: CloudStatus;
 }

@@ -24,16 +24,19 @@ const METRO_SPEC: ParamSpec = {
 
 function ConnectionPill() {
   const c = useEngine((s) => s.connection);
+  const mock = useEngine((s) => s.identity === 'mock');
   const label =
     c.status === 'open'
-      ? 'Engine'
+      ? mock
+        ? 'Mock'
+        : 'Engine'
       : c.status === 'reconnecting'
         ? `Retry ${c.attempt}`
         : c.status === 'connecting'
           ? 'Connecting'
           : 'Offline';
   return (
-    <div className={`conn conn-${c.status}`} title={`${c.url} — ${c.status}`}>
+    <div className={`conn conn-${c.status}${mock ? ' conn-mock' : ''}`} title={`${c.url} — ${c.status}${mock ? ' (mock engine)' : ''}`}>
       <span className="led" />
       <span>{label}</span>
     </div>
@@ -191,7 +194,7 @@ export function TopBar({ onAudioSettings, onCloud }: { onAudioSettings: () => vo
       {slow && audio && (
         <div className="latency-badge" role="status">
           <span className="latency-badge-text" title={`Output latency above ${LATENCY_WARN_MS} ms: ${latencyHint(audio)}`}>
-            ⚠ High latency
+            ⚠<span className="latency-badge-words"> High latency</span>
           </span>
           {audio.hasControlPanel && (
             <button type="button" className="btn small" onClick={() => void actions().openAudioPanel()} title={latencyHint(audio)} disabled={!!audio.panelOpen}>

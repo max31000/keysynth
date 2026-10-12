@@ -13,6 +13,7 @@ import { CloudDrawer } from './components/cloud/CloudDrawer';
 import { LinkConfirm, SampleToast, UpdateBanner } from './components/cloud/CloudNotices';
 import { PlatformBridge } from './platform/PlatformBridge';
 import { MODE } from './platform/mode';
+import { identityRejected } from './platform/identity';
 
 function Toast() {
   const err = useEngine((s) => s.lastError);
@@ -40,10 +41,10 @@ function OfflineBanner() {
       <div className="offline stale">
         <span className="led" />
         {phase === 'permission-denied'
-          ? 'Браузер заблокировал доступ к движку (локальная сеть) — разрешите его в настройках сайта.'
+          ? 'Нет доступа к локальной сети — разрешите в настройках сайта.'
           : phase === 'not-running'
-            ? 'Движок keysynth не отвечает — запустите его из меню «Пуск».'
-            : 'Связь с движком потеряна — переподключаюсь…'}
+            ? 'Движок не отвечает.'
+            : 'Нет связи с движком, переподключение…'}
         <button type="button" className="btn small" onClick={() => connectEngine()}>
           Повторить
         </button>
@@ -51,8 +52,7 @@ function OfflineBanner() {
     );
   return (
     <div className={`offline ${hasPatch ? 'stale' : ''}`}>
-      <span className="led" /> Engine not reachable at <code>{url}</code> — retrying. Start <code>keysynth-engine</code> or{' '}
-      <code>npm run mock</code>.
+      <span className="led" /> Engine not reachable at <code>{url}</code>, retrying.
     </div>
   );
 }
@@ -61,12 +61,14 @@ export function App() {
   const [audioOpen, setAudioOpen] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
   const hasPatch = useEngine((s) => s.patch !== null);
+  // a dev mock / another program on the engine port: never show it as the synth (platform/identity.ts)
+  const notKeysynth = useEngine((s) => identityRejected(s.identity, MODE.dev));
   const platform = MODE.mode === 'platform';
   return (
     <>
       {platform && <PlatformBridge />}
-      {platform && !hasPatch ? (
-        <EngineGate />
+      {notKeysynth || (platform && !hasPatch) ? (
+        <EngineGate notKeysynth={notKeysynth} />
       ) : (
         <div className="app">
           <TopBar onAudioSettings={() => setAudioOpen(true)} onCloud={() => setCloudOpen(true)} />

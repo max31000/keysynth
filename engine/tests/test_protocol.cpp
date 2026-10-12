@@ -112,6 +112,11 @@ TEST_CASE("protocol: hello returns state with id", "[protocol]") {
         REQUIRE(r["transport"].contains(k));
     REQUIRE(r["transport"]["pattern"] == "presets/patterns/basic-rock.json"); // default groove
     REQUIRE(r["patch"]["rhythm"]["node"].get<int>() > 0);
+    // identity (PROTOCOL.md "Hello additions"): the UI refuses servers that are not a keysynth engine
+    REQUIRE(r["engine"]["product"] == "keysynth");
+    REQUIRE(r["engine"]["kind"] == "engine");
+    REQUIRE(r["engine"]["version"] == r["version"]);
+    REQUIRE(r["engine"]["pid"].get<unsigned long>() > 0);
 }
 
 TEST_CASE("protocol: catalog", "[protocol]") {

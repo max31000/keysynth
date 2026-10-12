@@ -20,6 +20,7 @@ import {
   type SamplesView,
 } from '../lib/samples';
 import { initialDiscovery, type DiscoveryState } from '../platform/discovery';
+import { checkIdentity, identityAccepted } from '../platform/identity';
 import {
   defaultDeviceName,
   linkEngine,
@@ -104,6 +105,11 @@ export interface CloudState {
 export interface CloudDeps {
   client: Pick<EngineClient, 'request' | 'on' | 'onStatus' | 'status'>;
   mode: AppMode;
+  /**
+   * The mock counts as an engine (dev builds; tests). Default true; `store/index.ts` passes `MODE.dev`, so a
+   * production page never links (sends a device token to) a mock or another program on the engine port.
+   */
+  acceptMock?: boolean;
   api: {
     mint(deviceId: string, name: string): Promise<Minted>;
     listDevices(): Promise<DeviceRow[]>;
@@ -256,6 +262,10 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
           case 'state':
             // only the reply to `hello` carries these (PROTOCOL.md "Hello additions")
             if (msg.cloud || msg.version !== undefined || msg.trust) {
+              if (!identityAccepted(checkIdentity(msg), deps.acceptMock ?? true)) {
+                set({ engineVersion: null, trust: null, cloud: null, sync: null });
+                break;
+              }
               const prev = get().cloud;
               const c = msg.cloud ?? null;
               if (c?.linked && c.accountId) lastLinked = { accountId: c.accountId, name: c.accountName };

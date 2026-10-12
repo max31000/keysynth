@@ -157,7 +157,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
               className="btn"
               onClick={() => void actions().restartAudio()}
               disabled={panelOpen || !audio}
-              title="Close and reopen the audio device with the driver's current buffer size (use when sound stopped after changing driver settings)"
+              title="Reopen the device with the driver's current buffer size"
             >
               Restart audio
             </button>
@@ -181,7 +181,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
           <button type="button" className="btn" onClick={() => void actions().rescanMidi()}>
             Rescan MIDI
           </button>
-          <p className="hint">All inputs are opened automatically (omni); layers filter by channel.</p>
+          <p className="hint">All inputs open (omni); layers filter by channel.</p>
         </section>
       </div>
     </dialog>

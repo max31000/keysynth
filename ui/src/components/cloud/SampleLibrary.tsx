@@ -229,9 +229,9 @@ export function SampleLibrary() {
       {allJob && <Progress job={allJob} />}
 
       {!linked && (
-        <p className="note">Сэмплы скачиваются с mvv42.ru после привязки движка к аккаунту. Уже скачанные и локальные доступны всегда.</p>
+        <p className="note">Скачивание — после привязки движка к аккаунту.</p>
       )}
-      {samples?.manifest.state === 'stale' && linked && <p className="note warn">Каталог из кэша — сервер сейчас недоступен.</p>}
+      {samples?.manifest.state === 'stale' && linked && <p className="note warn">Каталог из кэша: сервер недоступен.</p>}
       {error && (
         <p className="note bad" role="alert">
           {error}
@@ -240,7 +240,7 @@ export function SampleLibrary() {
 
       {!samples && <p className="muted">{loading ? 'Загружаю каталог…' : 'Каталог ещё не загружен.'}</p>}
       {samples && samples.groups.length === 0 && (
-        <p className="muted">{samples.manifest.state === 'none' ? 'Каталог появится после привязки движка к аккаунту.' : 'Каталог пуст.'}</p>
+        <p className="muted">{samples.manifest.state === 'none' ? 'Каталог — после привязки к аккаунту.' : 'Каталог пуст.'}</p>
       )}
 
       {samples?.groups.map((g) => (

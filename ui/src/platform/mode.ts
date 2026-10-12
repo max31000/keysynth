@@ -31,18 +31,20 @@ export interface LocationLike {
  * `platformBuild` = the bundle was built with base `/keysynth/` (`npm run build:platform` / `dev:platform`).
  * The engine's own HTTP port always means local mode (the bundled offline UI), whatever the build.
  */
-export function detectMode(loc: LocationLike, platformBuild: boolean, dev: boolean): ModeInfo {
+export function detectMode(loc: LocationLike, platformBuild: boolean, dev: boolean, devEngineUrl?: string): ModeInfo {
   const isLoopback = loc.hostname === '127.0.0.1' || loc.hostname === 'localhost';
   const servedByEngine = isLoopback && loc.port === ENGINE_PORT_HTTP;
   const onPlatform = loc.hostname === 'mvv42.ru';
   const mode: AppMode = servedByEngine ? 'local' : onPlatform || platformBuild ? 'platform' : 'local';
-  // Production platform pages always talk to 127.0.0.1 (never `localhost`, spec §11); `?engine=` is a dev aid.
-  const engineUrl = dev || mode === 'local' ? engineUrlFromLocation(loc.search) : DEFAULT_ENGINE_URL;
+  // Production platform pages always talk to 127.0.0.1 (never `localhost`, spec §11); `?engine=` is a dev aid, as is
+  // the dev server's default (`npm run dev:mock` / KS_ENGINE, vite.config.ts).
+  const fallback = dev && devEngineUrl ? devEngineUrl : DEFAULT_ENGINE_URL;
+  const engineUrl = dev || mode === 'local' ? engineUrlFromLocation(loc.search, fallback) : DEFAULT_ENGINE_URL;
   return { mode, engineUrl, dev };
 }
 
 const env = import.meta.env;
 export const MODE: ModeInfo =
   typeof location !== 'undefined'
-    ? detectMode(location, env.BASE_URL === '/keysynth/', !!env.DEV)
+    ? detectMode(location, env.BASE_URL === '/keysynth/', !!env.DEV, env.VITE_KS_ENGINE as string | undefined)
     : { mode: 'local', engineUrl: DEFAULT_ENGINE_URL, dev: true };

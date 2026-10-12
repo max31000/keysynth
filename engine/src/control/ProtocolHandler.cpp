@@ -1,6 +1,7 @@
 #include "control/ProtocolHandler.h"
 
 #include "cloud/CloudServices.h"
+#include "platform/PortOwner.h"
 #include "plugins/PluginHost.h"
 #include "preset/PatchJson.h"
 #include "transport/Pattern.h"
@@ -104,6 +105,8 @@ const std::map<std::string, Handler>& handlers() {
          [](Ctx& c) {
              json st = c.s.stateJson();
              st["version"] = engineVersion();
+             st["engine"] = {{"product", "keysynth"}, {"kind", "engine"}, {"version", engineVersion()},
+                             {"pid", platform::currentProcessId()}}; // PROTOCOL.md "Hello additions"
              st["trust"] = toString(c.client.trust);
              st["cloud"] = c.cloud ? c.cloud->cloudStatusJson() : cloud::CloudServices::offlineStatusJson();
              c.reply(std::move(st));

@@ -82,8 +82,8 @@ function PlatformAccount() {
 export function AccountButton() {
   if (MODE.mode !== 'platform')
     return (
-      <a className="btn small ghost" href={PLATFORM_URL} target="_blank" rel="noopener" title="Синхронизация пресетов и загрузка сэмплов">
-        Войти на mvv42.ru
+      <a className="btn small ghost" href={PLATFORM_URL} target="_blank" rel="noopener" title={PLATFORM_URL}>
+        mvv42.ru
       </a>
     );
   return <PlatformAccount />;

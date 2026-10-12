@@ -1,7 +1,8 @@
-// Platform page without an engine (spec §1 step 2, §11 Browser): download card, install hint, connect button,
-// Local Network Access permission states. Shown instead of the synth until the first `state` arrives.
+// Platform page without an engine (spec §1 step 2, §11 Browser): state, download, connect, Local Network Access
+// permission, and «not a keysynth engine» (platform/identity.ts). Shown instead of the synth until a keysynth
+// engine's `state` arrives. Texts: facts and actions only.
 
-import { connectEngine, useCloud } from '../../store';
+import { connectEngine, reconnectEngine, useCloud, useEngine } from '../../store';
 import { DOWNLOAD_URL } from '../../platform/version';
 import { PLATFORM_URL } from '../../platform/mode';
 import { INSIDE_SHELL } from '../../platform/PlatformBridge';
@@ -14,16 +15,13 @@ function Steps() {
   return (
     <ol className="gate-steps">
       <li>
-        <b>Скачайте установщик.</b> Если Chrome пишет «Этот файл не часто скачивают» — откройте список загрузок и
-        нажмите <q>Сохранить</q>.
+        Chrome «файл не часто скачивают»: загрузки → <q>Сохранить</q>.
       </li>
       <li>
-        <b>Запустите keysynth-setup.exe.</b> Windows SmartScreen может предупредить о неизвестном издателе:{' '}
-        <q>Подробнее</q> → <q>Выполнить в любом случае</q>.
+        SmartScreen: <q>Подробнее</q> → <q>Выполнить в любом случае</q>.
       </li>
       <li>
-        <b>Запустите keysynth из меню «Пуск»</b> (значок появится в трее) и нажмите «Подключить движок». Браузер
-        спросит доступ к устройствам в локальной сети — нажмите <q>Разрешить</q>.
+        Запрос доступа к локальной сети — <q>Разрешить</q>.
       </li>
     </ol>
   );
@@ -33,7 +31,7 @@ function LaunchLink() {
   // Custom protocol from the sandboxed shell iframe is unreliable: there the Start-menu hint is enough.
   if (INSIDE_SHELL) return null;
   return (
-    <a className="btn ghost" href="keysynth://open" title="Если keysynth уже установлен">
+    <a className="btn ghost" href="keysynth://open" title="keysynth://open">
       Запустить
     </a>
   );
@@ -42,55 +40,80 @@ function LaunchLink() {
 function DeniedHelp() {
   return (
     <div className="gate-denied">
-      <p>
-        Странице нужен доступ к <code>127.0.0.1</code> — там работает движок. Сейчас браузер этот доступ блокирует.
-      </p>
       <ul>
         <li>
-          <b>Chrome / Edge:</b> значок настроек слева от адреса → «Настройки сайтов» → <q>Доступ к локальной сети</q>{' '}
-          (Local network access) → «Разрешить», затем перезагрузите страницу.
+          <b>Chrome / Edge:</b> настройки сайта → <q>Доступ к локальной сети</q> → «Разрешить», перезагрузить.
         </li>
         <li>
-          <b>Brave:</b> отключите щиты для mvv42.ru или разрешите <q>Localhost access</q> в настройках сайта.
+          <b>Brave:</b> щиты для mvv42.ru → <q>Localhost access</q>.
         </li>
         {INSIDE_SHELL && (
           <li>
-            Внутри портала разрешение может не передаваться во вкладку сервиса —{' '}
             <a href={PLATFORM_URL} target="_blank" rel="noopener">
-              откройте keysynth отдельно
-            </a>
-            .
+              Открыть отдельно
+            </a>{' '}
+            (из портала разрешение может не передаваться).
           </li>
         )}
         <li>
-          Доступ уже разрешён? Тогда проверьте, что keysynth запущен (меню «Пуск» или значок в трее), и нажмите
-          «Повторить».
-        </li>
-        <li>
-          Без браузерного доступа всё равно можно играть: локальный интерфейс движка —{' '}
+          Локальный интерфейс:{' '}
           <a href={LOCAL_UI} target="_blank" rel="noopener">
             {LOCAL_UI}
           </a>
-          .
         </li>
       </ul>
     </div>
   );
 }
 
+/** Something answers on the engine port, but it is not a keysynth engine (dev mock, another program). */
+function NotKeysynth() {
+  const identity = useEngine((s) => s.identity);
+  const info = useEngine((s) => s.engineInfo);
+  return (
+    <div className="gate-denied">
+      <p>
+        {identity === 'mock' ? 'Тестовый сервер разработчика (mock)' : 'Неизвестная программа'}
+        {info?.pid ? <> · PID {info.pid}</> : null}
+      </p>
+      <ul>
+        <li>
+          Закройте её (Диспетчер задач{info?.pid ? `, PID ${info.pid}` : ''}; mock: <code>scripts/stop-dev.ps1</code>).
+        </li>
+        <li>Запустите keysynth из меню «Пуск» — страница переподключится сама.</li>
+      </ul>
+    </div>
+  );
+}
+
 const TITLE: Record<EnginePhase, string> = {
-  'never-seen': 'Звук играет движок на вашем компьютере',
-  connecting: 'Подключаюсь к движку…',
-  'permission-denied': 'Браузер блокирует доступ к движку',
-  'not-running': 'Движок keysynth не запущен',
-  connected: 'Движок подключён — загружаю патч…',
+  'never-seen': 'Движок не подключён',
+  connecting: 'Подключение…',
+  'permission-denied': 'Браузер блокирует доступ к локальной сети',
+  'not-running': 'Движок не запущен',
+  connected: 'Загрузка патча…',
 };
 
-export function EngineGate() {
+export const notKeysynthTitle = (port: string) =>
+  `На порту ${port} отвечает не движок keysynth (тестовый сервер / другая программа)`;
+
+const portOf = (url: string) => /:(\d+)/.exec(url.replace(/^wss?:\/\//, ''))?.[1] ?? '7341';
+
+export function EngineGate({ notKeysynth = false }: { notKeysynth?: boolean }) {
   const d = useCloud((s) => s.discovery);
+  const url = useEngine((s) => s.connection.url);
   const phase = d.phase;
-  const busy = phase === 'connecting' || phase === 'connected';
-  const showDownload = phase !== 'connected' && (phase !== 'connecting' || !d.seen);
+  const busy = !notKeysynth && (phase === 'connecting' || phase === 'connected');
+  const showDownload = !notKeysynth && phase !== 'connected' && (phase !== 'connecting' || !d.seen);
+  const led = notKeysynth
+    ? 'bad'
+    : phase === 'connected'
+      ? 'on'
+      : phase === 'connecting'
+        ? 'blink'
+        : phase === 'permission-denied'
+          ? 'bad'
+          : '';
 
   return (
     <div className="gate" role="main">
@@ -107,37 +130,20 @@ export function EngineGate() {
         <AccountButton />
       </header>
 
-      <section className={`gate-card phase-${phase}`} aria-live="polite">
+      <section className={`gate-card phase-${notKeysynth ? 'not-keysynth' : phase}`} aria-live="polite">
         <div className="gate-status">
-          <span className={`led ${phase === 'connected' ? 'on' : phase === 'connecting' ? 'blink' : phase === 'permission-denied' ? 'bad' : ''}`} />
-          <span className="panel-label">
-            {busy ? 'ws://127.0.0.1:7341' : phase === 'never-seen' ? 'Движок не подключён' : 'Нет связи с движком'}
-          </span>
+          <span className={`led ${led}`} />
+          <span className="panel-label">{url}</span>
         </div>
-        <h1>{TITLE[phase]}</h1>
+        <h1>{notKeysynth ? notKeysynthTitle(portOf(url)) : TITLE[phase]}</h1>
 
-        {phase === 'never-seen' && (
+        {notKeysynth && <NotKeysynth />}
+        {!notKeysynth && phase === 'not-running' && (
           <p className="gate-lead">
-            keysynth — синтезатор с низкой задержкой: интерфейс открывается здесь, а звук, MIDI и сэмплы обрабатывает
-            программа-движок для Windows. Установите её один раз — дальше страница подключается сама, пресеты
-            синхронизируются с аккаунтом.
+            Нет ответа на <code>127.0.0.1:7341</code>. Запустите keysynth из меню «Пуск». Запущен, но связи нет — обновите.
           </p>
         )}
-        {phase === 'connecting' && (
-          <p className="gate-lead">
-            {d.seen
-              ? 'Ищу движок на этом компьютере.'
-              : 'Если браузер спрашивает о доступе к устройствам в локальной сети — нажмите «Разрешить». Без этого странице не достучаться до движка.'}
-          </p>
-        )}
-        {phase === 'not-running' && (
-          <p className="gate-lead">
-            Не удаётся подключиться к <code>127.0.0.1:7341</code>. Запустите keysynth из меню «Пуск» (или из значка в
-            трее) — страница подключится сама. Ещё не установлен? Скачайте ниже. Уже запущен, а связи нет? Скорее
-            всего это старая версия без поддержки mvv42.ru — установите новую поверх.
-          </p>
-        )}
-        {phase === 'permission-denied' && <DeniedHelp />}
+        {!notKeysynth && phase === 'permission-denied' && <DeniedHelp />}
 
         <div className="gate-actions">
           {showDownload && (
@@ -149,21 +155,19 @@ export function EngineGate() {
             </a>
           )}
           {!busy && (
-            <button type="button" className="btn big" onClick={() => connectEngine()}>
-              {phase === 'never-seen' ? 'Подключить движок' : 'Повторить'}
+            <button type="button" className="btn big" onClick={() => (notKeysynth ? reconnectEngine() : connectEngine())}>
+              {phase === 'never-seen' && !notKeysynth ? 'Подключить' : 'Повторить'}
             </button>
           )}
-          {!busy && <LaunchLink />}
+          {!busy && !notKeysynth && <LaunchLink />}
           {busy && <span className="gate-spinner" aria-label="Подключение" />}
         </div>
 
-        {(phase === 'never-seen' || phase === 'not-running') && <Steps />}
+        {!notKeysynth && (phase === 'never-seen' || phase === 'not-running') && <Steps />}
         <p className="gate-foot hint">
-          Windows 10/11 x64 · бесплатно · установка без прав администратора. Исходники и все версии —{' '}
           <a href="https://github.com/max31000/keysynth/releases" target="_blank" rel="noopener">
             GitHub Releases
           </a>
-          .
         </p>
       </section>
     </div>

@@ -202,15 +202,26 @@ Unlinked: the local profile (`userdata/presets`, `userdata/patterns`). Linked to
 into the old profile); clients re-request `list_presets` / `list_patterns`.
 
 ### Hello additions
-The `state` reply to `hello` (and only that reply) carries three extra fields:
+The `state` reply to `hello` (and only that reply) carries four extra fields:
 ```json
 { "type": "state", "id": 1, "patch": {}, "presetPath": null, "dirty": false, "audio": {}, "transport": {},
   "version": "0.4.0",
+  "engine": { "product": "keysynth", "kind": "engine", "version": "0.4.0", "pid": 15828 },
   "trust": "web",
   "cloud": { "linked": true, "accountId": "17", "accountName": "Max", "deviceId": "3f0c7e9a-5b1d-4c2e-9a77-0e5d2c1b8f40",
              "expiresAt": "2027-04-10T12:00:00Z", "online": true, "error": null } }
 ```
 `version` = engine semver (no `v`). Right after that `state` the engine sends a `sync_status` (no `id`).
+
+`engine` = identity of the server: `EngineIdentity = { product: "keysynth", kind: "engine" | "mock", version: string,
+pid: number }`. The real engine sends `kind: "engine"`, the dev mock (`ui/mock/mock-engine.ts`, default port 7441)
+`"mock"`. The UI checks it before showing the synth (`ui/src/platform/identity.ts`):
+- `product == "keysynth"`, `kind == "engine"` → ok;
+- `kind == "mock"` → accepted only by dev builds (shows a `MOCK` badge); production pages show «На порту 7341
+  отвечает не движок keysynth (тестовый сервер / другая программа)» with instructions;
+- no `engine` (engines before 0.1.1): accepted as a legacy keysynth when `version`, `trust` and `cloud` are present,
+  except the old mock's fixed `cloud.deviceId` `3f0c7e9a-5b1d-4c2e-9a77-0e5d2c1b8f40` (= mock);
+- anything else, an `error` reply or no reply to `hello` → not keysynth.
 
 `CloudStatus = { linked: bool, accountId: string|null, accountName: string|null, deviceId: string /* always set */,
 expiresAt: string|null, online: bool /* last API call succeeded */, error: string|null /* last cloud error code,

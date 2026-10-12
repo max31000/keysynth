@@ -169,4 +169,11 @@ describe('mode detection', () => {
     const m = detectMode(loc('127.0.0.1', '5173', '?engine=127.0.0.1:7999'), true, true);
     expect(m).toEqual({ mode: 'platform', engineUrl: 'ws://127.0.0.1:7999', dev: true });
   });
+  it('dev server default engine (npm run dev:mock → the mock port); ?engine= wins; ignored in production', () => {
+    const mock = 'ws://127.0.0.1:7441';
+    expect(detectMode(loc('127.0.0.1', '5173'), false, true, mock).engineUrl).toBe(mock);
+    expect(detectMode(loc('127.0.0.1', '5173', '?engine=127.0.0.1:7351'), false, true, mock).engineUrl).toBe('ws://127.0.0.1:7351');
+    expect(detectMode(loc('mvv42.ru'), true, false, mock).engineUrl).toBe('ws://127.0.0.1:7341');
+    expect(detectMode(loc('127.0.0.1', '7340'), false, false, mock).engineUrl).toBe('ws://127.0.0.1:7341');
+  });
 });

@@ -23,6 +23,7 @@
 #include "audio/NullAudioDriver.h"
 #include "cloud/CloudServices.h"
 #include "control/ControlServer.h"
+#include "control/PortConflict.h"
 #include "control/ProtocolHandler.h"
 #include "control/Session.h"
 #include "core/AppPaths.h"
@@ -30,6 +31,7 @@
 #include "core/ModuleRegistry.h"
 #include "core/RtCheck.h"
 #include "platform/DesktopIntegration.h"
+#include "platform/PortOwner.h"
 #include "plugins/PluginHost.h"
 
 #include <juce_events/juce_events.h>
@@ -41,8 +43,10 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -148,9 +152,70 @@ void printStatus(const ks::AudioStatus& st, const char* prefix) {
     std::fflush(stdout);
 }
 
-std::string trayTooltip(const ks::Session& session, ks::cloud::CloudServices* cloud) {
+// A [::1] listener does not block our 127.0.0.1 bind, but clients using `localhost` may reach it instead.
+void logShadowListeners(int port) {
+    for (const auto& l : ks::shadowListeners(ks::platform::tcpListeners(port)))
+        std::printf("control warning: %s (PID %lu) also listens on [%s]:%d; clients using 'localhost' may reach it "
+                    "instead of keysynth (the UI always uses 127.0.0.1)\n",
+                    l.image.empty() ? "?" : l.image.c_str(), l.pid, l.address.c_str(), port);
+    std::fflush(stdout);
+}
+
+// Desktop mode, a port could not be bound (ARCHITECTURE §16 "Port busy at start"): retry every 3 s, balloon on a
+// new owner and once bound. Message thread.
+class PortWatch final : public juce::Timer {
+public:
+    using Notify = std::function<void(const std::string& title, const std::string& text)>;
+    PortWatch(ks::ControlServer& srv, Notify notify, std::function<void()> onWsBound)
+        : srv_(srv), notify_(std::move(notify)), onWsBound_(std::move(onWsBound)) {
+        if (const auto& c = srv_.wsConflict()) lastPid_ = c->pid;
+        if (!srv_.wsRunning() || srv_.httpConflict()) startTimer(3000);
+    }
+    void timerCallback() override {
+        const bool hadWs = srv_.wsRunning(), hadHttp = srv_.httpRunning();
+        srv_.retryListen();
+        const bool ru = ks::app::trayRussian();
+        if (!hadWs && srv_.wsRunning()) {
+            std::printf("control: ws://127.0.0.1:%d bound\n", srv_.wsPort());
+            logShadowListeners(srv_.wsPort());
+            notify_("keysynth", ks::portFreeMessage(srv_.wsPort(), ru));
+            if (onWsBound_) onWsBound_();
+        } else if (const auto& c = srv_.wsConflict(); c && c->pid != lastPid_) {
+            lastPid_ = c->pid; // another program took the port meanwhile
+            std::printf("control: %s\n", ks::conflictLogLine(*c).c_str());
+            notify_("keysynth", ks::conflictMessage(*c, ru));
+        }
+        if (!hadHttp && srv_.httpRunning()) std::printf("control: ui http://127.0.0.1:%d bound\n", srv_.httpPort());
+        std::fflush(stdout);
+        if (srv_.wsRunning() && !srv_.httpConflict()) stopTimer();
+    }
+    void notifyConflict() const {
+        if (const auto& c = srv_.wsConflict()) notify_("keysynth", ks::conflictMessage(*c, ks::app::trayRussian()));
+    }
+    // Short tooltip line (Windows cuts the tooltip at 127 UTF-16 units), "" when everything is bound.
+    std::string tooltipLine() const {
+        const bool ru = ks::app::trayRussian();
+        auto line = [ru](const ks::PortConflict& c) {
+            const std::string who = c.kind == ks::PortOwnerKind::Unknown ? std::string("?")
+                                    : (c.name.empty() ? std::string("PID ") : c.name + " PID ") + std::to_string(c.pid);
+            return (ru ? "\nПорт " : "\nPort ") + std::to_string(c.port) + (ru ? " занят: " : " busy: ") + who;
+        };
+        std::string t;
+        if (const auto& c = srv_.wsConflict()) t += line(*c);
+        if (const auto& c = srv_.httpConflict()) t += line(*c);
+        return t;
+    }
+
+private:
+    ks::ControlServer& srv_;
+    Notify notify_;
+    std::function<void()> onWsBound_;
+    unsigned long lastPid_ = 0;
+};
+
+std::string trayTooltip(const ks::Session& session, ks::cloud::CloudServices* cloud, const std::string& portLine) {
     const bool ru = ks::app::trayRussian();
-    std::string t = std::string("keysynth ") + ks::engineVersion();
+    std::string t = std::string("keysynth ") + ks::engineVersion() + portLine;
     if (const ks::AudioControl* a = session.audio()) {
         const ks::AudioStatus st = a->status();
         if (st.running) {
@@ -240,6 +305,29 @@ int main(int argc, char** argv) {
         if (notify) ev["notify"] = true;
         server.broadcast(std::move(ev));
     };
+
+    // Bind before starting audio/plugins/cloud: an early return below is then cheap. Clients are served only once
+    // the dispatch loop runs (every message is posted to it), i.e. after the setup below.
+    server.start(args.wsPort, args.httpPort);
+    logShadowListeners(args.wsPort);
+    if (const auto& busy = server.wsConflict()) {
+        std::printf("control: %s\n", ks::conflictLogLine(*busy).c_str());
+        std::fflush(stdout);
+        if (!desktop) { // headless (dev, scripts, CI): fail fast with the classified reason
+            ks::app::reportFatal("keysynth: control server: " + ks::conflictLogLine(*busy));
+            return 1;
+        }
+        if (busy->kind == ks::PortOwnerKind::Keysynth) {
+            // Another engine outside our single instance (headless/dev build, other session) serves the UI.
+            std::printf("another keysynth engine owns port %d%s\n", args.wsPort, openOnStart ? ": opening the UI" : "");
+            if (openOnStart) {
+                const bool web = ks::platform::probeHealth(ks::platform::kWebHealthUrl, 3000);
+                ks::platform::openInBrowser(web ? ks::platform::kWebUiUrl : localUrl);
+            }
+            return 0;
+        }
+        // Foreign owner: keep running in the tray and retry (PortWatch below), no modal box.
+    }
 
     // Plugins compile asynchronously; patches referencing them are rebuilt when they become available.
     std::unique_ptr<ks::plugins::PluginHost> plugins;
@@ -346,15 +434,14 @@ int main(int argc, char** argv) {
         std::printf("\n");
     }
 
-    const std::string serr = server.start(args.wsPort, args.httpPort);
-    if (!serr.empty()) {
-        ks::app::reportFatal("keysynth: control server: " + serr);
-        return 1;
-    }
-    std::printf("control: ws://127.0.0.1:%d%s\n", args.wsPort,
-                server.httpRunning() ? (", ui: http://127.0.0.1:" + std::to_string(args.httpPort)).c_str()
-                : args.httpPort == 0 ? " (static UI disabled)"
-                                     : " (ui/dist not built or port busy: use the Vite dev server)");
+    if (server.wsRunning())
+        std::printf("control: ws://127.0.0.1:%d%s\n", args.wsPort,
+                    server.httpRunning() ? (", ui: http://127.0.0.1:" + std::to_string(args.httpPort)).c_str()
+                    : args.httpPort == 0 ? " (static UI disabled)"
+                    : server.httpConflict() ? " (static UI port busy, retrying)"
+                                            : " (ui/dist not built: use the Vite dev server)");
+    else
+        std::printf("control: waiting for port %d (retry every 3 s)\n", args.wsPort);
     std::printf("ready. Ctrl+C to quit.\n");
     std::fflush(stdout);
 
@@ -362,11 +449,24 @@ int main(int argc, char** argv) {
 
     std::unique_ptr<ks::app::UiOpener> opener;
     std::unique_ptr<ks::app::Tray> tray;
+    std::unique_ptr<PortWatch> portWatch;
+    bool openWhenBound = false; // open-on-start (or an open request) deferred until the WS port is ours
     if (desktop) {
-        opener = std::make_unique<ks::app::UiOpener>(localUrl, server.httpRunning());
+        opener = std::make_unique<ks::app::UiOpener>(localUrl, [&server] { return server.httpRunning(); });
+        portWatch = std::make_unique<PortWatch>(
+            server, [&tray](const std::string& title, const std::string& text) { if (tray) tray->notify(title, text); },
+            [&openWhenBound, o = opener.get()] {
+                if (std::exchange(openWhenBound, false)) o->openPreferred();
+            });
+        // Never open a browser while another program answers on the WS port: it would talk to that program.
+        auto openUi = [&server, &openWhenBound, o = opener.get(), w = portWatch.get()] {
+            if (server.wsRunning()) return o->openPreferred();
+            openWhenBound = true;
+            w->notifyConflict();
+        };
         ks::app::TrayActions ta;
-        ta.tooltip = [&session, c = cloud.get()] { return trayTooltip(session, c); };
-        ta.openUi = [o = opener.get()] { o->openPreferred(); };
+        ta.tooltip = [&session, c = cloud.get(), w = portWatch.get()] { return trayTooltip(session, c, w->tooltipLine()); };
+        ta.openUi = openUi;
         ta.openLocal = [o = opener.get()] { o->openLocal(); };
         ta.localAvailable = [&server] { return server.httpRunning(); };
         ta.restartAudio = [&session, &server]() -> std::string {
@@ -384,12 +484,17 @@ int main(int argc, char** argv) {
         ta.autostartEnabled = [] { return ks::platform::autostartEnabled(); };
         ta.setAutostart = [exePath](bool on) { return ks::platform::setAutostart(on, exePath); };
         ta.quit = [] { g_quit.store(true); };
-        ta.poll = [inst = instance.get(), o = opener.get()] {
+        ta.poll = [inst = instance.get(), openUi] {
             if (inst->takeQuitRequest()) g_quit.store(true);
-            if (inst->takeOpenRequest()) o->openPreferred();
+            if (inst->takeOpenRequest()) openUi();
         };
         tray = std::make_unique<ks::app::Tray>(std::move(ta), ks::engineVersion());
-        if (openOnStart) opener->openPreferred();
+        if (!server.wsRunning()) {
+            openWhenBound = openOnStart;
+            portWatch->notifyConflict(); // balloon instead of a modal box
+        } else if (openOnStart) {
+            opener->openPreferred();
+        }
     }
     if (audioHost)
         juce::Timer::callAfterDelay(1000, [host = audioHost.get()] {
@@ -402,6 +507,7 @@ int main(int argc, char** argv) {
 
     std::printf("shutting down...\n");
     juce::PopupMenu::dismissAllActiveMenus();
+    portWatch.reset(); // before the tray it notifies
     tray.reset();
     opener.reset(); // joins a running health probe (<= 3 s)
     pump.stopTimer();

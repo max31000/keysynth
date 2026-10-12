@@ -24,6 +24,7 @@ bindClient(engineStore, client);
 export const cloudStore = createCloudStore({
   client,
   mode: MODE.mode,
+  acceptMock: MODE.dev,
   api: { mint: mintDevice, listDevices },
   storage: safeLocalStorage,
   onProfileChanged: () => {
@@ -75,6 +76,11 @@ import.meta.hot?.dispose(() => client.close());
 
 /** «Подключить движок» / «Повторить» */
 export const connectEngine = () => startDiscovery();
+/** Drop the current socket (a non-keysynth server answered) and connect again. */
+export const reconnectEngine = () => {
+  client.close();
+  client.connect();
+};
 
 export function useEngine<T>(selector: (s: EngineState) => T): T {
   return useStore(engineStore, selector);
