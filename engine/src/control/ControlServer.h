@@ -7,6 +7,7 @@
 
 #include "control/PortConflict.h"
 #include "control/ProtocolHandler.h"
+#include "control/RemoteRouter.h"
 
 #include <nlohmann/json.hpp>
 
@@ -57,7 +58,20 @@ public:
     void dispatchAsync(const std::vector<AddressedOutgoing>& out);
     void sendTo(const std::string& clientId, const nlohmann::json& msg);
     void sendOthers(const std::string& exceptId, const nlohmann::json& msg);
-    size_t clientCount() const;
+    size_t clientCount() const; // local sockets + remote controllers
+
+    // --- remote controllers (relay, ARCHITECTURE §15 *Relay*): virtual clients "r:<cid>", Trust::Remote. ---
+    // Message thread. The sink receives the outbound envelopes (RelayClient::send).
+    void setRemoteSink(RemoteRouter::Sink sink) { remote_.setSink(std::move(sink)); }
+    void remoteJoined(const std::string& cid);
+    void remoteLeft(const std::string& cid);
+    void remoteClear(); // relay disconnected / zero controllers
+    void remotePaused(const std::string& cid, bool paused);
+    // A request from a remote controller (joins it implicitly). Runs the handler synchronously.
+    void remoteMessage(const std::string& cid, const nlohmann::json& msg);
+    void tickRemote() { remote_.tick(); } // pump: flush coalesced params / midi batch
+    size_t remoteCount() const noexcept { return remote_.count(); }
+    RemoteRouter& remoteRouter() noexcept { return remote_; }
 
     // Exposed for tests.
     static bool originAllowed(const std::string& origin, int wsPort, int httpPort); // dev policy
@@ -85,10 +99,11 @@ private:
     std::optional<PortConflict> wsConflict_, httpConflict_;
     mutable std::mutex clientsMutex_; // network threads + message thread (never the audio thread)
     struct Client {
-        std::weak_ptr<ix::WebSocket> ws;
+        std::weak_ptr<ix::WebSocket> ws; // empty for remote controllers
         Trust trust = Trust::Local;
     };
-    std::map<std::string, Client> clients_;
+    std::map<std::string, Client> clients_; // ix connection ids + "r:<cid>"
+    RemoteRouter remote_;                   // message thread
     OriginPolicy policy_;
     std::shared_ptr<bool> alive_;
 };

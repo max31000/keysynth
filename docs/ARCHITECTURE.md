@@ -43,7 +43,9 @@ Threads:
 - **Loader threads** (`juce::ThreadPool`, below-normal priority) for samples; PluginHost has its own loader thread
   for plugin compilation (§10). Results return to the message thread.
 - **Cloud threads** (§15): one CloudClient worker (API calls), one SyncService worker, two sample download
-  workers. Network IO only; results are queued and drained by the message thread's 30 Hz pump.
+  workers. Network IO only; results are queued and drained by the message thread's 30 Hz pump. The relay host
+  (§15 *Relay*) adds one RelayClient thread (connect / backoff / heartbeat) plus the socket's receive and send
+  threads; relayed requests are posted to the message thread like local WS messages.
 - **Desktop mode** (§16): the tray icon lives on the message thread; "open UI" probes mvv42.ru on a short-lived
   worker thread (one at a time) that only posts the browser launch back to the message thread.
 
@@ -503,6 +505,32 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   by preset saves on the message thread), never across network calls.
 - **CloudServices** (`cloud/`) owns the three, implements the cloud protocol messages (async replies through
   `poll()`), switches Session profiles on link/unlink, and is optional (tests and `ks-render` run without it).
+- **Relay host** (remote control from a browser anywhere, spec `docs/specs/2026-10-12-remote.md`, §10 wins). The
+  engine keeps no listening port for it: while linked, `cloud::RelayClient` (owned by CloudServices, started by the
+  app after the ControlServer exists) holds one outbound WebSocket `<api root>/api/relay?role=host` (`https`→`wss`)
+  with `Authorization: Bearer <device token>`.
+  - Socket: `platform/WinHttpWebSocket` behind the abstract `platform::WebSocket` (tests use a fake): WinHTTP with
+    `WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY`, TLS for `wss`, custom headers, blocking handshake, a receive thread
+    (callbacks) and a send thread draining a queue (`send()` never blocks the caller). No new dependency.
+  - RelayClient thread: connect while linked (token re-read each attempt; a changed token reconnects), `hello
+    {deviceId,name,version}` after the upgrade, app-level `{t:"ping"}` every 20 s, `{t:"pong"}` to server pings,
+    close + reconnect after 45 s without any frame. Failures back off 1 s → 30 s (doubling, ±20 % jitter; reset by
+    a connection that stayed up ≥ 10 s, so a flapping server is not hammered). 401/403 at the upgrade = CloudClient's 401 path (`clearLinkIfToken`, `cloud_status`
+    `linked:false`); it then idles until linked again (CloudServices wakes it on every status change).
+  - Inbound frames are parsed on the receive thread and posted to the message thread: `{t:"controller",cid,joined}`,
+    `{t:"msg",from,msg}` (an unknown `from` joins implicitly), `{t:"pause"|"resume",cid}`, `{t:"controllers",count}`
+    (0 → all leave); a disconnect removes every remote client.
+  - **Virtual clients** `r:<cid>` live in `ControlServer::clients_` (no socket) with `Trust::Remote` =
+    `webRestriction` + deny `cloud_link`, `cloud_unlink`, `set_audio_device`, `open_audio_panel`, `samples_delete`,
+    `reload_plugin` (`control/Trust`, default-deny; `hello` replies `trust:"remote"`). Their requests run through
+    the same ProtocolHandler.
+  - Outbound (`control/RemoteRouter`, message thread, owned by ControlServer): `Reply` → `{t:"msg",to:cid}`;
+    `Broadcast` → `to:"*"` once; `Others` → `to:"*"` plus `except:<cid>` when the origin is remote. `lossy:true` on
+    `telemetry`, `midi`, `samples_progress` (the server may drop only those). Remote rates: telemetry ≤ 10 Hz,
+    midi notes merged and flushed ≤ 15 Hz, `param` coalesced per (node,param) ≤ 20 Hz (latest value wins; the pump
+    calls `ControlServer::tickRemote()` to flush). Telemetry/midi go nowhere when no remote controller is active;
+    paused controllers (hidden tab) are skipped (fan-out per cid instead of `*`). Frames > 1 MB are not sent; lossy
+    frames are dropped when the socket queue holds > 256 KB.
 - **Web UI** (`ui/src/platform/`, `ui/src/store/cloudStore.ts`, `ui/src/components/cloud/`): one bundle, two
   modes picked at runtime (`platform/mode.ts`): *platform* (served from `https://mvv42.ru/keysynth/`, build
   `npm run build:platform`, base `/keysynth/`) and *local* (served by the engine at :7340 or the dev server, base

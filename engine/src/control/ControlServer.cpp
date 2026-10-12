@@ -234,7 +234,48 @@ void ControlServer::stop() {
     }
     std::lock_guard<std::mutex> lk(clientsMutex_);
     clients_.clear();
+    remote_.clear();
     alive_ = std::make_shared<bool>(true);
+}
+
+void ControlServer::remoteJoined(const std::string& cid) {
+    if (cid.empty()) return;
+    {
+        std::lock_guard<std::mutex> lk(clientsMutex_);
+        clients_[RemoteRouter::kPrefix + cid] = Client{{}, Trust::Remote};
+    }
+    remote_.join(cid);
+}
+
+void ControlServer::remoteLeft(const std::string& cid) {
+    {
+        std::lock_guard<std::mutex> lk(clientsMutex_);
+        clients_.erase(RemoteRouter::kPrefix + cid);
+    }
+    remote_.leave(cid);
+}
+
+void ControlServer::remoteClear() {
+    {
+        std::lock_guard<std::mutex> lk(clientsMutex_);
+        for (auto it = clients_.begin(); it != clients_.end();)
+            it = RemoteRouter::isRemoteId(it->first) ? clients_.erase(it) : std::next(it);
+    }
+    remote_.clear();
+}
+
+void ControlServer::remotePaused(const std::string& cid, bool paused) { remote_.setPaused(cid, paused); }
+
+void ControlServer::remoteMessage(const std::string& cid, const nlohmann::json& msg) {
+    if (cid.empty()) return;
+    const std::string id = RemoteRouter::kPrefix + cid;
+    bool known;
+    {
+        std::lock_guard<std::mutex> lk(clientsMutex_);
+        known = clients_.count(id) > 0;
+    }
+    if (!known) remoteJoined(cid);
+    dispatch(id, handler_.handle(msg, ClientInfo{id, Trust::Remote}));
 }
 
 void ControlServer::onMessage(const ClientInfo& client, const std::string& text) {
@@ -258,6 +299,7 @@ void ControlServer::dispatch(const std::string& clientId, const std::vector<Outg
 void ControlServer::broadcast(const nlohmann::json& msg) { sendOthers({}, msg); }
 
 void ControlServer::sendOthers(const std::string& exceptId, const nlohmann::json& msg) {
+    remote_.broadcast(msg, RemoteRouter::cidOf(exceptId));
     std::vector<std::shared_ptr<ix::WebSocket>> targets;
     {
         std::lock_guard<std::mutex> lk(clientsMutex_);
@@ -271,6 +313,15 @@ void ControlServer::sendOthers(const std::string& exceptId, const nlohmann::json
 }
 
 void ControlServer::sendTo(const std::string& clientId, const nlohmann::json& msg) {
+    if (RemoteRouter::isRemoteId(clientId)) {
+        bool known;
+        {
+            std::lock_guard<std::mutex> lk(clientsMutex_);
+            known = clients_.count(clientId) > 0;
+        }
+        if (known) remote_.reply(RemoteRouter::cidOf(clientId), msg);
+        return;
+    }
     std::shared_ptr<ix::WebSocket> s;
     {
         std::lock_guard<std::mutex> lk(clientsMutex_);

@@ -9,7 +9,13 @@ using nlohmann::json;
 
 namespace ks {
 
-const char* toString(Trust t) { return t == Trust::Web ? "web" : "local"; }
+const char* toString(Trust t) {
+    switch (t) {
+    case Trust::Web: return "web";
+    case Trust::Remote: return "remote";
+    default: return "local";
+    }
+}
 
 namespace {
 std::string lower(std::string s) {
@@ -146,6 +152,25 @@ std::string webRestriction(const json& msg) {
         return e.empty() ? std::string() : "set_patch: " + e;
     }
     return "'" + type + "' is not available to web sessions";
+}
+
+std::string remoteRestriction(const json& msg) {
+    static const std::set<std::string> denied = {"cloud_link",       "cloud_unlink",   "set_audio_device",
+                                                 "open_audio_panel", "samples_delete", "reload_plugin"};
+    const std::string type = msg.value("type", std::string());
+    if (denied.count(type)) return "'" + type + "' is not available to remote sessions";
+    std::string why = webRestriction(msg);
+    if (!why.empty() && why.find("is not available to web sessions") != std::string::npos)
+        why = "'" + type + "' is not available to remote sessions";
+    return why;
+}
+
+std::string trustRestriction(Trust t, const json& msg) {
+    switch (t) {
+    case Trust::Web: return webRestriction(msg);
+    case Trust::Remote: return remoteRestriction(msg);
+    default: return {};
+    }
 }
 
 } // namespace ks

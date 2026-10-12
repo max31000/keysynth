@@ -220,6 +220,11 @@ std::string CloudClient::deviceId() const {
     return store_.deviceId;
 }
 
+std::string CloudClient::deviceName() const {
+    std::lock_guard<std::mutex> lk(m_);
+    return store_.deviceName;
+}
+
 std::string CloudClient::currentToken() const {
     std::lock_guard<std::mutex> lk(m_);
     return store_.token;

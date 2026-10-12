@@ -1,6 +1,7 @@
 #pragma once
 // Session trust (PROTOCOL.md "Sessions, Origin, Host"; ARCHITECTURE §11): the handshake's Origin decides whether a
 // WS session is `local` (full protocol) or `web` (https://mvv42.ru: default-deny allow-list, logical paths only).
+// `remote` = a controller relayed through the keysynth API (ARCHITECTURE §15 *Relay*): web rules + a deny list.
 // Pure functions: unit-tested without sockets.
 
 #include <nlohmann/json.hpp>
@@ -10,7 +11,7 @@
 
 namespace ks {
 
-enum class Trust { Local, Web };
+enum class Trust { Local, Web, Remote };
 const char* toString(Trust t);
 
 struct OriginPolicy {
@@ -29,5 +30,9 @@ bool isLogicalPath(const std::string& p, const std::string& prefix);
 
 // For `web` sessions: "" when `msg` (a request with a string `type`) is allowed, else the reason (-> `forbidden`).
 std::string webRestriction(const nlohmann::json& msg);
+// For `remote` sessions: webRestriction + deny cloud_link/unlink, audio device selection, samples_delete, plugins.
+std::string remoteRestriction(const nlohmann::json& msg);
+// Restriction for any trust ("" = allowed; `local` allows everything).
+std::string trustRestriction(Trust t, const nlohmann::json& msg);
 
 } // namespace ks

@@ -442,8 +442,8 @@ std::vector<Outgoing> ProtocolHandler::handle(const json& msg, const ClientInfo&
     auto t = msg.find("type");
     if (t == msg.end() || !t->is_string()) return {{Outgoing::Target::Reply, error(id, "bad_request", "missing 'type'")}};
     const std::string type = t->get<std::string>();
-    if (client.trust == Trust::Web)
-        if (const std::string why = webRestriction(msg); !why.empty())
+    if (client.trust != Trust::Local)
+        if (const std::string why = trustRestriction(client.trust, msg); !why.empty())
             return {{Outgoing::Target::Reply, error(id, "forbidden", why)}};
     const auto& h = handlers();
     auto it = h.find(type);
