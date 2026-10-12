@@ -76,6 +76,16 @@ checkout's `assets/` (for roots laid out as `<main>/.claude/worktrees/<name>`), 
 (e.g. `$env:KS_ASSETS_DIR = "M:/Projects/Piano/assets"`). ks-render waits until every module reports ready
 (samples loaded) before rendering.
 
+Server sample catalogue (cloud downloads, contract `docs/specs/2026-10-12-cloud-api.md` §4):
+
+```powershell
+python scripts/build_sample_index.py        # assets/samples.json + assets/samples/ -> build/samples/index.json (fails on any missing file)
+scripts/upload_samples.ps1 -DryRun          # what would be sent to mvv42.ru:/var/lib/keysynth/samples/
+scripts/upload_samples.ps1                  # upload (resumable: only missing/size-mismatched files), index.json, chown, verify
+scripts/upload_samples.ps1 -VerifyOnly -SpotCheck 100   # counts/bytes per library + sha256 of 100 random files
+```
+Needs the deploy key `~/.ssh/mvv42_deploy`. Re-run both after changing `assets/samples.json` or a library.
+
 Render suite (`engine/tests/test_render.cpp`): every `presets/factory/**` preset renders the standard pattern
 (`OfflineRenderer::standardTestEvents()`: C-major chord, scale with rising velocity, low/high extremes, sustain-pedal
 section) + 3 s tail and must satisfy: no NaN/Inf, peak ≤ 0 dBFS, |DC| < 1e-3, RMS > −40 dBFS (not silent), RMS of the

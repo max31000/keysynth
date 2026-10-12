@@ -12,6 +12,16 @@ Update when a chunk of work lands. Newest first inside each section.
   Fresh-context review: fixed cross-account sync race, 401-vs-relink race, partial-cache loads, message-thread
   cache walk, reserved slugs, trailing-dot logical segments, manifest NTFS-case/`.part` collisions, inline tasks
   after stop.
+- Cloud WP-A `server/` keysynth-api (.NET 8): devices (cookie mint/list/delete, device me), samples manifest +
+  X-Accel files, presets (revisions, If-Match/If-None-Match, tombstones), rate limits, migrations; xUnit unit +
+  WebApplicationFactory tests (in-memory repos), MySQL repository contract tests via Testcontainers (skipped
+  without Docker, run in CI); `server/Dockerfile`, `.github/workflows/backend.yml` (inline copy of infra
+  deploy-dotnet-api.yml). Review fixes applied (cookie endpoints reject any bearer identity, dev file serving only
+  in Development, `If-Match: *`). Deferred review notes: DELETE on a tombstone bumps the revision again (per
+  contract wording); no per-IP limiter before auth (bad bearers cost a DB lookup → rely on nginx `limit_req`);
+  provisioning cache may return a deleted user id for ≤ 1 h (users are never deleted by the API); migrations take
+  no lock (single instance, old container stopped first); no MySQL concurrency tests yet (limits / 412 races).
+  Not yet verified against MySQL locally (no Docker on the dev box) — first CI run is the check.
 - Cloud WP0 contracts: PROTOCOL.md *Cloud & samples* (trust/Origin/Host, link, sync, samples jobs, auto-fetch),
   `docs/specs/2026-10-12-cloud-api.md` (REST, DB, index/manifest, AppPaths, cache.json, cloud.json), TS types.
 - Audio robustness after driver-side buffer/rate changes (bug: UR22C buffer change broke sound until restart).
