@@ -66,6 +66,9 @@ public sealed class RelaySocket : IAsyncDisposable
     /// <summary>Answer server pings automatically (default) and keep them out of the inbox.</summary>
     public bool AutoPong { get; set; } = true;
 
+    /// <summary>Reply to the server's close frame (default); false = a dead / misbehaving peer.</summary>
+    public bool AnswerClose { get; set; } = true;
+
     public static async Task<RelaySocket> ConnectAsync(KeysynthFactory factory, string roleQuery, Action<IDictionary<string, Microsoft.Extensions.Primitives.StringValues>> headers)
     {
         var client = factory.Server.CreateWebSocketClient();
@@ -92,6 +95,8 @@ public sealed class RelaySocket : IAsyncDisposable
                 if (r.MessageType == WebSocketMessageType.Close)
                 {
                     _closed.TrySetResult((int?)Socket.CloseStatus ?? -1);
+                    if (!AnswerClose)
+                        return;
                     try
                     {
                         await Socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);

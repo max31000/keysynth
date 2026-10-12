@@ -371,7 +371,11 @@ socket, the engine sees the status).
   socket with the **same `cid`** and then closes the old one: a connecting known `cid` is a **resume** — the old
   socket is closed with 4000, hosts see no `joined`/left (a paused state is reset with `resume`). The grant is
   checked at the handshake only. Host tokens are re-checked every 5 min (deleted / expired / `reauth_required` →
-  close 4003); `DELETE /api/devices/{id}` and `/me` close that host at once and drop it from `hosts`.
+  close 4003); `DELETE /api/devices/{id}` and `/me` close that host at once and drop it from `hosts` (a handshake
+  authenticated just before the delete is caught by the next 5-min check).
+- A server-initiated close removes the socket from the room immediately (hosts list / `joined:false` / slot freed),
+  without waiting for the client's close reply; the socket is aborted 5 s later if the handshake has not finished.
+- A repeated `hello` only updates name/version (no second round of `controller` events).
 
 ### Envelope (JSON text frames)
 ```jsonc
@@ -407,7 +411,7 @@ socket, the engine sees the status).
 | inbound message (all fragments) | host 1 MB, controller 128 KB |
 | inbound rate (safety cap, burst = 1 s) | host 300 msg/s, controller 100 msg/s |
 | heartbeat | server `ping` every 20 s; any inbound frame is liveness; 45 s silence → close |
-| outgoing queue per socket | lossy frames dropped at ≥ 64 frames or 1 MB queued; a non-lossy frame over 1024 frames / 8 MB → close 4008 |
+| outgoing queue per socket | a lossy frame is dropped while ≥ 64 frames are queued or it would bring the queue over 1 MB; a non-lossy frame that would exceed 1024 frames / 8 MB → close 4008 |
 
 | code | meaning | client action |
 |---|---|---|
@@ -415,7 +419,7 @@ socket, the engine sees the status).
 | 1001 | server shutdown | reconnect with backoff |
 | 1003 | binary frame | bug |
 | 1009 | inbound message over the cap | bug (engine: replies > 1 MB become `error too_large`) |
-| 4000 | replaced (same host deviceId / same cid connected again) | none (the new socket wins) |
+| 4000 | replaced (same host deviceId / same cid connected again) | controller: none (the new socket wins); the engine reconnects with backoff (two engines sharing one token keep replacing each other) |
 | 4001 | heartbeat timeout | reconnect, re-`hello` |
 | 4002 | controller socket max age (60 min) | reconnect with a refreshed cookie, same cid |
 | 4003 | host token revoked / expired / reauth required | reconnect → the upgrade answers 401 → unlink |

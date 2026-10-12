@@ -19,6 +19,7 @@ public sealed class RelayConnection
     private readonly Channel<ReadOnlyMemory<byte>> _out =
         Channel.CreateUnbounded<ReadOnlyMemory<byte>>(new UnboundedChannelOptions { SingleReader = true });
     private readonly CancellationTokenSource _abort = new();
+    private readonly CancellationTokenRegistration _abortReg;
     private int _queuedFrames;
     private long _queuedBytes;
     private int _closing;
@@ -43,7 +44,14 @@ public sealed class RelayConnection
         NextRevalidateAt = OpenedAt + Ticks(options.HostRevalidateInterval);
         _bucketTicks = OpenedAt;
         _tokens = RateCap * 1000L;
+        // Lives until the connection is disposed: the grace abort must also fire after the close frame went out
+        // (a peer that never answers the close would otherwise keep the reader waiting).
+        _abortReg = _abort.Token.Register(static s => ((WebSocket)s!).Abort(), socket);
     }
+
+    /// <summary>Invoked (on the thread pool) once when a server-initiated close starts: the hub leaves the room at
+    /// once instead of when the reader finally ends.</summary>
+    internal Action<RelayConnection>? Closing { get; set; }
 
     public RelayRole Role { get; }
     public long UserId { get; }
@@ -106,6 +114,7 @@ public sealed class RelayConnection
             return;
         var frames = Volatile.Read(ref _queuedFrames);
         var bytes = Interlocked.Read(ref _queuedBytes);
+        // Approximate under concurrent enqueuers (a few frames over the marks at most); good enough for a bound.
         if (lossy && (frames >= _options.LossyQueueFrames || bytes + frame.Length > _options.LossyQueueBytes))
         {
             Interlocked.Increment(ref _droppedLossy);
@@ -136,6 +145,8 @@ public sealed class RelayConnection
         _closeCode = code;
         _closeReason = reason;
         _out.Writer.TryComplete();
+        if (Closing is { } closing)
+            ThreadPool.QueueUserWorkItem(static s => s.Item1(s.Item2), (closing, this), preferLocal: false);
         try
         {
             _abort.CancelAfter(_options.CloseGrace);
@@ -161,7 +172,6 @@ public sealed class RelayConnection
     internal async Task RunWriterAsync()
     {
         var ct = _abort.Token;
-        using var reg = ct.Register(static s => ((WebSocket)s!).Abort(), _socket);
         try
         {
             await foreach (var frame in _out.Reader.ReadAllAsync(CancellationToken.None))
@@ -185,5 +195,9 @@ public sealed class RelayConnection
         }
     }
 
-    internal void DisposeAbort() => _abort.Dispose();
+    internal void DisposeAbort()
+    {
+        _abortReg.Dispose();
+        _abort.Dispose();
+    }
 }

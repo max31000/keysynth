@@ -19,6 +19,7 @@ public sealed class RelayHub(
     IOptions<RelayOptions> options,
     IServiceScopeFactory scopes,
     IClock clock,
+    IHostApplicationLifetime lifetime,
     ILogger<RelayHub> log) : BackgroundService
 {
     private sealed class Room
@@ -39,13 +40,21 @@ public sealed class RelayHub(
     private readonly ConcurrentDictionary<long, Room> _rooms = new();
     private readonly ConcurrentDictionary<RelayConnection, byte> _all = new();
 
+    private volatile bool _stopping;
+
     public RelayOptions Options => _o;
+
+    /// <summary>Sockets currently running (incl. ones waiting for their close handshake).</summary>
+    public int ConnectionCount => _all.Count;
 
     /// <summary>Runs one accepted socket until it closes: join, read loop, leave.</summary>
     public async Task RunAsync(RelayConnection conn, WebSocket socket, CancellationToken aborted)
     {
+        conn.Closing = Leave;
         var writer = conn.RunWriterAsync();
         _all[conn] = 0;
+        if (_stopping)
+            conn.Close(RelayClose.GoingAway, "shutdown");
         try
         {
             if (Join(conn))
@@ -273,17 +282,23 @@ public sealed class RelayHub(
             {
                 if (!room.Hosts.TryGetValue(host.Id, out var cur) || !ReferenceEquals(cur, host))
                     return true; // replaced meanwhile
+                var first = !host.Online;
+                var changed = first || host.Name != name || host.Version != version;
                 host.Name = name;
                 host.Version = version;
                 host.Online = true;
                 room.Known[host.Id] = (name, version);
-                foreach (var c in room.Controllers.Values)
+                if (first) // a repeated hello only updates name/version
                 {
-                    host.Enqueue(RelayFrames.Controller(c.Id, true), lossy: false);
-                    if (c.Paused)
-                        host.Enqueue(RelayFrames.Pause(c.Id, true), lossy: false);
+                    foreach (var c in room.Controllers.Values)
+                    {
+                        host.Enqueue(RelayFrames.Controller(c.Id, true), lossy: false);
+                        if (c.Paused)
+                            host.Enqueue(RelayFrames.Pause(c.Id, true), lossy: false);
+                    }
                 }
-                BroadcastHostsLocked(room);
+                if (changed)
+                    BroadcastHostsLocked(room);
             }
             return true;
         }
@@ -433,6 +448,9 @@ public sealed class RelayHub(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // ApplicationStopping fires before the server drains in-flight requests (= every relay socket), so the
+        // close frames still go out; hosted-service StopAsync would run too late.
+        using var stopping = lifetime.ApplicationStopping.Register(CloseAll);
         using var timer = new PeriodicTimer(_o.SweepInterval);
         try
         {
@@ -479,10 +497,16 @@ public sealed class RelayHub(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    private void CloseAll()
     {
+        _stopping = true;
         foreach (var conn in _all.Keys)
             conn.Close(RelayClose.GoingAway, "shutdown");
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        CloseAll();
         await base.StopAsync(cancellationToken);
     }
 }

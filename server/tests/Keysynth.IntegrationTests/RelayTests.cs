@@ -422,6 +422,87 @@ public sealed class RelayTests
     }
 
     [Fact]
+    public async Task ServerCloseFreesTheSlotAtOnceAndAbortsAPeerThatNeverAnswers()
+    {
+        await using var f = new RelayFactory(o =>
+        {
+            o.MaxControllersPerUser = 1;
+            o.PingInterval = TimeSpan.FromMilliseconds(100);
+            o.SilenceTimeout = TimeSpan.FromMilliseconds(1000);
+            o.CloseGrace = TimeSpan.FromMilliseconds(300);
+        });
+        var tg = f.NewTelegramId();
+        var dev = await f.LinkAsync(telegramId: tg);
+        await using var host = await f.OnlineHostAsync(dev);
+        await using var dead = await f.ControllerAsync(tg, "dead-ctl-1");
+        dead.AutoPong = false;
+        dead.AnswerClose = false;
+        await dead.ExpectAsync("hosts");
+        await host.ExpectAsync("controller", j => j.GetProperty("joined").GetBoolean());
+        (await dead.ClosedAsync()).Should().Be(RelayClose.Timeout);
+        // left at once (not when the never-coming close reply arrives)
+        (await host.ExpectAsync("controller", j => !j.GetProperty("joined").GetBoolean())).GetProperty("cid").GetString().Should().Be("dead-ctl-1");
+        await using var next = await f.ControllerAsync(tg, "next-ctl-1");
+        await next.ExpectAsync("hosts");
+        next.IsClosed.Should().BeFalse("the dead controller no longer holds the only slot");
+        // the hub aborts the silent socket after the grace
+        var deadline = DateTime.UtcNow + RelaySocket.Wait;
+        while (f.Hub.ConnectionCount > 2 && DateTime.UtcNow < deadline)
+            await Task.Delay(50);
+        f.Hub.ConnectionCount.Should().BeLessThanOrEqualTo(2, "the dead socket is gone (host + next remain unless they timed out under load)");
+    }
+
+    [Fact]
+    public async Task ClosedHostIsOfflineAtOnce()
+    {
+        await using var f = new RelayFactory(o => o.HostMessagesPerSecond = 5);
+        var tg = f.NewTelegramId();
+        var dev = await f.LinkAsync(telegramId: tg);
+        await using var c = await f.ControllerAsync(tg);
+        await c.ExpectAsync("hosts");
+        await using var host = await f.OnlineHostAsync(dev);
+        host.AnswerClose = false;
+        await c.ExpectAsync("hosts", h => h.GetProperty("hosts")[0].GetProperty("online").GetBoolean());
+        for (var i = 0; i < 20 && !host.IsClosed; i++)
+            await host.SendAsync(new { t = "ping" });
+        (await host.ClosedAsync()).Should().Be(RelayClose.RateLimited);
+        await c.ExpectAsync("hosts", h => !h.GetProperty("hosts")[0].GetProperty("online").GetBoolean());
+        await c.SendAsync(new { t = "msg", host = dev.DeviceId, msg = new { type = "panic", id = 1 } });
+        (await c.ExpectAsync("error")).GetProperty("code").GetString().Should().Be("host_offline");
+    }
+
+    [Fact]
+    public async Task RepeatedHelloOnlyUpdatesTheName()
+    {
+        await using var f = new RelayFactory();
+        var tg = f.NewTelegramId();
+        var dev = await f.LinkAsync(telegramId: tg);
+        await using var c = await f.ControllerAsync(tg, "hello-ctl-1");
+        await c.ExpectAsync("hosts");
+        await using var host = await f.OnlineHostAsync(dev, "A");
+        await host.ExpectAsync("controller");
+        await c.ExpectAsync("hosts", h => h.GetProperty("hosts")[0].GetProperty("name").GetString() == "A");
+        await host.SendAsync(new { t = "hello", host = new { deviceId = dev.DeviceId, name = "B", version = "0.2.0" } });
+        await c.ExpectAsync("hosts", h => h.GetProperty("hosts")[0].GetProperty("name").GetString() == "B");
+        await host.SendAsync(new { t = "hello", host = new { deviceId = dev.DeviceId, name = "B", version = "0.2.0" } });
+        await host.SyncAsync();
+        (await host.QuietAsync(Short)).Should().BeTrue("no second round of controller events");
+        (await c.QuietAsync(Short)).Should().BeTrue("unchanged hello broadcasts nothing");
+    }
+
+    [Fact]
+    public async Task StoppingTheServerSends1001()
+    {
+        var f = new RelayFactory();
+        var tg = f.NewTelegramId();
+        await using var c = await f.ControllerAsync(tg);
+        await c.ExpectAsync("hosts");
+        var stop = Task.Run(f.Dispose);
+        (await c.ClosedAsync()).Should().Be(RelayClose.GoingAway);
+        await stop;
+    }
+
+    [Fact]
     public async Task ControllerMaxAgeCloses4002()
     {
         await using var f = new RelayFactory(o => o.ControllerMaxAge = TimeSpan.FromMilliseconds(300));
