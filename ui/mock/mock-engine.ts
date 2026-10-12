@@ -45,6 +45,18 @@ export interface MockEngine {
 }
 
 const ALLOWED_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):(7341|5173|4173)$/;
+/** PROTOCOL.md "Sessions, Origin, Host": the platform page gets a `web` session (default-deny allow-list). */
+const WEB_ORIGIN = 'https://mvv42.ru';
+const WEB_ALLOWED = new Set([
+  'hello', 'get_catalog', 'set_param', 'get_patch', 'list_presets', 'add_layer', 'remove_layer', 'set_zone',
+  'set_instrument', 'add_fx', 'remove_fx', 'move_fx', 'set_fx_bypass', 'note', 'cc', 'panic', 'list_patterns',
+  'set_pattern', 'rescan_midi', 'list_devices', 'set_audio_device', 'open_audio_panel', 'restart_audio', 'list_plugins',
+  'save_preset', 'save_pattern', 'load_preset', 'get_pattern', 'transport', 'set_patch', 'cloud_link', 'cloud_unlink',
+  'sync_now', 'samples_list', 'samples_fetch', 'samples_cancel', 'samples_delete',
+]);
+const MOCK_VERSION = '0.1.0';
+/** Mock cloud: any `ksd_` + 43 base64url token links; tokens containing "BAD" are rejected, "OTHER" = account 42. */
+const TOKEN_RE = /^ksd_[A-Za-z0-9_-]{43}$/;
 
 const DEVICE_TYPES: { type: string; names: string[] }[] = [
   { type: 'ASIO', names: ['Focusrite USB ASIO', 'ASIO4ALL v2'] },
@@ -189,11 +201,149 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   const presetList = (): PresetEntry[] =>
     presets.map(({ path, name, category, tags, factory }) => ({ path, name, category, tags, factory }));
 
+  // ─────────────── cloud & samples (PROTOCOL.md "Cloud & samples") ───────────────
+  type MockEntry = { id: string; name: string; sfz: string; bytes: number; cachedBytes: number; local?: boolean };
+  type MockLib = { id: string; name: string; group: string; licence: string; author: string; attribution: string; entries: MockEntry[] };
+  type MockJob = { id: string; scope: string; target: string; state: 'queued' | 'running'; bytesDone: number; bytesTotal: number;
+    filesDone: number; filesTotal: number; rate: number; entries: string[]; auto: boolean };
+  const MB = 1024 * 1024;
+  const entry = (lib: string, sfz: string, mb: number, local = false): MockEntry =>
+    ({ id: `${lib}/${sfz}`, name: sfz.replace(/^.*\//, '').replace(/\.sfz$/, ''), sfz: `assets/samples/${lib}/${sfz}`,
+       bytes: mb * MB, cachedBytes: 0, local });
+  const groups = [{ id: 'piano', name: 'Piano' }, { id: 'epiano', name: 'Electric piano' }];
+  const libs: MockLib[] = [
+    { id: 'salamander', name: 'Salamander Grand Piano V3', group: 'piano', licence: 'CC-BY-3.0', author: 'Alexander Holm',
+      attribution: 'Salamander Grand Piano by Alexander Holm, CC BY 3.0.',
+      entries: [entry('salamander', 'SalamanderGrandPiano-V3.sfz', 40)] },
+    { id: 'jrhodes3c', name: 'jRhodes3c', group: 'epiano', licence: 'CC0', author: 'jlearman', attribution: 'jRhodes3c (CC0)',
+      entries: [entry('jrhodes3c', 'jRhodes3c-looped.sfz', 12), entry('jrhodes3c', 'jRhodes3c-stereo.sfz', 18)] },
+    { id: 'localdemo', name: 'Local demo', group: 'epiano', licence: 'CC0', author: 'you', attribution: '',
+      entries: [entry('localdemo', 'demo.sfz', 1, true)] },
+  ];
+  const deviceId = '3f0c7e9a-5b1d-4c2e-9a77-0e5d2c1b8f40';
+  let link: { accountId: string; accountName: string; expiresAt: string } | null = null;
+  const seenAccounts = new Set<string>();
+  const jobs: MockJob[] = [];
+  let lastSyncAt: string | null = null;
+  let syncState: 'disabled' | 'idle' | 'syncing' | 'offline' | 'error' = 'disabled';
+  const trustOf = new WeakMap<WebSocket, 'local' | 'web'>();
+  const cloudStatus = () => ({
+    linked: !!link, accountId: link?.accountId ?? null, accountName: link?.accountName ?? null, deviceId,
+    expiresAt: link?.expiresAt ?? null, online: true, error: null as string | null,
+  });
+  const syncStatus = () => ({ type: 'sync_status', state: syncState, lastSyncAt, pending: 0, conflicts: [], error: null });
+  const allEntries = () => libs.flatMap((l) => l.entries);
+  const entryStatus = (e: MockEntry) => (e.local ? 'local' : e.cachedBytes >= e.bytes ? 'cached' : e.cachedBytes > 0 ? 'partial' : 'missing');
+  const jobFor = (lib: MockLib, e?: MockEntry) =>
+    (e && jobs.find((j) => j.id === `entry:${e.id}`)) || jobs.find((j) => j.id === `library:${lib.id}`) || jobs.find((j) => j.id === 'all');
+  const samplesList = (id?: number) => ({
+    type: 'samples_list_ok', ...(id !== undefined ? { id } : {}),
+    manifest: link ? { state: 'ok', etag: '"9c1f0a2b3c4d5e6f"', fetchedAt: new Date().toISOString() } : { state: 'none', etag: null, fetchedAt: null },
+    cacheBytes: allEntries().reduce((s, e) => s + (e.local ? 0 : e.cachedBytes), 0),
+    freeBytes: 98765432100,
+    groups: link
+      ? groups.map((g) => ({
+          ...g,
+          libraries: libs.filter((l) => l.group === g.id).map((l) => {
+            const st = l.entries.map(entryStatus);
+            return {
+              id: l.id, name: l.name, licence: l.licence, author: l.author, attribution: l.attribution,
+              bytes: l.entries.reduce((s, e) => s + e.bytes, 0), cachedBytes: l.entries.reduce((s, e) => s + e.cachedBytes, 0),
+              status: st.includes('local') ? 'local' : st.every((s) => s === 'cached') ? 'cached' : st.every((s) => s === 'missing') ? 'missing' : 'partial',
+              job: jobs.find((j) => j.id === `library:${l.id}` || j.id === 'all')?.id ?? null,
+              entries: l.entries.map((e) => ({ id: e.id, name: e.name, sfz: e.sfz, bytes: e.bytes, cachedBytes: e.cachedBytes,
+                status: entryStatus(e), job: jobFor(l, e)?.id ?? null })),
+            };
+          }),
+        }))
+      : [],
+  });
+  const targetEntries = (scope: string, target: string) =>
+    scope === 'all' ? allEntries() : scope === 'library' ? (libs.find((l) => l.id === target)?.entries ?? []) : allEntries().filter((e) => e.id === target);
+  const startJob = (scope: string, target: string, auto = false): { job: string; existing: boolean } | null => {
+    const id = scope === 'all' ? 'all' : `${scope}:${target}`;
+    if (jobs.some((j) => j.id === id)) return { job: id, existing: true };
+    const es = targetEntries(scope, target);
+    if (!es.length) return null;
+    const todo = es.filter((e) => !e.local && e.cachedBytes < e.bytes);
+    const job: MockJob = { id, scope, target: scope === 'all' ? '' : target, state: 'queued',
+      bytesDone: 0, bytesTotal: todo.reduce((s, e) => s + e.bytes - e.cachedBytes, 0), filesDone: 0,
+      filesTotal: todo.length * 30, rate: 0, entries: es.map((e) => e.id), auto };
+    if (auto) jobs.unshift(job);
+    else jobs.push(job);
+    return { job: id, existing: false };
+  };
+  const endJob = (j: MockJob, cancelled: boolean) => {
+    jobs.splice(jobs.indexOf(j), 1);
+    const cached = j.entries.filter((id) => { const e = allEntries().find((x) => x.id === id); return e && entryStatus(e) === 'cached'; });
+    broadcast({ type: 'samples_done', job: j.id, scope: j.scope, target: j.target, cancelled, entries: cached });
+  };
+  // Download sim: 2 "parallel files", ~6 MB/s per job; tokens are fine, so only `samples_cancel` stops jobs.
+  const samplesTimer = setInterval(() => {
+    if (!jobs.length) return;
+    for (const j of jobs.slice(0, 2)) {
+      j.state = 'running';
+      const step = 1.2 * MB;
+      let left = step;
+      for (const id of j.entries) {
+        const e = allEntries().find((x) => x.id === id);
+        if (!e || e.local || left <= 0) continue;
+        const take = Math.min(left, e.bytes - e.cachedBytes);
+        e.cachedBytes += take;
+        left -= take;
+      }
+      j.bytesDone = Math.min(j.bytesTotal, j.bytesDone + step - left);
+      j.filesDone = j.bytesTotal ? Math.floor((j.filesTotal * j.bytesDone) / j.bytesTotal) : j.filesTotal;
+      j.rate = 6 * MB;
+    }
+    broadcast({ type: 'samples_progress', jobs: jobs.map(({ entries, auto, ...pub }) => (void entries, void auto, pub)) });
+    for (const j of [...jobs]) if (j.bytesDone >= j.bytesTotal) endJob(j, false);
+  }, 200);
+  /** Auto-fetch: a sampler sfz under assets/samples/ that is not cached starts an entry job at the queue front. */
+  const autoFetch = () => {
+    if (!link) return;
+    for (const l of patch.layers) {
+      const sfz = l.instrument.type === 'sampler' ? (l.instrument.state as { sfz?: string } | undefined)?.sfz : undefined;
+      const e = sfz ? allEntries().find((x) => x.sfz === sfz) : undefined;
+      if (e && entryStatus(e) !== 'cached' && entryStatus(e) !== 'local') startJob('entry', e.id, true);
+    }
+  };
+  const runSync = () => {
+    if (!link) return;
+    syncState = 'syncing';
+    broadcast(syncStatus());
+    setTimeout(() => {
+      if (!link) return;
+      syncState = 'idle';
+      lastSyncAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+      broadcast(syncStatus());
+    }, 400);
+  };
+  const isLogical = (p: unknown, prefixes: string[]) =>
+    typeof p === 'string' && !/(^|\/)\.\.?(\/|$)|\\|:|^\/|\/\/|[\x00-\x1f]/.test(p) && prefixes.some((x) => p.startsWith(x) && p.length > x.length);
+  const webForbidden = (m: Record<string, unknown>): string | null => {
+    const t = String(m.type);
+    if (!WEB_ALLOWED.has(t)) return `'${t}' is not available to web sessions`;
+    if (t === 'load_preset' && !isLogical(m.path, ['presets/factory/', 'userdata/presets/'])) return 'load_preset: bad path';
+    const pat = (v: unknown) => v === undefined || v === '' || isLogical(v, ['presets/patterns/', 'userdata/patterns/']);
+    if (t === 'get_pattern' && !pat(m.path)) return 'get_pattern: bad path';
+    if (t === 'transport' && !pat(m.pattern)) return 'transport: bad pattern';
+    if (t === 'set_patch') {
+      const p = m.patch as Patch | undefined;
+      for (const l of p?.layers ?? []) {
+        const sfz = (l.instrument?.state as { sfz?: string } | undefined)?.sfz;
+        if (sfz && !isLogical(sfz, ['assets/samples/'])) return 'set_patch: sampler sfz must be under assets/samples/';
+      }
+      if (p?.rhythm && !pat((p.rhythm as { pattern?: string }).pattern)) return 'set_patch: bad rhythm.pattern';
+    }
+    return null;
+  };
+
   // ─────────────── server ───────────────
   const wss = new WebSocketServer({
     host,
     port: opts.port ?? 7341,
-    verifyClient: (info: { origin?: string }) => !info.origin || ALLOWED_ORIGIN.test(info.origin),
+    verifyClient: (info: { origin?: string }) => !info.origin || ALLOWED_ORIGIN.test(info.origin) || info.origin === WEB_ORIGIN,
   });
 
   const send = (ws: WebSocket, msg: object) => {
@@ -232,10 +382,89 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   function handle(ws: WebSocket, m: Record<string, unknown>) {
     const id = typeof m.id === 'number' ? m.id : undefined;
     const num = (k: string) => (typeof m[k] === 'number' ? (m[k] as number) : undefined);
+    if (trustOf.get(ws) === 'web') {
+      const why = webForbidden(m);
+      if (why) return err(ws, id, 'forbidden', why);
+    }
     switch (m.type) {
       case 'hello':
-        send(ws, stateMsg(id));
+        send(ws, { ...stateMsg(id), version: MOCK_VERSION, trust: trustOf.get(ws) ?? 'local', cloud: cloudStatus() });
+        send(ws, syncStatus());
         return;
+      case 'cloud_link': {
+        const token = typeof m.token === 'string' ? m.token : '';
+        if (!TOKEN_RE.test(token)) return err(ws, id, 'bad_request', 'malformed device token');
+        setTimeout(() => {
+          if (token.includes('BAD')) return err(ws, id, 'token_invalid', 'the server rejected the token');
+          const next = token.includes('OTHER')
+            ? { accountId: '42', accountName: 'Other' }
+            : { accountId: '17', accountName: 'Max' };
+          if (link && link.accountId !== next.accountId && m.replace !== true)
+            return err(ws, id, 'account_mismatch', `this engine is linked to account '${link.accountName}'`);
+          const switched = link?.accountId !== next.accountId;
+          const first = !seenAccounts.has(next.accountId);
+          seenAccounts.add(next.accountId);
+          link = { ...next, expiresAt: '2027-04-10T12:00:00Z' };
+          send(ws, { type: 'cloud_status', id, ...cloudStatus(), ...(first ? { merged: { presets: presets.filter((p) => !p.factory).length, patterns: 0 } } : {}) });
+          broadcast({ type: 'cloud_status', ...cloudStatus() }, ws);
+          if (switched) {
+            if (presetPath?.startsWith('userdata/')) presetPath = null;
+            broadcastState();
+          }
+          runSync();
+          autoFetch();
+        }, 150);
+        return;
+      }
+      case 'cloud_unlink': {
+        const had = !!link;
+        link = null;
+        syncState = 'disabled';
+        for (const j of [...jobs]) endJob(j, true);
+        send(ws, { type: 'cloud_status', id, ...cloudStatus() });
+        broadcast({ type: 'cloud_status', ...cloudStatus() }, ws);
+        broadcast(syncStatus());
+        if (had) broadcastState();
+        return;
+      }
+      case 'sync_now':
+        if (!link) return err(ws, id, 'not_linked', 'link this engine to your account first');
+        send(ws, { type: 'sync_now_ok', id });
+        runSync();
+        return;
+      case 'samples_list':
+        setTimeout(() => send(ws, samplesList(id)), link ? 120 : 0);
+        return;
+      case 'samples_fetch': {
+        const scope = String(m.scope ?? '');
+        const target = typeof m.target === 'string' ? m.target : '';
+        if (!['entry', 'library', 'all'].includes(scope) || (scope !== 'all' && !target)) return err(ws, id, 'bad_request', 'scope/target');
+        if (!link) return err(ws, id, 'not_linked', 'link this engine to your account first');
+        const r = startJob(scope, target);
+        if (!r) return err(ws, id, 'not_found', `unknown ${scope} '${target}'`);
+        send(ws, { type: 'samples_fetch_ok', id, ...r });
+        return;
+      }
+      case 'samples_cancel': {
+        const which = typeof m.job === 'string' ? jobs.filter((j) => j.id === m.job) : [...jobs];
+        for (const j of which) endJob(j, true);
+        send(ws, { type: 'samples_cancel_ok', id, jobs: which.map((j) => j.id) });
+        return;
+      }
+      case 'samples_delete': {
+        const scope = String(m.scope ?? '');
+        const target = typeof m.target === 'string' ? m.target : '';
+        const es = targetEntries(scope, target);
+        if (!es.length) return err(ws, id, 'not_found', `unknown ${scope} '${target}'`);
+        const inUse = patch.layers.map((l) => (l.instrument.state as { sfz?: string } | undefined)?.sfz);
+        if (es.some((e) => inUse.includes(e.sfz))) return err(ws, id, 'in_use', 'used by the current patch: unload it first');
+        if (es.every((e) => e.local)) return err(ws, id, 'read_only', 'local sample library');
+        for (const j of [...jobs]) if (j.entries.some((x) => es.some((e) => e.id === x))) endJob(j, true);
+        let freed = 0;
+        for (const e of es) if (!e.local) { freed += e.cachedBytes; e.cachedBytes = 0; }
+        send(ws, { type: 'samples_delete_ok', id, freedBytes: freed });
+        return;
+      }
       case 'get_catalog':
         send(ws, { type: 'catalog_ok', id, modules: CATALOG });
         return;
@@ -562,7 +791,8 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     }
   }
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    trustOf.set(ws, req.headers.origin === WEB_ORIGIN ? 'web' : 'local');
     log('client connected');
     ws.on('message', (raw) => {
       let m: unknown;
@@ -576,6 +806,8 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       }
       try {
         handle(ws, m as Record<string, unknown>);
+        const t = (m as { type: string }).type;
+        if (t === 'set_patch' || t === 'load_preset' || t === 'set_instrument') autoFetch();
       } catch (e) {
         err(ws, (m as { id?: number }).id, 'internal', String(e));
       }
@@ -682,6 +914,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         close: () =>
           new Promise<void>((res) => {
             clearInterval(telemetryTimer);
+            clearInterval(samplesTimer);
             if (demoTimer) clearInterval(demoTimer);
             for (const c of wss.clients) c.terminate();
             wss.close(() => res());

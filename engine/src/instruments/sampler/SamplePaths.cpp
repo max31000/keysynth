@@ -3,6 +3,7 @@
 #include "core/AppPaths.h"
 
 #include <cstdlib>
+#include <mutex>
 #include <system_error>
 #include <vector>
 
@@ -36,7 +37,56 @@ std::optional<fs::path> belowAssets(const fs::path& relToRoot) {
     return rest;
 }
 
+struct SampleHooks {
+    std::mutex m;
+    std::optional<fs::path> cacheDir;
+    SampleFetchHook fetch;
+};
+SampleHooks& hooks() {
+    static SampleHooks* h = new SampleHooks(); // leaked: loader threads may resolve during static destruction
+    return *h;
+}
+
 } // namespace
+
+void setSampleCacheDir(const fs::path& dir) {
+    std::lock_guard<std::mutex> lk(hooks().m);
+    hooks().cacheDir = dir;
+}
+
+fs::path sampleCacheDir() {
+    {
+        std::lock_guard<std::mutex> lk(hooks().m);
+        if (hooks().cacheDir) return *hooks().cacheDir;
+    }
+    const fs::path d = AppPaths::discover().sampleCache;
+    std::lock_guard<std::mutex> lk(hooks().m);
+    if (!hooks().cacheDir) hooks().cacheDir = d;
+    return *hooks().cacheDir;
+}
+
+void setSampleFetchHook(SampleFetchHook hook) {
+    std::lock_guard<std::mutex> lk(hooks().m);
+    hooks().fetch = std::move(hook);
+}
+
+SampleFetchState querySampleFetch(const std::string& entryId, bool fresh) {
+    SampleFetchHook h;
+    {
+        std::lock_guard<std::mutex> lk(hooks().m);
+        h = hooks().fetch;
+    }
+    return h ? h(entryId, fresh) : SampleFetchState::Unavailable;
+}
+
+std::optional<std::string> sampleEntryIdOf(const std::string& spec) {
+    static const std::string prefix = "assets/samples/";
+    if (spec.rfind(prefix, 0) != 0 || spec.size() <= prefix.size()) return std::nullopt;
+    std::string id = spec.substr(prefix.size());
+    if (id.find('\\') != std::string::npos || id.find("..") != std::string::npos || id.find('/') == std::string::npos)
+        return std::nullopt;
+    return id;
+}
 
 std::vector<fs::path> sampleAssetDirs(const fs::path& root) {
     std::vector<fs::path> dirs;
@@ -77,7 +127,19 @@ SamplePathResult resolveSamplePath(const std::string& spec, const fs::path& root
                 return res;
             }
         }
-        res.error = "sfz not found: '" + spec + "' (searched repo assets/, $KS_ASSETS_DIR, main checkout assets/)";
+        // assets/samples/<lib>/<path> -> <cache>/<lib>/<path>
+        auto it = rest->begin();
+        if (it != rest->end() && *it == "samples") {
+            fs::path below;
+            for (++it; it != rest->end(); ++it) below /= *it;
+            const fs::path cache = sampleCacheDir().lexically_normal();
+            const fs::path cand = (cache / below).lexically_normal();
+            if (!below.empty() && isPathInside(cand, cache) && isFile(cand)) {
+                res.path = cand;
+                return res;
+            }
+        }
+        res.error = "sfz not found: '" + spec + "' (searched repo assets/, $KS_ASSETS_DIR, main checkout assets/, sample cache)";
         return res;
     }
     res.error = paths.resolveAllowed(spec) ? "sfz not found: '" + spec + "'"

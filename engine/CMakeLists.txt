@@ -78,9 +78,10 @@ if(TARGET sfizz_static)
 endif()
 target_compile_definitions(ks_core PUBLIC
     KS_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    KS_VERSION="${PROJECT_VERSION}"
     $<$<BOOL:${KS_RT_CHECKS}>:KS_RT_CHECKS=1>)
 if(WIN32)
-    target_link_libraries(ks_core PUBLIC avrt ws2_32)
+    target_link_libraries(ks_core PUBLIC avrt ws2_32 crypt32 wininet)
 endif()
 # Plugin SDK (C ABI header).
 target_include_directories(ks_core PUBLIC ${CMAKE_SOURCE_DIR}/sdk/include)

@@ -52,7 +52,7 @@ const std::filesystem::path& repoRoot() {
 
 // Shared between the module (control + audio thread) and its loader thread.
 struct SamplerModule::Core {
-    enum State : int { Idle = 0, Loading, Ready, Paused, Failed };
+    enum State : int { Idle = 0, Loading, Ready, Paused, Failed, Waiting }; // Waiting: SFZ downloading (auto-fetch)
 
     sfizz_synth_t* synth = nullptr; // created/loaded by the loader thread; used by the audio thread when Ready
 
@@ -247,14 +247,20 @@ void SamplerModule::prepare(double sampleRate, int maxBlock) {
     c->maxBlock = maxBlock_;
     c->offline.store(offline_);
     c->wantPolyphony.store(static_cast<int>(params().get(Polyphony)));
+    missing_ = false;
+    errorReported_ = false;
     if (!sfz_.empty()) {
         SamplePathResult r = resolveSamplePath(sfz_, repoRoot());
-        if (r.path) {
+        if (r.path && cacheIncomplete(*r.path, true)) {
+            missing_ = true; // SFZ cached, samples still downloading: wait for the job
+            c->state.store(Core::Waiting);
+        } else if (r.path) {
             c->path = *r.path;
             c->state.store(Core::Loading);
         } else {
             c->error = r.error;
-            c->state.store(Core::Failed);
+            missing_ = true;
+            applyFetchState(*c, true);
         }
     }
     {
@@ -265,12 +271,56 @@ void SamplerModule::prepare(double sampleRate, int maxBlock) {
     }
     core_ = c;
     coreRaw_ = c.get();
-    params().setRaw(Loading, c->state.load() == Core::Loading ? 1.0f : 0.0f);
+    params().setRaw(Loading, c->state.load() == Core::Loading || c->state.load() == Core::Waiting ? 1.0f : 0.0f);
     params().setRaw(LoadedRegions, 0.0f);
     if (c->state.load() == Core::Loading) {
         gate().threads.fetch_add(1);
         loader_ = std::thread(&Core::run, c);
     }
+}
+
+bool SamplerModule::cacheIncomplete(const std::filesystem::path& p, bool fresh) const {
+    const auto entry = sampleEntryIdOf(sfz_);
+    if (!entry || !isPathInside(p, sampleCacheDir())) return false;
+    // The sample service keeps or starts a job for an entry whose files are not all cached.
+    return querySampleFetch(*entry, fresh) == SampleFetchState::Waiting;
+}
+
+void SamplerModule::applyFetchState(Core& c, bool fresh) {
+    const auto entry = sampleEntryIdOf(sfz_);
+    const SampleFetchState fs = entry ? querySampleFetch(*entry, fresh) : SampleFetchState::Unavailable;
+    errorReported_ = fs == SampleFetchState::Failed; // the samples_error toast already told the player
+    c.state.store(fs == SampleFetchState::Waiting ? Core::Waiting : Core::Failed);
+}
+
+void SamplerModule::resourcesChanged() {
+    if (!core_ || !missing_) return;
+    const int st = core_->state.load();
+    if (st != Core::Waiting && st != Core::Failed) return;
+    SamplePathResult r = resolveSamplePath(sfz_, repoRoot());
+    if (!r.path) {
+        applyFetchState(*core_, false);
+        return;
+    }
+    if (cacheIncomplete(*r.path, false)) {
+        core_->state.store(Core::Waiting);
+        return;
+    }
+    // The SFZ arrived (sample cache): load it now. No loader thread exists in Waiting/Failed.
+    if (loader_.joinable()) loader_.join();
+    missing_ = false;
+    errorReported_ = false;
+    core_->setError({});
+    core_->path = *r.path;
+    core_->state.store(Core::Loading);
+    params().setRaw(Loading, 1.0f);
+    gate().threads.fetch_add(1);
+    loader_ = std::thread(&Core::run, core_);
+}
+
+std::string SamplerModule::loadError() const {
+    if (!core_ || errorReported_ || core_->state.load() == Core::Waiting) return {};
+    return lastError();
 }
 
 void SamplerModule::reset() {
@@ -296,6 +346,11 @@ void SamplerModule::setOfflineMode(bool offline) {
 int SamplerModule::regionCount() const noexcept {
     const Core* c = coreRaw_;
     return c ? c->regions.load() : 0;
+}
+
+bool SamplerModule::waitingForDownload() const noexcept {
+    const Core* c = coreRaw_;
+    return c != nullptr && c->state.load() == Core::Waiting;
 }
 
 bool SamplerModule::loadFailed() const noexcept {
@@ -338,7 +393,7 @@ void SamplerModule::process(AudioBlock& out, MidiEventSpan events, const Process
 
     c->busy.store(true);
     const int st = c->state.load();
-    p.setRaw(Loading, st == Core::Loading ? 1.0f : 0.0f);
+    p.setRaw(Loading, st == Core::Loading || st == Core::Waiting ? 1.0f : 0.0f);
     p.setRaw(LoadedRegions, static_cast<float>(c->regions.load(std::memory_order_relaxed)));
     if (st != Core::Ready) {
         c->busy.store(false);

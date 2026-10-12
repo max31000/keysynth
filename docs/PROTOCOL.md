@@ -160,7 +160,9 @@ Design: `docs/specs/2026-10-12-cloud.md` (§11 wins). REST side, storage layout 
 bytes, rates bytes/s. Request/reply conventions as above (`id`, `error { code, message }`).
 
 ### Sessions, Origin, Host
-Checked on the WS (7341) and HTTP (7340) handshake; a failure is HTTP 403, no upgrade.
+Checked on the WS (7341) and HTTP (7340) handshake; a failure is HTTP 403 on 7340. On 7341 the socket library has no
+pre-upgrade hook, so a refused handshake is closed with code 4003 right after the upgrade and no message from it is
+ever processed.
 - `Host` must be exactly `127.0.0.1:<port>` or `localhost:<port>` (`<port>` = the port listened on) — DNS-rebinding
   guard. Both servers bind 127.0.0.1 only.
 - `Origin` decides the session's **trust**:

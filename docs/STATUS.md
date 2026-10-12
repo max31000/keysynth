@@ -3,6 +3,15 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Cloud WP-B (engine): AppPaths installed/dev modes + logical paths + per-account profiles; Origin/Host session
+  trust (`control/Trust`, web default-deny); CloudClient (JUCE/WinINet behind `HttpTransport`, DPAPI token in
+  `cloud.json`, link/unlink/401 drop, `--cloud-api`); SampleService (manifest+ETag, jobs, 2 workers, Range/If-Range
+  resume, SHA-256, strict path rules, refcounted delete, sampler auto-fetch with `loading`=1 + `resourcesChanged`);
+  SyncService (contract §3.4, conflicts, tombstones, per-pass token binding); `scripts/dev_cloud_server.py`; mock
+  engine cloud messages. 22 `[cloud]` tests (fake API) + hidden `[cloud-live]`; E2E against the dev server.
+  Fresh-context review: fixed cross-account sync race, 401-vs-relink race, partial-cache loads, message-thread
+  cache walk, reserved slugs, trailing-dot logical segments, manifest NTFS-case/`.part` collisions, inline tasks
+  after stop.
 - Cloud WP-A `server/` keysynth-api (.NET 8): devices (cookie mint/list/delete, device me), samples manifest +
   X-Accel files, presets (revisions, If-Match/If-None-Match, tombstones), rate limits, migrations; xUnit unit +
   WebApplicationFactory tests (in-memory repos), MySQL repository contract tests via Testcontainers (skipped
@@ -61,6 +70,11 @@ Update when a chunk of work lands. Newest first inside each section.
 - Later: looper, recording, MIDI controller mapping, cross-instance sample cache, sandboxing paths inside SFZ files.
 
 ## Known issues / decisions log
+- WP-B review items not fixed (accepted for v1): a `web` session's `load_preset` does not re-check paths *inside* the
+  preset file (synced presets are server-controlled; still bounded by AppPaths roots); `set_patch` from `web` may
+  hand a state blob to an already installed `plugin:` DLL (`load_state`, guarded); WS refusals are a 4003 close after
+  the upgrade (ixwebsocket has no pre-upgrade hook). sfizz fails on non-ASCII `sample=` paths (index builder should
+  warn). Replacing a cached file that a sampler streams from fails with `io_error` (delete is refused with `in_use`).
 - Review #1 of Phase 1 (fresh-context subagent): fixed render-once cache sizing/pass-through, double processing of
   shared fx, metronome beat drop at block edges, stuck notes on zone-channel change / MIDI unplug, UNC path probing,
   node-id wrap, VoiceAllocator pedal/mono edge cases, set_patch reuse, transport validation, CC120/123 mapping.

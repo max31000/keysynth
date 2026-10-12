@@ -49,13 +49,13 @@ ControlServer::~ControlServer() { stop(); }
 
 bool ControlServer::originAllowed(const std::string& origin, int wsPort, int httpPort) {
     // Non-browser clients (scripts, tests) send no Origin; browsers always do. Local processes are trusted anyway.
-    if (origin.empty()) return true;
-    static const std::regex re(R"(^http://(localhost|127\.0\.0\.1)(:(\d+))?$)", std::regex::icase);
-    std::smatch m;
-    if (!std::regex_match(origin, m, re)) return false;
-    if (!m[3].matched) return false;
-    const int port = std::stoi(m[3].str());
-    return port == wsPort || port == httpPort || port == 5173;
+    return classifyOrigin(origin, wsPort, httpPort, OriginPolicy{}).has_value();
+}
+
+std::optional<Trust> ControlServer::admit(const std::string& host, const std::string& origin, int listenPort, int wsPort,
+                                          int httpPort, const OriginPolicy& policy) {
+    if (!hostAllowed(host, listenPort)) return std::nullopt;
+    return classifyOrigin(origin, wsPort, httpPort, policy);
 }
 
 bool ControlServer::wsPathAllowed(const std::string& uri) {
@@ -93,14 +93,18 @@ std::string ControlServer::start(int wsPort, int httpPort) {
             if (alive.expired()) return;
             switch (msg->type) {
             case ix::WebSocketMessageType::Open: {
-                auto origin = msg->openInfo.headers.find("Origin");
-                const std::string o = origin == msg->openInfo.headers.end() ? std::string() : origin->second;
-                if (!originAllowed(o, wsPort_, httpPort_) || !wsPathAllowed(msg->openInfo.uri)) {
+                const auto& hs = msg->openInfo.headers;
+                auto origin = hs.find("Origin");
+                auto host = hs.find("Host");
+                const std::string o = origin == hs.end() ? std::string() : origin->second;
+                const std::string h = host == hs.end() ? std::string() : host->second;
+                const auto trust = admit(h, o, wsPort_, wsPort_, httpPort_, policy_);
+                if (!trust || !wsPathAllowed(msg->openInfo.uri)) {
                     if (auto s = wsWeak.lock()) s->close(4003, "forbidden");
                     return;
                 }
                 std::lock_guard<std::mutex> lk(clientsMutex_);
-                clients_[id] = wsWeak;
+                clients_[id] = Client{wsWeak, *trust};
                 break;
             }
             case ix::WebSocketMessageType::Close: {
@@ -109,15 +113,18 @@ std::string ControlServer::start(int wsPort, int httpPort) {
                 break;
             }
             case ix::WebSocketMessageType::Message: {
+                Trust trust = Trust::Local;
                 {
                     std::lock_guard<std::mutex> lk(clientsMutex_);
-                    if (!clients_.count(id)) return; // rejected connection
+                    auto c = clients_.find(id);
+                    if (c == clients_.end()) return; // rejected connection
+                    trust = c->second.trust;
                 }
                 if (msg->binary) return;
                 const std::string text = msg->str;
-                post_([this, alive, id, text] {
+                post_([this, alive, id, text, trust] {
                     if (alive.expired()) return;
-                    onMessage(id, text);
+                    onMessage(ClientInfo{id, trust}, text);
                 });
                 break;
             }
@@ -136,8 +143,12 @@ std::string ControlServer::start(int wsPort, int httpPort) {
     if (httpPort > 0 && fs::is_regular_file(uiDist_ / "index.html", ec)) {
         http_ = std::make_unique<ix::HttpServer>(httpPort, "127.0.0.1");
         const fs::path dist = uiDist_;
-        http_->setOnConnectionCallback([dist](ix::HttpRequestPtr req, std::shared_ptr<ix::ConnectionState>) {
+        const int port = httpPort;
+        http_->setOnConnectionCallback([dist, port](ix::HttpRequestPtr req, std::shared_ptr<ix::ConnectionState>) {
             ix::WebSocketHttpHeaders headers;
+            auto host = req->headers.find("Host");
+            if (host == req->headers.end() || !hostAllowed(host->second, port)) // DNS-rebinding guard
+                return std::make_shared<ix::HttpResponse>(403, "Forbidden", ix::HttpErrorCode::Ok, headers, "forbidden");
             if (req->method != "GET" && req->method != "HEAD")
                 return std::make_shared<ix::HttpResponse>(405, "Method Not Allowed", ix::HttpErrorCode::Ok, headers, "");
             auto file = resolveStatic(req->uri, dist);
@@ -172,8 +183,12 @@ void ControlServer::stop() {
     alive_ = std::make_shared<bool>(true);
 }
 
-void ControlServer::onMessage(const std::string& clientId, const std::string& text) {
-    dispatch(clientId, handler_.handleText(text));
+void ControlServer::onMessage(const ClientInfo& client, const std::string& text) {
+    dispatch(client.id, handler_.handleText(text, client));
+}
+
+void ControlServer::dispatchAsync(const std::vector<AddressedOutgoing>& out) {
+    for (const auto& a : out) dispatch(a.clientId, {a.out});
 }
 
 void ControlServer::dispatch(const std::string& clientId, const std::vector<Outgoing>& out) {
@@ -192,9 +207,9 @@ void ControlServer::sendOthers(const std::string& exceptId, const nlohmann::json
     std::vector<std::shared_ptr<ix::WebSocket>> targets;
     {
         std::lock_guard<std::mutex> lk(clientsMutex_);
-        for (auto& [id, w] : clients_)
+        for (auto& [id, c] : clients_)
             if (id != exceptId)
-                if (auto s = w.lock()) targets.push_back(std::move(s));
+                if (auto s = c.ws.lock()) targets.push_back(std::move(s));
     }
     if (targets.empty()) return;
     const std::string text = msg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
@@ -206,7 +221,7 @@ void ControlServer::sendTo(const std::string& clientId, const nlohmann::json& ms
     {
         std::lock_guard<std::mutex> lk(clientsMutex_);
         auto it = clients_.find(clientId);
-        if (it != clients_.end()) s = it->second.lock();
+        if (it != clients_.end()) s = it->second.ws.lock();
     }
     if (s) s->sendText(msg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }

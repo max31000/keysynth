@@ -72,8 +72,7 @@ Pattern Session::readPatternFile(const std::string& path, std::vector<std::strin
 std::vector<Session::PatternInfo> Session::listPatterns() const {
     namespace fs = std::filesystem;
     std::vector<PatternInfo> out;
-    const std::pair<fs::path, bool> dirs[] = {{paths_.root / "presets" / "patterns", true},
-                                              {paths_.userdata / "patterns", false}};
+    const std::pair<fs::path, bool> dirs[] = {{paths_.factoryPatterns, true}, {paths_.userPatterns, false}};
     for (const auto& [dir, factory] : dirs) {
         std::error_code ec;
         if (!fs::is_directory(dir, ec)) continue;
@@ -128,7 +127,7 @@ std::string Session::savePattern(const std::string& name, bool overwrite) {
     namespace fs = std::filesystem;
     if (name.empty()) throw PatchError("bad_request", "pattern name is empty");
     std::error_code ec;
-    const fs::path dir = paths_.userdata / "patterns";
+    const fs::path dir = paths_.userPatterns;
     fs::create_directories(dir, ec);
     const fs::path file = dir / (PresetStore::slugify(name) + ".json");
     if (!overwrite && fs::exists(file, ec)) throw PatchError("exists", "pattern already exists: " + pathToUtf8(file));
@@ -238,7 +237,12 @@ std::vector<std::string> Session::loadPreset(const std::string& path) {
 }
 
 std::string Session::savePreset(const std::string& name, const std::string& category, bool overwrite) {
-    const std::string path = presets_.save(model_.patch(), name, category, overwrite);
+    std::string path;
+    {
+        std::lock_guard<std::mutex> lk(profileMutex_);
+        path = presets_.save(model_.patch(), name, category, overwrite);
+    }
+    if (onUserPresetsChanged) onUserPresetsChanged();
     PatchMeta meta = model_.patch().meta;
     meta.name = name;
     if (!category.empty()) meta.category = category;
@@ -279,6 +283,42 @@ void Session::setMasterVolume(float db) {
 void Session::setTempo(double bpm) {
     model_.setTempo(bpm);
     engine_.transport().setTempo(model_.patch().tempo);
+}
+
+bool Session::setProfile(const std::string& accountId) {
+    std::lock_guard<std::mutex> lk(profileMutex_);
+    if (!paths_.setProfile(accountId)) return false;
+    presets_ = PresetStore(paths_);
+    // Wire paths `userdata/...` now mean the new profile: forget references into the old one.
+    if (presetPath_.rfind("userdata/", 0) == 0) presetPath_.clear();
+    if (patternPath_.rfind("userdata/", 0) == 0) {
+        patternPath_.clear();
+        patternEdited_ = true;
+    }
+    return true;
+}
+
+void Session::notifyResourcesChanged() {
+    if (RackGraph* g = engine_.latestGraph())
+        for (ModuleNode* n : g->allModuleNodes())
+            if (n->module) n->module->resourcesChanged();
+}
+
+std::set<std::string> Session::samplerEntriesInUse() const {
+    std::set<std::string> out;
+    const std::string prefix = "assets/samples/";
+    auto visit = [&](const ModuleSlot& s) {
+        if (s.type != "sampler" || !s.state.is_object()) return;
+        auto it = s.state.find("sfz");
+        if (it == s.state.end() || !it->is_string()) return;
+        const std::string sfz = it->get<std::string>();
+        if (sfz.rfind(prefix, 0) == 0) out.insert(sfz.substr(prefix.size()));
+    };
+    for (const Layer& l : model_.patch().layers) {
+        visit(l.instrument);
+        for (const ModuleSlot& f : l.fx) visit(f);
+    }
+    return out;
 }
 
 nlohmann::json Session::transportJson() const {

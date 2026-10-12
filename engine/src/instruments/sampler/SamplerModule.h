@@ -18,6 +18,7 @@
 #include "core/Module.h"
 
 #include <atomic>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <thread>
@@ -52,7 +53,11 @@ public:
     int regionCount() const noexcept;  // 0 while loading or on failure
     bool loadFailed() const noexcept;  // finished loading without any region
     std::string lastError() const;     // control thread
-    std::string loadError() const override { return lastError(); }
+    // "" while waiting for a download, or when the download failure was already reported (samples_error).
+    std::string loadError() const override;
+    // A missing SFZ may be in the sample cache now (download finished / failed): load it or settle the state.
+    void resourcesChanged() override;
+    bool waitingForDownload() const noexcept; // control thread (tests)
     std::string resolvedPath() const;  // control thread
     double loadSeconds() const noexcept; // wall time of the last load (0 until finished)
     // Tests: artificial delay before each load starts, so the loading state can be observed deterministically.
@@ -65,6 +70,9 @@ public:
 
 private:
     void stopCore() noexcept;
+    void applyFetchState(Core& c, bool fresh); // control thread: missing SFZ -> Waiting or Failed
+    // Control thread: `p` is in the sample cache but its entry is still (being) downloaded.
+    bool cacheIncomplete(const std::filesystem::path& p, bool fresh) const;
     void sendCc(sfizz_synth_t* s, int delay, int cc, float value) noexcept; // audio thread; tracks sent_
 
     // Controller values sfizz last received (audio thread). -1 = never sent (instrument's own default).
@@ -78,6 +86,8 @@ private:
     Core* coreRaw_ = nullptr;
     std::thread loader_;
     bool offline_ = false;
+    bool missing_ = false;       // control thread: the SFZ did not resolve at prepare()
+    bool errorReported_ = false; // control thread: its auto-fetch failed (samples_error was the notification)
     double sampleRate_ = 0.0;
     int maxBlock_ = 0;
 

@@ -79,7 +79,7 @@ public:
     unsigned long mmcssError() const noexcept { return mmcssError_.load(); }
     uint64_t callbackCount() const noexcept { return callbacks_.load(std::memory_order_relaxed); }
     int recoveryAttempts() const noexcept { return recoveryAttempts_; } // message thread
-    std::filesystem::path logFile() const { return paths_.userdata / "logs" / "audio.log"; }
+    std::filesystem::path logFile() const { return paths_.logsDir / "audio.log"; }
 
 private:
     void audioDeviceIOCallbackWithContext(const float* const* in, int numIn, float* const* out, int numOut,
