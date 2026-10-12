@@ -3,6 +3,9 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- v0.2.0 remote control via relay (spec docs/specs/2026-10-12-remote.md): server RelayHub `/api/relay`
+  (R-A), engine relay host over WinHTTP WebSocket with remote trust (R-B), UI RelayTransport + touch «Пульт»
+  view (R-C), nginx WS location (mvv42-infra PR #3). Engine E2E against the real API: `KS_TESTS_ENGINE=1`.
 - Remote R-B (engine as relay host, spec `docs/specs/2026-10-12-remote.md` §10, ARCHITECTURE §15 *Relay host*):
   `platform/WinHttpWebSocket`, `cloud/RelayClient`, `Trust::Remote`, virtual clients `r:<cid>` + `control/RemoteRouter`
   (envelopes, lossy, rates, pause); `[relay]` tests; `scripts/dev_relay_server.py` + `scripts/dev_relay_e2e.py`
