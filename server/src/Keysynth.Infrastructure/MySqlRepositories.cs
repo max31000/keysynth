@@ -7,9 +7,13 @@ namespace Keysynth.Infrastructure;
 /// <summary>Dapper + MySqlConnector implementations of the Core repositories (schema: Migrations/001_initial.sql).</summary>
 public abstract class MySqlRepository(string connectionString)
 {
+    // Ids are CHAR(36) mapped to string; MySqlConnector would otherwise read CHAR(36) columns as Guid.
+    private readonly string _connectionString =
+        new MySqlConnectionStringBuilder(connectionString) { GuidFormat = MySqlGuidFormat.None }.ConnectionString;
+
     protected async Task<MySqlConnection> OpenAsync(CancellationToken ct)
     {
-        var conn = new MySqlConnection(connectionString);
+        var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         return conn;
     }
