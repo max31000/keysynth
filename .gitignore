@@ -18,3 +18,4 @@ __pycache__/
 *.pyc
 .claude/worktrees/
 .claude/settings.local.json
+ui/dist-platform/

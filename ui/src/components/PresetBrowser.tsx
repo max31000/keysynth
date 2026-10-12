@@ -1,7 +1,19 @@
 import { useMemo, useState } from 'react';
-import { actions, useEngine } from '../store';
-import type { PresetEntry } from '../protocol/types';
+import { actions, useCloud, useEngine } from '../store';
+import type { PresetEntry, SampleJob } from '../protocol/types';
 import { useFavourites } from '../lib/favourites';
+import { jobForEntry, jobFraction, patchSampleEntries } from '../lib/samples';
+
+/** Download job the current patch is waiting for (auto-fetch of missing samples), if any. */
+function usePatchDownload(): SampleJob | null {
+  const patch = useEngine((s) => s.patch);
+  const jobs = useCloud((s) => s.jobs);
+  for (const id of patchSampleEntries(patch)) {
+    const j = jobForEntry(jobs, id);
+    if (j) return j;
+  }
+  return null;
+}
 
 /** ARCHITECTURE §9 category list (order), extended by whatever the engine reports. */
 const CATEGORY_ORDER = [
@@ -87,6 +99,7 @@ export function PresetBrowser() {
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const download = usePatchDownload();
 
   const categories = useMemo(() => {
     const present = new Set(presets.map((p) => p.category));
@@ -224,6 +237,16 @@ export function PresetBrowser() {
               </div>
             </div>
             {!p.factory && <span className="badge">USER</span>}
+            {download && p.path === presetPath && (
+              <>
+                <span className="badge dl mono" title="Сэмплы этого пресета скачиваются">
+                  ↓ {download.state === 'queued' ? '…' : `${Math.round(jobFraction(download) * 100)}%`}
+                </span>
+                <span className="preset-dl" aria-hidden>
+                  <i style={{ transform: `scaleX(${jobFraction(download).toFixed(3)})` }} />
+                </span>
+              </>
+            )}
           </li>
         ))}
         {list.length === 0 && <li className="empty">No presets match.</li>}

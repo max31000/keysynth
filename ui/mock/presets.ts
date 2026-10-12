@@ -24,10 +24,17 @@ const fx = (type: string, params: Record<string, number> = {}, bypass = false): 
   params: { ...defaultParams(type), ...params },
 });
 
-const layer = (name: string, type: string, params: Record<string, number>, fxs: FxSlot[] = [], z: Partial<Zone> = {}): Layer => ({
+const layer = (
+  name: string,
+  type: string,
+  params: Record<string, number>,
+  fxs: FxSlot[] = [],
+  z: Partial<Zone> = {},
+  state: Record<string, unknown> = {},
+): Layer => ({
   name,
   zone: zone(z),
-  instrument: { type, params: { ...defaultParams(type), ...params }, state: {} },
+  instrument: { type, params: { ...defaultParams(type), ...params }, state },
   fx: fxs,
 });
 
@@ -43,6 +50,22 @@ interface Def {
 }
 
 const DEFS: Def[] = [
+  // Sample-based (mock cloud library, mock-engine.ts): loading one of these auto-fetches its samples when linked.
+  {
+    slug: 'piano/salamander-grand',
+    name: 'Salamander Grand',
+    category: 'Piano',
+    tags: ['acoustic', 'sampled'],
+    description: 'Salamander Grand Piano V3 (SFZ, downloaded on demand).',
+    layers: [layer('Grand', 'sampler', {}, [fx('reverb', { mix: 0.18 })], {}, { sfz: 'assets/samples/salamander/SalamanderGrandPiano-V3.sfz' })],
+  },
+  {
+    slug: 'e-piano/jrhodes-stereo',
+    name: 'jRhodes Stereo',
+    category: 'E.Piano',
+    tags: ['rhodes', 'sampled'],
+    layers: [layer('Rhodes', 'sampler', {}, [fx('chorus')], {}, { sfz: 'assets/samples/jrhodes3c/jRhodes3c-stereo.sfz' })],
+  },
   {
     slug: 'organ/light-my-fire',
     name: 'Light My Fire Organ',

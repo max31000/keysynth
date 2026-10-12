@@ -50,6 +50,8 @@ interface Pending {
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
   expect?: EngineMsgType;
+  /** only a reply carrying this request's id resolves it (no type fallback) */
+  strict?: boolean;
 }
 
 type Handler = (msg: EngineMsg) => void;
@@ -104,6 +106,15 @@ export class EngineClient {
     this.open();
   }
 
+  /** Connect now, skipping a pending backoff delay (user pressed «retry»). No-op while a socket exists. */
+  retryNow(): void {
+    this.wantOpen = true;
+    if (this.ws) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.open();
+  }
+
   close(): void {
     this.wantOpen = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -138,7 +149,7 @@ export class EngineClient {
    */
   request<T extends EngineMsgType = EngineMsgType>(
     msg: Outgoing,
-    options: { timeoutMs?: number; expect?: T } = {},
+    options: { timeoutMs?: number; expect?: T; strictId?: boolean } = {},
   ): Promise<EngineMsgOf<T>> {
     if (!this.ws || this.ws.readyState !== WS_OPEN) {
       return Promise.reject(new EngineError('disconnected', 'not connected to engine'));
@@ -152,6 +163,7 @@ export class EngineClient {
       }, timeoutMs);
       const p: Pending = { resolve: resolve as (m: EngineMsg) => void, reject, timer };
       if (options.expect) p.expect = options.expect;
+      if (options.strictId) p.strict = true;
       this.pending.set(id, p);
       this.ws!.send(JSON.stringify({ ...msg, id }));
     });
@@ -229,7 +241,7 @@ export class EngineClient {
     if (typeof id === 'number' && this.pending.has(id)) key = id;
     else if (id === undefined) {
       for (const [k, p] of this.pending) {
-        if (p.expect === msg.type) {
+        if (!p.strict && p.expect === msg.type) {
           key = k;
           break;
         }

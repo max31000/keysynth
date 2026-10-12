@@ -482,3 +482,16 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   by preset saves on the message thread), never across network calls.
 - **CloudServices** (`cloud/`) owns the three, implements the cloud protocol messages (async replies through
   `poll()`), switches Session profiles on link/unlink, and is optional (tests and `ks-render` run without it).
+- **Web UI** (`ui/src/platform/`, `ui/src/store/cloudStore.ts`, `ui/src/components/cloud/`): one bundle, two
+  modes picked at runtime (`platform/mode.ts`): *platform* (served from `https://mvv42.ru/keysynth/`, build
+  `npm run build:platform`, base `/keysynth/`) and *local* (served by the engine at :7340 or the dev server, base
+  `/`). Platform mode uses only the framework-free `@mvv42/kit/platform` entry (`useMe`, `apiJson`,
+  `requestLogin`, `logout`, shell `READY`) — not `Mvv42Provider`/Mantine, whose global CSS would restyle the synth
+  UI; the account button is our own. Engine discovery (`platform/discovery.ts`): no socket before the engine was
+  seen (localStorage `keysynth.engineSeen`) or the LNA permission is granted; phases never-seen / connecting /
+  permission-denied / not-running / connected; until the first `state` the page shows the download card
+  (`EngineGate`). Account link (`platform/link.ts` + cloud store): plan from (`/me`, `hello.cloud`, owner check via
+  `GET /api/devices`), mint `POST /api/devices` → `cloud_link`; re-linking to another account only after the
+  user's confirmation; an explicit unlink holds auto-linking (localStorage `keysynth.linkHold`). The device token
+  exists only in local variables of the link call (never stored, logged or put in a URL). Update check: GitHub
+  `releases/latest` vs `hello.version`.

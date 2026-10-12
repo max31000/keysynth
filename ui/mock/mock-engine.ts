@@ -320,6 +320,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     }, 400);
   };
   const isLogical = (p: unknown, prefixes: string[]) =>
+    // eslint-disable-next-line no-control-regex -- control chars are exactly what the path rule rejects
     typeof p === 'string' && !/(^|\/)\.\.?(\/|$)|\\|:|^\/|\/\/|[\x00-\x1f]/.test(p) && prefixes.some((x) => p.startsWith(x) && p.length > x.length);
   const webForbidden = (m: Record<string, unknown>): string | null => {
     const t = String(m.type);

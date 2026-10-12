@@ -1,0 +1,182 @@
+# keysynth web UI → https://mvv42.ru/keysynth/ (static SPA in /var/www/keysynth, served by nginx/apps/keysynth.conf).
+#
+# INLINE copy of max31000/mvv42-infra .github/workflows/deploy-static.yml (commit 974ba1f, 2026-10-11), because this
+# repo is public and cannot call the private infra repo's reusable workflows (docs/specs/2026-10-12-cloud.md §11).
+# Re-sync by hand when the infra workflow changes.
+# Differences: inputs are fixed values below (app-id keysynth, working dir ui, npm, dist dir dist-platform,
+# build `npm run build:platform`); checks run in a separate job (also on PRs, without deploy); deploy only from main.
+#
+# Atomic publish (as upstream): the build is uploaded to /var/www/.keysynth.new-<run> (the live dir is never touched
+# while uploading), hashed files of the current release's assets/ that the new build lacks are copied in (open tabs
+# can still lazy-load old chunks for one more release), then the dirs are swapped with mv: live → /var/www/.keysynth.prev,
+# new → live. Manual rollback = swap back.
+#
+# Secrets: VDS_HOST, VDS_USER, VDS_SSH_KEY; optional TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (failure notice).
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths: ['ui/**', '.github/workflows/frontend.yml']
+  pull_request:
+    paths: ['ui/**', '.github/workflows/frontend.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_ID: keysynth
+  NODE_VERSION: '22'
+  DIST: dist-platform
+  VERIFY_URL: https://mvv42.ru/keysynth/
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build (platform, base /keysynth/)
+        run: npm run build:platform
+      - name: Stage build output
+        run: |
+          set -euo pipefail
+          [ -f "$DIST/index.html" ] || { echo "::error::$DIST/index.html not found"; exit 1; }
+          grep -q '/keysynth/assets/' "$DIST/index.html" || { echo "::error::build is not based at /keysynth/"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          name: ui-platform
+          path: ui/${{ env.DIST }}
+          include-hidden-files: true
+          retention-days: 7
+      - name: Notify on failure
+        if: failure() && github.event_name != 'pull_request'
+        working-directory: .
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] || exit 0
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="$TG_CHAT" \
+            --data-urlencode text="❌ $APP_ID frontend checks failed: $RUN_URL" > /dev/null
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-static-keysynth
+      cancel-in-progress: false # never kill a run in the middle of the swap
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-platform
+          path: _deploy
+
+      - name: Check artifact
+        run: |
+          set -euo pipefail
+          [ -f _deploy/index.html ] || { echo "::error::_deploy/index.html missing"; exit 1; }
+
+      - name: Upload to staging dir /var/www/.keysynth.new-*
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: ${{ secrets.VDS_USER }}
+          key: ${{ secrets.VDS_SSH_KEY }}
+          # Directory source (not "_deploy/*": the glob would skip dotfiles); strip_components drops "_deploy/".
+          source: _deploy
+          strip_components: 1
+          target: /var/www/.keysynth.new-${{ github.run_id }}-${{ github.run_attempt }}
+          rm: true
+
+      - name: Swap into /var/www/keysynth
+        uses: appleboy/ssh-action@v1
+        env:
+          RUN_TAG: ${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: ${{ secrets.VDS_USER }}
+          key: ${{ secrets.VDS_SSH_KEY }}
+          envs: APP_ID,RUN_TAG
+          script: |
+            bash -s <<'REMOTE'
+            set -euo pipefail
+            [[ "$APP_ID" =~ ^[a-z][a-z0-9_-]*$ && "$RUN_TAG" =~ ^[0-9-]+$ ]] || { echo "bad APP_ID/RUN_TAG" >&2; exit 1; }
+            LIVE="/var/www/$APP_ID"
+            NEW="/var/www/.$APP_ID.new-$RUN_TAG"
+            PREV="/var/www/.$APP_ID.prev"
+            OWN="/var/www/.$APP_ID.release-assets"   # assets/ entries of the live release itself
+            [ -f "$NEW/index.html" ] || { echo "$NEW/index.html missing (upload failed?)" >&2; exit 1; }
+            chmod 755 "$NEW"
+
+            # Entries of the new release's own assets/ (recorded before merging old ones in).
+            new_own="$(mktemp)"
+            if [ -d "$NEW/assets" ]; then ls -1A "$NEW/assets" > "$new_own"; fi
+
+            # Keep the previous release's hashed assets for one more release. Only its
+            # OWN files (manifest) are carried over, so old chunks do not pile up.
+            if [ -d "$LIVE/assets" ]; then
+              mkdir -p "$NEW/assets"
+              if [ -f "$OWN" ]; then list="$(cat "$OWN")"; else list="$(ls -1A "$LIVE/assets")"; fi
+              kept=0
+              while IFS= read -r f; do
+                [ -n "$f" ] && [ -e "$LIVE/assets/$f" ] && [ ! -e "$NEW/assets/$f" ] || continue
+                cp -a "$LIVE/assets/$f" "$NEW/assets/"
+                kept=$((kept + 1))
+              done <<< "$list"
+              echo "kept $kept asset(s) of the previous release"
+            fi
+
+            # Swap (two renames on the same filesystem; the gap between them is microseconds).
+            rm -rf "$PREV"
+            if [ -e "$LIVE" ]; then mv "$LIVE" "$PREV"; fi
+            mv "$NEW" "$LIVE"
+            mv -f "$new_own" "$OWN"; chmod 644 "$OWN"
+
+            # Leftovers of failed/cancelled runs.
+            find /var/www -maxdepth 1 -name ".$APP_ID.new-*" -exec rm -rf {} +
+            echo "published $LIVE (previous release in $PREV)"
+            REMOTE
+
+      - name: Verify
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if curl -fsS -o /dev/null --max-time 10 "$VERIFY_URL"; then echo "OK $VERIFY_URL"; exit 0; fi
+            sleep 3
+          done
+          echo "::error::$VERIFY_URL did not answer 2xx"; exit 1
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] || exit 0
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="$TG_CHAT" \
+            --data-urlencode text="❌ $APP_ID static deploy failed: $RUN_URL" > /dev/null
