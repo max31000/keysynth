@@ -82,7 +82,7 @@ export interface LinkDeps {
 }
 
 export type LinkResult =
-  | { ok: true; status: CloudStatus; merged?: { presets: number; patterns: number } | undefined; expiresAt: string }
+  | { ok: true; status: CloudStatus; merged?: { presets: number; patterns: number } | undefined; expiresAt: string; accountId: string }
   | { ok: false; code: string; message: string };
 
 function errCode(e: unknown): { code: string; message: string } {
@@ -97,16 +97,24 @@ function errCode(e: unknown): { code: string; message: string } {
  * Mint + link. `replace` = the user confirmed switching the engine to this account. Without it an engine linked
  * to another account answers `account_mismatch` (nothing changes) and the caller asks the user.
  */
-export async function linkEngine(deps: LinkDeps, deviceId: string, deviceName: string, replace: boolean): Promise<LinkResult> {
+export async function linkEngine(
+  deps: LinkDeps,
+  deviceId: string,
+  deviceName: string,
+  replace: boolean,
+  /** before handing the token over: false → `account_mismatch` (the token is dropped, nothing is sent) */
+  accept: (m: Pick<Minted, 'accountId' | 'accountName'>) => boolean = () => true,
+): Promise<LinkResult> {
   let minted: Minted;
   try {
     minted = await deps.mint(deviceId, deviceName);
   } catch (e) {
     return { ok: false, ...errCode(e) };
   }
+  if (!replace && !accept(minted)) return { ok: false, code: 'account_mismatch', message: 'another account was linked before' };
   try {
     const status = await deps.sendLink(minted.token, replace);
-    return { ok: true, status, merged: status.merged, expiresAt: minted.expiresAt };
+    return { ok: true, status, merged: status.merged, expiresAt: minted.expiresAt, accountId: minted.accountId };
   } catch (e) {
     return { ok: false, ...errCode(e) };
   }

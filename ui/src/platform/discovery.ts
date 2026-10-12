@@ -153,6 +153,9 @@ export function createDiscovery(deps: DiscoveryDeps) {
     state = reduceDiscovery(state, e);
     if (state.seen && !prev.seen) writeSeen(deps.storage);
     if (state.started && !prev.started) deps.client.connect();
+    // granted while waiting in backoff (up to 10 s): try right away
+    else if (e.type === 'permission' && e.state === 'granted' && prev.permission !== 'granted' && state.phase !== 'connected')
+      deps.client.retryNow();
     if (state !== prev) deps.onState(state);
   };
   deps.onState(state);

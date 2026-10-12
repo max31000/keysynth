@@ -26,6 +26,10 @@ export const cloudStore = createCloudStore({
   mode: MODE.mode,
   api: { mint: mintDevice, listDevices },
   storage: safeLocalStorage,
+  onProfileChanged: () => {
+    void engineStore.getState().refreshPresets();
+    void engineStore.getState().refreshPatterns();
+  },
 });
 
 let startDiscovery: () => void = () => client.retryNow();

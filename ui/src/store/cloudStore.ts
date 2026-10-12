@@ -114,6 +114,10 @@ export interface CloudDeps {
   now?: () => number;
   /** `samples_done` → re-list after this delay (coalesces bursts) */
   relistDelayMs?: number;
+  /** the engine switched profile (link / unlink / relink): re-request presets + patterns (PROTOCOL.md "Profiles") */
+  onProfileChanged?: () => void;
+  /** GET /api/devices timeout */
+  apiTimeoutMs?: number;
 }
 
 export type CloudStore = StoreApi<CloudState>;
@@ -129,25 +133,50 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
   /** plan keys that already failed: not retried automatically until the inputs change */
   let failedKey: string | null = null;
   let reconciling: Promise<void> | null = null;
-  /** after an explicit unlink the page does not re-link on its own until the user asks (persisted per browser) */
+  /** keysynth account id the page knows to be the signed-in user's (from a mint / the owner check) */
+  let myAccountId: string | null = null;
+  /** last account the engine was seen linked to (null after our own explicit unlink) */
+  let lastLinked: { accountId: string; name: string | null } | null = null;
+  /** re-mint at most once per page load (a skewed PC clock or short tokens must not make it loop) */
+  let reminted = false;
+  const apiTimeout = deps.apiTimeoutMs ?? 15000;
+  /**
+   * After an explicit unlink the page does not re-link on its own until the user asks. Persisted per browser,
+   * tagged with the user who unlinked (another user on this browser is not held).
+   */
   const HOLD_KEY = 'keysynth.linkHold';
-  let manualHold = (() => {
+  let holdUser: string | null = (() => {
     try {
-      return deps.storage?.getItem(HOLD_KEY) === '1';
+      return deps.storage?.getItem(HOLD_KEY) ?? null;
     } catch {
-      return false;
+      return null;
     }
   })();
+  const held = () => holdUser !== null && holdUser === (store.getState().me.name ?? '');
   const setHold = (v: boolean) => {
-    manualHold = v;
+    holdUser = v ? (store.getState().me.name ?? '') : null;
     store.setState({ link: { ...store.getState().link, held: v } });
     try {
-      if (v) deps.storage?.setItem(HOLD_KEY, '1');
+      if (holdUser !== null) deps.storage?.setItem(HOLD_KEY, holdUser);
       else deps.storage?.removeItem(HOLD_KEY);
     } catch {
       /* private mode */
     }
   };
+  const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'timeout' })), ms);
+      p.then(
+        (v) => {
+          clearTimeout(t);
+          resolve(v);
+        },
+        (e: unknown) => {
+          clearTimeout(t);
+          reject(e);
+        },
+      );
+    });
 
   const store = createStore<CloudState>()((set, get) => {
     const scheduleRelist = () => {
@@ -160,16 +189,28 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
 
     const sendLink = async (token: string, replace: boolean) => {
       const msg = replace ? { type: 'cloud_link' as const, token, replace: true } : { type: 'cloud_link' as const, token };
-      return client.request(msg, { expect: 'cloud_status', timeoutMs: 20000 });
+      // strictId: a `cloud_status` broadcast (online flip, another tab) must not pass for our reply
+      return client.request(msg, { expect: 'cloud_status', timeoutMs: 20000, strictId: true });
     };
 
     const doLink = async (replace: boolean) => {
       const cloud = get().cloud;
       if (!cloud) return;
       set({ link: { ...get().link, busy: true, error: null } });
-      const r = await linkEngine({ mint: deps.api.mint, sendLink }, cloud.deviceId, deviceName, replace);
+      if (cloud.linked) reminted = true;
+      // The engine lost a link to another account (token dropped): linking ours silently would hand that PC's
+      // profile to this account. The engine cannot see the mismatch any more, so the page asks first.
+      const prior = !cloud.linked ? lastLinked : null;
+      const r = await linkEngine(
+        { mint: deps.api.mint, sendLink },
+        cloud.deviceId,
+        deviceName,
+        replace,
+        (m) => !prior || prior.accountId === m.accountId,
+      );
       if (r.ok) {
         failedKey = null;
+        myAccountId = r.accountId;
         set({
           cloud: stripStatus(r.status),
           link: { busy: false, error: null, owner: 'mine', confirm: null, merged: r.merged ?? get().link.merged, held: false },
@@ -177,12 +218,17 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
         return;
       }
       if (r.code === 'account_mismatch') {
-        set({ link: { ...get().link, busy: false, confirm: { current: get().cloud?.accountName ?? null } } });
+        const current = get().cloud?.accountName ?? prior?.name ?? null;
+        set({ link: { ...get().link, busy: false, confirm: { current } } });
         return;
       }
       failedKey = planKey();
       set({ link: { ...get().link, busy: false, error: linkErrorText(r.code) } });
     };
+
+    /** owner stays `mine` only while the engine is linked to the account we know to be ours */
+    const ownerAfter = (c: CloudStatus | null): Owner =>
+      c?.linked && myAccountId !== null && c.accountId === myAccountId ? 'mine' : 'unknown';
 
     const planKey = () => {
       const c = get().cloud;
@@ -203,7 +249,7 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
       sampleNotice: null,
       latest: null,
       me: { status: 'loading', granted: false, name: null },
-      link: { busy: false, error: null, owner: 'unknown', confirm: null, merged: null, held: manualHold },
+      link: { busy: false, error: null, owner: 'unknown', confirm: null, merged: null, held: false },
 
       handle(msg) {
         switch (msg.type) {
@@ -211,12 +257,15 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
             // only the reply to `hello` carries these (PROTOCOL.md "Hello additions")
             if (msg.cloud || msg.version !== undefined || msg.trust) {
               const prev = get().cloud;
+              const c = msg.cloud ?? null;
+              if (c?.linked && c.accountId) lastLinked = { accountId: c.accountId, name: c.accountName };
               set({
                 engineVersion: msg.version ?? null,
                 trust: msg.trust ?? null,
-                cloud: msg.cloud ?? null,
-                ...(msg.cloud && prev && prev.accountId !== msg.cloud.accountId ? { link: { ...get().link, owner: 'unknown' as Owner } } : {}),
+                cloud: c,
+                link: { ...get().link, owner: ownerAfter(c) },
               });
+              if (prev && c && (prev.linked !== c.linked || prev.accountId !== c.accountId)) deps.onProfileChanged?.();
               void get().reconcile();
             }
             break;
@@ -224,14 +273,14 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
             const status = stripStatus(msg);
             const merged = msg.merged;
             const prev = get().cloud;
-            const accountChanged = !prev || prev.accountId !== status.accountId || prev.expiresAt !== status.expiresAt;
+            if (status.linked && status.accountId) lastLinked = { accountId: status.accountId, name: status.accountName };
             set({
               cloud: status,
-              ...(merged ? { link: { ...get().link, merged } } : {}),
+              link: { ...get().link, owner: ownerAfter(status), ...(merged ? { merged } : {}) },
+              ...(status.linked ? {} : { jobs: {} }),
             });
-            if (accountChanged && get().link.owner !== 'mine') set({ link: { ...get().link, owner: 'unknown' } });
-            if (!status.linked) set({ link: { ...get().link, owner: 'unknown' }, jobs: {} });
             if (prev?.linked !== status.linked) scheduleRelist();
+            if (prev && (prev.linked !== status.linked || prev.accountId !== status.accountId)) deps.onProfileChanged?.();
             void get().reconcile();
             break;
           }
@@ -286,7 +335,8 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
       setMe(me) {
         const prev = get().me;
         if (prev.status === me.status && prev.granted === me.granted && prev.name === me.name) return;
-        set({ me, link: { ...get().link, owner: 'unknown' } });
+        if (prev.name !== me.name) myAccountId = null;
+        set({ me, link: { ...get().link, owner: 'unknown', held: holdUser !== null && holdUser === (me.name ?? '') } });
         failedKey = null;
         void get().reconcile();
       },
@@ -317,15 +367,18 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
               if (get().link.busy || get().link.confirm) return;
               const key = planKey();
               if (key === failedKey) return;
-              if (manualHold && p.kind === 'link') return;
+              if (held() && p.kind === 'link') return;
+              if (p.kind === 'remint' && reminted) return;
               if (p.kind === 'link' || p.kind === 'remint') {
                 await doLink(false);
               } else if (p.kind === 'check-owner') {
                 const cloud = get().cloud!;
                 set({ link: { ...get().link, busy: true } });
                 try {
-                  const items = await deps.api.listDevices();
-                  set({ link: { ...get().link, busy: false, owner: ownerFromDevices(cloud, items) } });
+                  const items = await withTimeout(deps.api.listDevices(), apiTimeout);
+                  const owner = ownerFromDevices(cloud, items);
+                  if (owner === 'mine') myAccountId = cloud.accountId;
+                  set({ link: { ...get().link, busy: false, owner } });
                 } catch (e) {
                   failedKey = key;
                   set({ link: { ...get().link, busy: false, error: linkErrorText(codeOf(e)) } });
@@ -345,7 +398,11 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
         set({ link: { ...get().link, confirm: null } });
         await doLink(true);
       },
-      dismissConfirm: () => set({ link: { ...get().link, confirm: null } }),
+      dismissConfirm: () => {
+        if (!get().link.confirm) return; // dialog closed after a confirm
+        failedKey = planKey(); // «оставить как есть»: do not ask again until something changes
+        set({ link: { ...get().link, confirm: null } });
+      },
       async retryLink() {
         failedKey = null;
         setHold(false);
@@ -362,7 +419,8 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
         setHold(true); // before the request: its cloud_status reply must not trigger an automatic re-link
         try {
           set({ link: { ...get().link, busy: true, error: null } });
-          const r = await client.request({ type: 'cloud_unlink' }, { expect: 'cloud_status', timeoutMs: 15000 });
+          const r = await client.request({ type: 'cloud_unlink' }, { expect: 'cloud_status', timeoutMs: 15000, strictId: true });
+          lastLinked = null; // our own decision: a later link of this PC is not a silent account switch
           // stay unlinked until the user links again (no automatic re-link right after an explicit unlink)
           failedKey = null;
           set({ cloud: stripStatus(r), link: { busy: false, error: null, owner: 'unknown', confirm: null, merged: null, held: true }, jobs: {} });

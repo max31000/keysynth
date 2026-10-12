@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), ...(stub ? [platformStub({ latest: process.env.KS_STUB_LATEST ?? null })] : [])],
     define: stub ? { 'import.meta.env.VITE_KS_RELEASES_API': JSON.stringify('/__stub/github-latest') } : {},
     server: { port: 5173, strictPort: true, host: '127.0.0.1' },
+    // sourcemaps are published on purpose (public AGPL repo; readable stack traces from users)
     build: { outDir: platform ? 'dist-platform' : 'dist', target: 'es2022', sourcemap: true },
     test: { environment: 'node', include: ['tests/**/*.test.ts'] },
   };

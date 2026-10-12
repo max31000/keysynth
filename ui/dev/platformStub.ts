@@ -68,7 +68,8 @@ export function platformStub(opts: { latest?: string | null } = {}): Plugin {
           st.loggedIn = true;
           res.statusCode = 302;
           const ret = url.searchParams.get('return') ?? '/keysynth/';
-          res.setHeader('Location', ret.startsWith('/') && !ret.startsWith('//') ? ret : '/keysynth/');
+          // same-origin paths only: no `//host`, no backslashes (`/\host` reads as `//host` in browsers)
+          res.setHeader('Location', ret.startsWith('/') && !ret.startsWith('//') && !ret.includes('\\') ? ret : '/keysynth/');
           return res.end();
         }
         if (p === '/__stub/login') return (st.loggedIn = true), back();
