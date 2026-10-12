@@ -6,6 +6,7 @@
 #include "effects/delay/DelayFx.h"
 #include "effects/drive/DriveFx.h"
 #include "effects/ensemble/EnsembleFx.h"
+#include "effects/echo/EchoFx.h"
 #include "effects/eq/EqFx.h"
 #include "effects/flanger/FlangerFx.h"
 #include "effects/gain/GainFx.h"
@@ -13,6 +14,9 @@
 #include "effects/rotary/RotaryFx.h"
 #include "effects/phaser/PhaserFx.h"
 #include "effects/reverb/ReverbFx.h"
+#include "effects/tapestop/TapeStopFx.h"
+#include "effects/vocoder/VocoderFx.h"
+#include "effects/wah/WahFx.h"
 #include "instruments/basic/BasicSynth.h"
 #include "instruments/drums/DrumKit.h"
 #include "instruments/combo/ComboOrgan.h"
@@ -51,6 +55,10 @@ void registerBuiltinModules(ModuleRegistry& r) {
     r.add<DriveFx>();
     r.add<CompressorFx>();
     r.add<EqFx>();
+    r.add<VocoderFx>();
+    r.add<WahFx>();
+    r.add<EchoFx>();
+    r.add<TapeStopFx>();
 }
 
 } // namespace ks

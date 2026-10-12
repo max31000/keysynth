@@ -355,7 +355,11 @@ nlohmann::json Session::devicesJson() {
         const AudioDeviceList l = audio_->listDevices();
         types = l.types;
         for (const auto& t : l.available)
-            available.push_back({{"type", t.type}, {"names", t.names}, {"sampleRates", t.sampleRates}, {"bufferSizes", t.bufferSizes}});
+            available.push_back({{"type", t.type},
+                                 {"names", t.names},
+                                 {"inputNames", t.inputNames},
+                                 {"sampleRates", t.sampleRates},
+                                 {"bufferSizes", t.bufferSizes}});
         st = audio_->status();
     }
     nlohmann::json midi = nlohmann::json::array();
@@ -424,7 +428,9 @@ nlohmann::json Session::pollTelemetry() {
             {"cpu", std::round(std::fmin(static_cast<double>(cpu), 1.0) * 1000.0) / 1000.0},
             {"xruns", xr},
             {"voices", t.voices.load()},
-            {"meters", {{"master", {toDb(t.masterL.exchange(0.0f)), toDb(t.masterR.exchange(0.0f))}}, {"layers", layers}}},
+            {"meters", {{"master", {toDb(t.masterL.exchange(0.0f)), toDb(t.masterR.exchange(0.0f))}},
+                        {"input", {toDb(t.inputL.exchange(0.0f)), toDb(t.inputR.exchange(0.0f))}},
+                        {"layers", layers}}},
             {"readouts", readouts},
             {"transport", transportTelemetry()},
             {"rtViolations", rt::violationCount()}};

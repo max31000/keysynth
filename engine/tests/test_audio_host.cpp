@@ -11,13 +11,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <juce_events/juce_events.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 using namespace ks;
 
@@ -46,7 +49,7 @@ public:
     ~FakeDevice() override { close(); }
 
     juce::StringArray getOutputChannelNames() override { return {"Out L", "Out R"}; }
-    juce::StringArray getInputChannelNames() override { return {}; }
+    juce::StringArray getInputChannelNames() override { return {"In 1", "In 2"}; }
     juce::Array<double> getAvailableSampleRates() override { return {44100.0, 48000.0, 96000.0}; }
     juce::Array<int> getAvailableBufferSizes() override {
         juce::Array<int> a;
@@ -58,9 +61,11 @@ public:
     }
     int getDefaultBufferSize() override { return d_.preferred.load(); }
 
-    juce::String open(const juce::BigInteger&, const juce::BigInteger&, double sr, int bs) override {
+    juce::String open(const juce::BigInteger& ins, const juce::BigInteger&, double sr, int bs) override {
         close();
         ++d_.opens;
+        ins_ = ins;
+        ins_.setRange(2, std::max(0, ins_.getHighestBit() + 1 - 2), false); // like ASIO: only existing inputs
         if (d_.failOpens.load() > 0) {
             --d_.failOpens;
             error_ = "Can't create i/o buffers";
@@ -110,7 +115,7 @@ public:
         b.setRange(0, 2, true);
         return b;
     }
-    juce::BigInteger getActiveInputChannels() const override { return {}; }
+    juce::BigInteger getActiveInputChannels() const override { return ins_; }
     int getOutputLatencyInSamples() override { return bs_ + 32; }
     int getInputLatencyInSamples() override { return bs_ + 16; }
 
@@ -152,6 +157,11 @@ private:
     }
     void loop() {
         float* outs[2] = {l_.data(), r_.data()};
+        std::vector<float> in1(32768, 0.25f), in2(32768, 0.5f); // "mic" levels of input 1 / 2
+        const float* ins[2] = {};
+        int numIns = 0;
+        if (ins_[0]) ins[numIns++] = in1.data();
+        if (ins_[1]) ins[numIns++] = in2.data();
         const juce::AudioIODeviceCallbackContext ctx{};
         while (run_.load()) {
             {
@@ -161,7 +171,7 @@ private:
                         cb_->audioDeviceError(errorMsg_);
                         break;
                     }
-                    cb_->audioDeviceIOCallbackWithContext(nullptr, 0, outs, 2, bs_, ctx);
+                    cb_->audioDeviceIOCallbackWithContext(numIns ? ins : nullptr, numIns, outs, 2, bs_, ctx);
                 }
             }
             std::this_thread::sleep_for(std::chrono::microseconds(300));
@@ -172,6 +182,7 @@ private:
     double sr_ = 48000.0;
     int bs_ = 256;
     bool open_ = false;
+    juce::BigInteger ins_;
     juce::String error_;
     std::mutex m_;
     juce::AudioIODeviceCallback* cb_ = nullptr;
@@ -186,10 +197,11 @@ public:
     explicit FakeType(Driver& d) : juce::AudioIODeviceType("ASIO"), d_(d) {}
     void scanForDevices() override {}
     juce::StringArray getDeviceNames(bool input) const override {
-        return input ? juce::StringArray() : juce::StringArray(kDeviceName);
+        (void)input; // ASIO lists every driver as input and output device
+        return juce::StringArray(kDeviceName);
     }
     int getDefaultDeviceIndex(bool) const override { return 0; }
-    int getIndexOfDevice(juce::AudioIODevice* d, bool input) const override { return d != nullptr && !input ? 0 : -1; }
+    int getIndexOfDevice(juce::AudioIODevice* d, bool) const override { return d != nullptr ? 0 : -1; }
     bool hasSeparateInputsAndOutputs() const override { return false; }
     juce::AudioIODevice* createDevice(const juce::String& out, const juce::String& in) override {
         const juce::String name = out.isNotEmpty() ? out : in;
@@ -536,4 +548,45 @@ TEST_CASE("engine: device callbacks larger than maxBlock are split without alloc
     CHECK(rt::violationCount() == v0);
     for (int i = 0; i < 20000; ++i) REQUIRE(z[static_cast<size_t>(i)] == 0.0f); // extra channels zeroed
     CHECK(l[19999] == 0.0f); // silence rendered all the way to the end
+}
+
+TEST_CASE("audio host: input channels are opened, metered, persisted and re-applied (set_audio_input)", "[audio]") {
+    HostFixture f;
+    REQUIRE(f.start().empty());
+    REQUIRE(f.waitCallbacks());
+    REQUIRE(f.host->status().inputChannels.empty()); // no input by default
+    REQUIRE(f.host->status().inputChannelNames == std::vector<std::string>{"In 1", "In 2"});
+
+    // Input 2 only (mono bus): the engine sees it on both sides.
+    REQUIRE(f.host->setInput("", {1}).empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{1});
+    REQUIRE(f.host->status().inputName == kDeviceName.toStdString());
+    REQUIRE(f.savedAudio()["inputChannels"] == nlohmann::json::array({1}));
+    f.engine.telemetry().inputL.store(0.0f);
+    REQUIRE(f.waitCallbacks());
+    REQUIRE(std::fabs(f.engine.telemetry().inputL.load() - 0.5f) < 1e-6f);
+    REQUIRE(std::fabs(f.engine.telemetry().inputR.load() - 0.5f) < 1e-6f);
+
+    // Stereo pair; a channel the device does not have is refused and the selection kept.
+    REQUIRE(f.host->setInput("", {0, 1}).empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{0, 1});
+    REQUIRE(!f.host->setInput("", {4}).empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{0, 1});
+
+    // A restart (recovery path) and a fresh host (startup from settings) re-apply it.
+    REQUIRE(f.host->restart().empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{0, 1});
+    f.makeHost();
+    REQUIRE(f.start().empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{0, 1});
+    f.engine.telemetry().inputL.store(0.0f);
+    f.engine.telemetry().inputR.store(0.0f);
+    REQUIRE(f.waitCallbacks());
+    REQUIRE(std::fabs(f.engine.telemetry().inputL.load() - 0.25f) < 1e-6f);
+    REQUIRE(std::fabs(f.engine.telemetry().inputR.load() - 0.5f) < 1e-6f);
+
+    // Off again.
+    REQUIRE(f.host->setInput("", {}).empty());
+    REQUIRE(f.host->status().inputChannels.empty());
+    REQUIRE(f.savedAudio()["inputChannels"] == nlohmann::json::array());
 }

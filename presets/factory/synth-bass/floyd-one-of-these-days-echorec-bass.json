@@ -1,0 +1,102 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "One of These Days Echorec Bass",
+    "category": "Synth Bass",
+    "tags": [
+      "pink floyd",
+      "echorec",
+      "binson",
+      "bass",
+      "70s"
+    ],
+    "description": "Plucky ladder-filter bass into a Binson Echorec drum echo, heads 1+3 at a dotted-sixteenth spacing for the galloping repeats, valve saturation and drum wow. Reference: Pink Floyd - One of These Days (1971).",
+    "author": "factory"
+  },
+  "tempo": 128,
+  "layers": [
+    {
+      "name": "One of These Days Echorec Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.35,
+          "osc2_level": 0.6,
+          "sub_level": 0.4,
+          "filter_model": 0,
+          "cutoff": 700,
+          "resonance": 0.25,
+          "key_track": 0.4,
+          "filter_env_amt": 0.45,
+          "fenv_attack": 0.001,
+          "fenv_decay": 0.22,
+          "fenv_sustain": 0.2,
+          "fenv_release": 0.15,
+          "amp_attack": 0.001,
+          "amp_decay": 0.6,
+          "amp_sustain": 0.7,
+          "amp_release": 0.12,
+          "voice_mode": 1,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "threshold_db": -16,
+            "ratio": 3,
+            "attack_ms": 8,
+            "release_ms": 150,
+            "makeup_db": 2
+          }
+        },
+        {
+          "type": "echo",
+          "bypass": false,
+          "params": {
+            "heads": 7,
+            "sync": 14,
+            "feedback": 0.35,
+            "tone": 0.45,
+            "drive": 0.45,
+            "wow": 0.3,
+            "flutter": 0.25,
+            "width": 0.6,
+            "mix": 0.45
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 5.5,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

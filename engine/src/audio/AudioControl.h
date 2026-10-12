@@ -22,6 +22,11 @@ struct AudioStatus {
     // The driver panel is showing (a modal one runs a nested message loop): open_audio_panel/set_audio_device
     // are refused (`busy`) and list_devices does not rescan until it closes.
     bool panelOpen = false;
+    // Audio input (ARCHITECTURE §6 "Audio input"): the open input device ("" = none), its channel names and the
+    // active channel indices (ascending, <= 2).
+    std::string inputName;
+    std::vector<std::string> inputChannelNames;
+    std::vector<int> inputChannels;
 };
 
 nlohmann::json toJson(const AudioStatus& s);
@@ -31,6 +36,7 @@ struct AudioDeviceList {
     struct TypeDevices {
         std::string type;
         std::vector<std::string> names;
+        std::vector<std::string> inputNames; // input devices of types with separate inputs (empty for ASIO)
         // Supported values of the *open* device when it is of this type; empty for other types (unknown until
         // selected — probing would have to open drivers, and ASIO allows only one loaded driver).
         std::vector<double> sampleRates;
@@ -54,6 +60,12 @@ public:
     // Closes and reopens the current device with the driver's current buffer/rate (`restart_audio`). Synchronous
     // (message thread). Returns "" on success, else an error (AudioHost's watchdog keeps retrying).
     virtual std::string restart() { return "this audio device cannot be restarted"; }
+    // Opens these input channels (<= 2 device channel indices, empty = no input) of `inputName` (ignored for ASIO:
+    // inputs belong to the output device) and reopens the device. Synchronous (message thread). "" on success.
+    // Callers validate the shape (<= 2, ascending unique, >= 0); the host checks the indices against the device.
+    virtual std::string setInput(const std::string& /*inputName*/, const std::vector<int>& /*channels*/) {
+        return "this audio host has no inputs";
+    }
 
     // Message thread: the device (re)started or its settings changed outside a setDevice call (driver reset
     // request after a control-panel change, panel closed). Set by the app to re-report `devices` + `state`.

@@ -1,0 +1,107 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Robots Vocoder",
+    "category": "Choir & Vox",
+    "tags": [
+      "kraftwerk",
+      "vocoder",
+      "robot",
+      "70s"
+    ],
+    "description": "16-band channel vocoder over a bright saw + pulse poly synth, short release for clipped robotic syllables. Sing or speak into the audio interface input chosen in Audio settings (Input); without an open input the vocoder uses its internal vowel test signal. Reference: Kraftwerk - The Robots (1978).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Robots Vocoder",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 1,
+          "osc2_pw": 0.4,
+          "osc2_level": 0.8,
+          "osc2_fine": 7,
+          "cutoff": 10000,
+          "resonance": 0.05,
+          "key_track": 0.3,
+          "amp_attack": 0.004,
+          "amp_decay": 0.3,
+          "amp_sustain": 1.0,
+          "amp_release": 0.12,
+          "polyphony": 8,
+          "hpf_cutoff": 90,
+          "drift": 0.1,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "vocoder",
+          "bypass": false,
+          "params": {
+            "bands": 1,
+            "modulator": 0,
+            "mod_gain_db": 6,
+            "gate_db": -55,
+            "attack_ms": 2.5,
+            "release_ms": 35,
+            "formant": 0,
+            "sibilance": 0.35,
+            "carrier_mix": 0.0,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "p2_hz": 2800,
+            "p2_db": 2.0,
+            "p2_q": 0.8
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.1,
+            "size": 0.3,
+            "decay": 0.7,
+            "predelay_ms": 10
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -20.2,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

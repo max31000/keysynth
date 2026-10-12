@@ -37,6 +37,7 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `save_pattern` | `{ name, overwrite? }` (current pattern → `userdata/patterns/<slug>.json`) | `save_pattern_ok { path }`, then `state` to all |
 | `list_devices` | — | `devices` |
 | `set_audio_device` | `{ device_type, name, sample_rate?, buffer_size? }` | `devices` (also to others; + `log` warn if the driver kept another buffer size), then `state` to all; `error` `busy` while the driver panel is open |
+| `set_audio_input` | `{ channels: number[], name? }` (≤ 2 input channel indices of the open device, `[]` = off; `name`: input device for non-ASIO types) | `devices` (also to others), then `state` to all; `error` `bad_request` / `device_error` / `busy` (see *Audio input*) |
 | `open_audio_panel` | — (opens the driver's own settings panel, ASIO) | `open_audio_panel_ok`, or `error` `not_available` / `busy` (already open) (see *Audio latency*) |
 | `restart_audio` | — (close + reopen the current device with the driver's current buffer/rate; ASIO: the panel's size) | `devices` (also to others), then `state` to all; `error` `busy` while the driver panel is open, `device_error` when the reopen failed (the watchdog keeps retrying), `not_available` without an audio host |
 | `panic` | — | none (all notes off, reset tails) |
@@ -51,17 +52,31 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 |---|---|
 | `state` | `{ patch, presetPath, dirty, audio: AudioStatus, transport }` — full snapshot |
 | `param` | `{ node, param, value }` — another client changed a param |
-| `telemetry` | `{ cpu, xruns, voices, meters: { master:[l,r], layers:{ "<node>":[l,r] } }, readouts: { "<node>": { param: value } } }` ≤30 Hz, peaks in dBFS |
+| `telemetry` | `{ cpu, xruns, voices, meters: { master:[l,r], input:[l,r], layers:{ "<node>":[l,r] } }, readouts: { "<node>": { param: value } } }` ≤30 Hz, peaks in dBFS |
 | `midi` | `{ notes: [ {note, on, velocity} ] }` batched ≤30 Hz, for keyboard highlighting |
 | `pattern` | `{ path, edited, pattern: Pattern }` — another client changed the current pattern (`set_pattern`) |
-| `devices` | `{ types: string[], current: AudioStatus, available: { type, names[], sampleRates: number[], bufferSizes: number[] }[], midiInputs: string[] }` |
+| `devices` | `{ types: string[], current: AudioStatus, available: { type, names[], inputNames[], sampleRates: number[], bufferSizes: number[] }[], midiInputs: string[] }` |
 | `log` | `{ level, message, notify? }` — `notify: true` marks a problem the player must see (see *Wire details*) |
 | `plugin_status` | `{ plugin: PluginStatus }` — every plugin state change (see below) |
 | `cloud_status`, `sync_status`, `samples_progress`, `samples_done`, `samples_error` | see *Cloud & samples* |
 
-`AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running, hasControlPanel, panelOpen }`
+`AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running, hasControlPanel, panelOpen,
+inputName, inputChannelNames, inputChannels }`
 (latencies are device-reported and include the buffer; `hasControlPanel`: `open_audio_panel` is available;
-`panelOpen`: the driver panel is showing right now).
+`panelOpen`: the driver panel is showing right now; `inputName`: the open input device ("" = none),
+`inputChannelNames`: its channels, `inputChannels`: the active ones, ascending).
+
+### Audio input
+The engine opens at most 2 device input channels as an external input bus for effects (`vocoder`; ARCHITECTURE §6
+*Audio input*). `set_audio_input { channels: [0] }` opens input 1 (mono: the bus carries it on both sides),
+`[0, 1]` a stereo pair, `[]` closes the input. ASIO: inputs belong to the output device, `name` is ignored; other
+types take `name` from `devices.available[].inputNames` (input devices of types with separate inputs; empty for
+ASIO). The device is reopened with the same
+output settings (the graph is kept when rate/buffer did not change); errors: more than 2 / negative / duplicate
+indices → `bad_request`, an index the device does not have or a failed reopen → `device_error`, driver panel open →
+`busy`. The selection is saved in `userdata/settings.json` and re-applied on every reopen of that device;
+`set_audio_device` to another device clears it. `telemetry.meters.input` is the input peak (dBFS, −120 = silent or
+no input) since the last telemetry frame. `remote` sessions may not send it (like `set_audio_device`).
 
 ### Audio latency (buffer size, ASIO control panel)
 - JUCE only applies a requested `buffer_size` (`set_audio_device`, `--asio-buffer`) when it is in the open device's
@@ -184,7 +199,7 @@ builds ignore it.
 
 | allowed for `web` | restriction |
 |---|---|
-| `hello`, `get_catalog`, `set_param`, `get_patch`, `list_presets`, `add_layer`, `remove_layer`, `set_zone`, `set_instrument`, `add_fx`, `remove_fx`, `move_fx`, `set_fx_bypass`, `note`, `cc`, `panic`, `list_patterns`, `set_pattern`, `rescan_midi`, `list_devices`, `set_audio_device`, `open_audio_panel`, `restart_audio`, `list_plugins` | none (module typeIds incl. already registered `plugin:<name>` are fine) |
+| `hello`, `get_catalog`, `set_param`, `get_patch`, `list_presets`, `add_layer`, `remove_layer`, `set_zone`, `set_instrument`, `add_fx`, `remove_fx`, `move_fx`, `set_fx_bypass`, `note`, `cc`, `panic`, `list_patterns`, `set_pattern`, `rescan_midi`, `list_devices`, `set_audio_device`, `set_audio_input`, `open_audio_panel`, `restart_audio`, `list_plugins` | none (module typeIds incl. already registered `plugin:<name>` are fine) |
 | `save_preset`, `save_pattern` | none (they take a name; the engine slugifies) |
 | `load_preset` | `path` is a logical path under `presets/factory/` or `userdata/presets/` |
 | `get_pattern`, `transport` | `path` / `pattern` is a logical path under `presets/patterns/` or `userdata/patterns/` (or `""`) |
@@ -197,7 +212,7 @@ no `\`, `:`, leading `/` or control chars, starting with one of the prefixes abo
 **active profile** (below). The engine maps logical paths to disk via AppPaths (cloud-api spec *Local storage*).
 
 **`remote` sessions** (relayed controllers) = the `web` table above, minus `cloud_link`, `cloud_unlink`,
-`set_audio_device`, `open_audio_panel`, `samples_delete` (and `reload_plugin`, already forbidden) → `error`
+`set_audio_device`, `set_audio_input`, `open_audio_panel`, `samples_delete` (and `reload_plugin`, already forbidden) → `error`
 `forbidden`; default-deny for anything new. Their `hello` reply carries `trust: "remote"`; the UI hides denied features.
 
 ### Profiles
