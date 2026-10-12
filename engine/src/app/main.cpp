@@ -306,11 +306,9 @@ int main(int argc, char** argv) {
         server.broadcast(std::move(ev));
     };
 
-    // Bind before starting audio/plugins/cloud: an early return below is then cheap. Clients are served only once
-    // the dispatch loop runs (every message is posted to it), i.e. after the setup below.
-    server.start(args.wsPort, args.httpPort);
-    logShadowListeners(args.wsPort);
-    if (const auto& busy = server.wsConflict()) {
+    // Check the WS port before starting audio/plugins/cloud, so an early exit is cheap. The bind itself comes after
+    // the setup (a client's hello must not wait for a slow ASIO open and time out).
+    if (const auto busy = ks::ControlServer::probe(args.wsPort)) {
         std::printf("control: %s\n", ks::conflictLogLine(*busy).c_str());
         std::fflush(stdout);
         if (!desktop) { // headless (dev, scripts, CI): fail fast with the classified reason
@@ -434,6 +432,15 @@ int main(int argc, char** argv) {
         std::printf("\n");
     }
 
+    server.start(args.wsPort, args.httpPort);
+    logShadowListeners(args.wsPort);
+    if (const auto& busy = server.wsConflict()) {
+        std::printf("control: %s\n", ks::conflictLogLine(*busy).c_str());
+        if (!desktop) { // taken meanwhile
+            ks::app::reportFatal("keysynth: control server: " + ks::conflictLogLine(*busy));
+            return 1;
+        }
+    }
     if (server.wsRunning())
         std::printf("control: ws://127.0.0.1:%d%s\n", args.wsPort,
                     server.httpRunning() ? (", ui: http://127.0.0.1:" + std::to_string(args.httpPort)).c_str()

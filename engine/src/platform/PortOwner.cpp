@@ -11,7 +11,9 @@
 #include <unistd.h>
 #endif
 
+#include <atomic>
 #include <cstdint>
+#include <cstdio>
 
 namespace ks::platform {
 
@@ -33,8 +35,13 @@ std::vector<unsigned char> readTable(ULONG family) {
         DWORD size = static_cast<DWORD>(buf.size());
         const DWORD r = GetExtendedTcpTable(buf.data(), &size, FALSE, family, TCP_TABLE_OWNER_PID_LISTENER, 0);
         if (r == NO_ERROR) return buf;
-        if (r != ERROR_INSUFFICIENT_BUFFER) return {};
+        if (r != ERROR_INSUFFICIENT_BUFFER) break;
         buf.resize(static_cast<size_t>(size) + 4096);
+    }
+    static std::atomic<bool> logged{false};
+    if (!logged.exchange(true)) {
+        std::fprintf(stderr, "port owner: GetExtendedTcpTable failed (family %lu)\n", family);
+        std::fflush(stderr);
     }
     return {};
 }
@@ -61,6 +68,31 @@ std::string processImagePath(unsigned long pid) {
 }
 
 unsigned long currentProcessId() { return GetCurrentProcessId(); }
+
+bool loopbackPortBindable(int port, std::string& error) {
+    if (port <= 0 || port > 65535) return true;
+    WSADATA w;
+    if (WSAStartup(MAKEWORD(2, 2), &w) != 0) return true; // cannot check: let the real bind decide
+    bool ok = true;
+    const SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s != INVALID_SOCKET) {
+        BOOL on = TRUE;
+        setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&on), sizeof(on));
+        sockaddr_in a{};
+        a.sin_family = AF_INET;
+        a.sin_port = htons(static_cast<u_short>(port));
+        inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+        if (bind(s, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) != 0) {
+            const int e = WSAGetLastError();
+            ok = false;
+            error = e == WSAEADDRINUSE ? "address in use" : e == WSAEACCES ? "access denied (excluded port range?)"
+                                                                           : "bind error " + std::to_string(e);
+        }
+        closesocket(s);
+    }
+    WSACleanup();
+    return ok;
+}
 
 std::vector<TcpListener> tcpListeners(int port) {
     std::vector<TcpListener> out;
@@ -114,6 +146,7 @@ std::vector<TcpListener> tcpListeners(int port) {
 std::string processImagePath(unsigned long) { return {}; }
 unsigned long currentProcessId() { return static_cast<unsigned long>(getpid()); }
 std::vector<TcpListener> tcpListeners(int) { return {}; }
+bool loopbackPortBindable(int, std::string&) { return true; }
 
 #endif
 

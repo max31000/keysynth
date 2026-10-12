@@ -71,7 +71,7 @@ public:
 
     // Control thread: a resource that is missing for a non-error reason (sampler: samples not downloaded because
     // the engine is not linked / the server is unreachable; ARCHITECTURE §15). Session notifies once per
-    // (reason, id) with a friendly `log` warn (code "samples_missing"); `detail` goes to the engine log only.
+    // (reason, id) with a friendly `log` warn; `detail` goes to the engine log only (sampler readout: samples_missing).
     struct MissingResource {
         std::string id;     // sample entry id
         std::string reason; // "not_linked" | "offline"

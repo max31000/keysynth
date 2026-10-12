@@ -26,7 +26,7 @@ import {
 import { normalizePattern, setTimeSig } from '../lib/stepGrid';
 import { applyBypass, applyMoveFx, applyParam, applyZone, findLayer, findModule } from './patchOps';
 import { clearNotes, pushMidi, pushTelemetry } from './liveBus';
-import { checkIdentity, type IdentityCheck } from '../platform/identity';
+import { checkIdentity, identityAccepted, type IdentityCheck } from '../platform/identity';
 
 export interface Stats {
   cpu: number;
@@ -101,6 +101,7 @@ export interface EngineState {
   /** `restart_audio`: reopen the device with the driver's current settings (sound broke after a driver change). */
   restartAudio(): Promise<void>;
   clearError(): void;
+  clearNotice(): void;
   refreshPlugins(): Promise<void>;
   reloadPlugin(name: string): Promise<void>;
   dismissPluginNotice(): void;
@@ -547,7 +548,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       openAudioPanel: () => structural(() => client.request({ type: 'open_audio_panel' }, { expect: 'open_audio_panel_ok' })),
       restartAudio: () =>
         structural(() => client.request({ type: 'restart_audio' }, { expect: 'devices', timeoutMs: 15000 })),
-      clearError: () => set({ lastError: null, notice: null }),
+      clearError: () => set({ lastError: null }),
+      clearNotice: () => set({ notice: null }),
       refreshPlugins: () => structural(() => client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' })),
       reloadPlugin: (name) =>
         structural(() => client.request({ type: 'reload_plugin', name }, { expect: 'reload_plugin_ok' })),
@@ -559,14 +561,15 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
 }
 
 /** Wire a store to its client: event dispatch, connection status, hello/bootstrap on (re)connect. */
-export function bindClient(store: EngineStore, client: EngineClient): () => void {
+/** `acceptMock`: dev builds drive the mock; production stops after its hello (`store/index.ts` passes MODE.dev). */
+export function bindClient(store: EngineStore, client: EngineClient, { acceptMock = true }: { acceptMock?: boolean } = {}): () => void {
   const offMsg = client.on('*', (m) => store.getState().handle(m as EngineMsg));
   const offStatus = client.onStatus((status, attempt) => {
     store.getState().connectionChanged(status);
     store.setState({ connection: { status, attempt, url: client.url } });
     if (status !== 'open') store.setState({ identity: 'pending', engineInfo: null });
     if (status === 'open') {
-      void bootstrap(client, (identity, engineInfo) => store.setState({ identity, engineInfo })).catch((e) => store.setState({ lastError: String(e) }));
+      void bootstrap(client, acceptMock, (identity, engineInfo) => store.setState({ identity, engineInfo })).catch((e) => store.setState({ lastError: String(e) }));
     } else if (status === 'reconnecting' || status === 'closed') {
       clearNotes();
     }
@@ -579,6 +582,7 @@ export function bindClient(store: EngineStore, client: EngineClient): () => void
 
 async function bootstrap(
   client: EngineClient,
+  acceptMock: boolean,
   onIdentity: (c: IdentityCheck, info: EngineIdentity | null) => void,
 ): Promise<void> {
   let reply: unknown;
@@ -592,7 +596,7 @@ async function bootstrap(
   const identity = checkIdentity(reply);
   const info = (reply as { engine?: EngineIdentity }).engine;
   onIdentity(identity, info && typeof info === 'object' ? info : null);
-  if (identity === 'foreign') return; // never drive an unknown program
+  if (!identityAccepted(identity, acceptMock)) return; // never drive a mock (production) or an unknown program
   await Promise.all([
     client.request({ type: 'get_catalog' }, { expect: 'catalog_ok' }),
     client.request({ type: 'list_presets' }, { expect: 'list_presets_ok' }),

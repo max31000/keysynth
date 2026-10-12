@@ -110,6 +110,17 @@ describe('identity against servers', () => {
     expect(store.getState().engineVersion).toBeNull();
     expect(mint).not.toHaveBeenCalled();
     expect(p.sent.some((s) => s.includes('cloud_link'))).toBe(false);
+
+    // another client links / unlinks the mock: its cloud_status broadcasts must not drive this page either
+    const other = page(`ws://127.0.0.1:${mock.port}`, 'http://localhost:5173');
+    other.client.connect();
+    await until(() => other.engineStore.getState().identity === 'mock');
+    await other.client.request({ type: 'cloud_link', token: 'ksd_' + 'b'.repeat(43) }, { expect: 'cloud_status' });
+    await other.client.request({ type: 'cloud_unlink' }, { expect: 'cloud_status' });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(store.getState().cloud).toBeNull();
+    expect(mint).not.toHaveBeenCalled();
+    expect(p.sent.some((s) => s.includes('cloud_link'))).toBe(false);
   });
 
   it('a foreign WebSocket server → foreign, and nothing beyond hello is sent', async () => {

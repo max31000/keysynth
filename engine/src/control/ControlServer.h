@@ -65,6 +65,8 @@ public:
     static std::optional<Trust> admit(const std::string& host, const std::string& origin, int listenPort, int wsPort,
                                       int httpPort, const OriginPolicy& policy);
     static bool wsPathAllowed(const std::string& uri);
+    // Pre-bind check of 127.0.0.1:<port>: trial exclusive bind, owner named from the listener table. nullopt = free.
+    static std::optional<PortConflict> probe(int port);
     // Maps a request URI to a file inside distDir (SPA fallback to index.html). nullopt = 404/forbidden.
     static std::optional<std::filesystem::path> resolveStatic(const std::string& uri, const std::filesystem::path& distDir);
 

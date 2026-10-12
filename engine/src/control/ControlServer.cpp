@@ -90,6 +90,15 @@ PortConflict bindFailure(int port, const std::string& ixError) {
 }
 } // namespace
 
+std::optional<PortConflict> ControlServer::probe(int port) {
+    std::string err;
+    // Free for IPv4 loopback (a v6-only [::] listener passes): no conflict even if the table lists one.
+    if (platform::loopbackPortBindable(port, err)) return std::nullopt;
+    // Exclusive bind refused: a listener we can name is the conflict. Without one (only TIME_WAIT connections of a
+    // previous run, which also refuse an exclusive bind) let the real bind decide.
+    return findConflict(port, platform::tcpListeners(port));
+}
+
 std::string ControlServer::start(int wsPort, int httpPort) {
     ix::initNetSystem();
     wsPort_ = wsPort;
@@ -121,7 +130,7 @@ bool ControlServer::httpWanted() const {
 
 std::optional<PortConflict> ControlServer::listenWs() {
     // Before the bind: ix sets SO_REUSEADDR, so on Windows its bind can succeed on top of another listener.
-    if (auto c = findConflict(wsPort_, platform::tcpListeners(wsPort_))) return c;
+    if (auto c = probe(wsPort_)) return c;
     ws_ = std::make_unique<ix::WebSocketServer>(wsPort_, "127.0.0.1");
     ws_->disablePerMessageDeflate();
     std::weak_ptr<bool> alive = alive_;
@@ -183,7 +192,7 @@ std::optional<PortConflict> ControlServer::listenWs() {
 }
 
 std::optional<PortConflict> ControlServer::listenHttp() {
-    if (auto c = findConflict(httpPort_, platform::tcpListeners(httpPort_))) return c;
+    if (auto c = probe(httpPort_)) return c;
     http_ = std::make_unique<ix::HttpServer>(httpPort_, "127.0.0.1");
     const fs::path dist = uiDist_;
     const int port = httpPort_;

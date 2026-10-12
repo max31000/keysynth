@@ -24,7 +24,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 # A worktree (<main>/.claude/worktrees/<x>) stops everything of the main checkout too: one repo, one dev stack.
 $parts = $repo -split '[\\/]\.claude[\\/]worktrees[\\/]'
 $root = [System.IO.Path]::GetFullPath($parts[0]).TrimEnd('\')
-$rootPattern = [regex]::Escape($root)
+$rootPattern = [regex]::Escape($root) + '[\\/]' # <root>\..., not a sibling like <root>Site\...
 $installedDir = Join-Path $env:LOCALAPPDATA "Programs\keysynth"
 $devExes = @("keysynth-engine.exe", "ks-tests.exe", "ks-render.exe", "ks-bench.exe")
 
@@ -36,9 +36,10 @@ function Test-UnderPath([string]$path, [string]$dir) {
 
 $all = Get-CimInstance Win32_Process
 # Processes started with a relative script path (`node node_modules/vite/bin/vite.js` from ui/) carry no repo path:
-# those count when they listen on a keysynth dev port (Vite 5173/4173, mock 7441/7440, or the engine's 7341/7340
-# where a stray mock caused the 2026-10 incident).
-$devPorts = @(5173, 4173, 7441, 7440, 7341, 7340)
+# those count when they listen on a keysynth port (mock 7441/7440, or the engine's 7341/7340 where a stray mock
+# caused the 2026-10 incident). A Vite started that way is not matched (5173 is every project's default);
+# start-dev.ps1 and launch.json start it with a path inside the repo.
+$devPorts = @(7441, 7440, 7341, 7340) # not Vite's 5173/4173: every project's Vite uses them
 $listeners = @{}
 foreach ($c in (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)) {
     if ($devPorts -contains [int]$c.LocalPort) { $listeners[[int]$c.OwningProcess] = $true }

@@ -436,12 +436,16 @@ JSON over WebSocket, see `docs/PROTOCOL.md` (source of truth for UI and engine; 
   never reaches the protocol handler. Rules and the `web` allow-list: PROTOCOL.md *Sessions, Origin, Host*
   (`control/Trust.h`, checked in `ProtocolHandler` before dispatch).
 - **Port conflicts.** ixwebsocket sets `SO_REUSEADDR`, which on Windows lets a second socket bind a port that is
-  already listening. So before each bind `ControlServer` reads the listener table (`platform/PortOwner`:
-  `GetExtendedTcpTable` IPv4 + IPv6 → pid → image) and treats a listener on `127.0.0.1`, `0.0.0.0` or `[::]` as a
-  conflict (`control/PortConflict`: `keysynth` = image `keysynth-engine.exe`, else `foreign`; a `[::1]` listener
-  only logs a warning: `localhost` clients may reach it). WS (7341) and HTTP (7340) bind independently, exactly
-  `127.0.0.1`. Headless runs exit 1 with the classified message; desktop mode handles it without a modal box
-  (§16). `retryListen()` binds whatever is still missing.
+  already listening. So before each bind `ControlServer::probe` tries an exclusive bind (`SO_EXCLUSIVEADDRUSE`) of
+  exactly `127.0.0.1:<port>`; when refused, the owner is named from the listener table (`platform/PortOwner`:
+  `GetExtendedTcpTable` IPv4 + IPv6 → pid → image; a listener on `127.0.0.1`, `0.0.0.0` or `[::]`) and classified
+  (`control/PortConflict`: `keysynth` = image `keysynth-engine.exe`, else `foreign`). Refused without a nameable
+  listener (TIME_WAIT connections of a previous run) → the real bind decides. A v6-only `[::]` / `[::1]` listener
+  and a non-exclusive `0.0.0.0` one (the more specific 127.0.0.1 bind wins loopback traffic) do not block; `[::1]`
+  is logged (`localhost` clients may reach it). WS (7341) and HTTP (7340) bind independently.
+  Headless runs exit 1 with the classified message; desktop mode handles it without a modal box (§16). The WS port
+  is probed before audio/plugins/cloud start, bound after them (a hello must not wait for a slow device open).
+  `retryListen()` binds whatever is still missing.
 - Every path in a request is resolved and must lie inside allow-listed roots (app `presets/`, the profile root
   `userdata/`, `assets/`, the plugins dir, the sample cache; AppPaths). Handlers validate input and reply `error`
   instead of crashing.

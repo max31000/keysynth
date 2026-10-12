@@ -178,11 +178,36 @@ TEST_CASE("port conflict: a second control server on the same port is refused (n
     CHECK(b.server->wsRunning());
 }
 
-TEST_CASE("port conflict: wildcard IPv4 listener blocks the loopback bind", "[port]") {
+TEST_CASE("port conflict: a v6-only [::] listener does not block 127.0.0.1", "[port]") {
+    WSADATA w;
+    WSAStartup(MAKEWORD(2, 2), &w);
+    SOCKET s6 = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    DWORD v6only = 1;
+    setsockopt(s6, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char*>(&v6only), sizeof(v6only));
+    sockaddr_in6 a{};
+    a.sin6_family = AF_INET6;
+    a.sin6_addr = in6addr_any;
+    REQUIRE(bind(s6, reinterpret_cast<sockaddr*>(&a), sizeof(a)) == 0);
+    REQUIRE(listen(s6, 4) == 0);
+    int len = sizeof(a);
+    getsockname(s6, reinterpret_cast<sockaddr*>(&a), &len);
+    const int port = ntohs(a.sin6_port);
+    {
+        ServerFixture f;
+        CHECK_FALSE(ControlServer::probe(port).has_value());
+        CHECK(f.server->start(port, 0).empty());
+        CHECK(f.server->wsRunning());
+    }
+    closesocket(s6);
+    WSACleanup();
+}
+
+TEST_CASE("port conflict: a plain 0.0.0.0 listener does not take 127.0.0.1 from us", "[port]") {
+    // Windows lets the more specific 127.0.0.1 bind succeed and routes loopback connections to it, so the
+    // exclusive trial bind passes and we serve; only an exclusive wildcard owner would block (then named).
     FakeListener fake("0.0.0.0");
     ServerFixture f;
-    REQUIRE_FALSE(f.server->start(fake.port, 0).empty());
-    REQUIRE(f.server->wsConflict());
-    CHECK(f.server->wsConflict()->address == "0.0.0.0");
+    REQUIRE(f.server->start(fake.port, 0).empty());
+    CHECK(f.server->wsRunning());
 }
 #endif

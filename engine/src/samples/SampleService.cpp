@@ -104,7 +104,13 @@ std::string SampleService::refreshManifest(int timeoutMs) {
         lastManifestCheck_ = Clock::now();
         etag = manifest_ ? index_.manifestEtag : std::string();
     }
-    if (!client_.linked()) return manifestState() == "none" ? "none" : "stale";
+    if (!client_.linked()) {
+        {
+            std::lock_guard<std::mutex> lk(m_);
+            retryPosted_ = false;
+        }
+        return manifestState() == "none" ? "none" : "stale";
+    }
     cloud::HttpRequest req;
     req.url = "/api/samples/manifest";
     req.timeoutMs = timeoutMs;
@@ -137,7 +143,10 @@ std::string SampleService::refreshManifest(int timeoutMs) {
 void SampleService::maybeRefreshManifest() {
     {
         std::lock_guard<std::mutex> lk(m_);
-        if (lastManifestCheck_ != Clock::time_point{} && Clock::now() - lastManifestCheck_ < std::chrono::minutes(1)) return;
+        if (lastManifestCheck_ != Clock::time_point{} && Clock::now() - lastManifestCheck_ < std::chrono::minutes(1)) {
+            jobsEnded_ = true; // still wake waiting samplers (a relink within the minute: NotLinked → fetch)
+            return;
+        }
     }
     refreshManifest(10000);
 }

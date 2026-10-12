@@ -18,15 +18,17 @@ import { identityRejected } from './platform/identity';
 function Toast() {
   const err = useEngine((s) => s.lastError);
   const notice = useEngine((s) => s.notice);
+  // an error first; a notice that arrived meanwhile shows after it
   const text = err ?? notice;
+  const clear = () => (err ? actions().clearError() : actions().clearNotice());
   useEffect(() => {
     if (!text) return;
-    const t = setTimeout(() => actions().clearError(), err ? 5000 : 8000);
+    const t = setTimeout(() => (err ? actions().clearError() : actions().clearNotice()), err ? 5000 : 8000);
     return () => clearTimeout(t);
   }, [text, err]);
   if (!text) return null;
   return (
-    <div className={`toast ${err ? '' : 'notice'}`} role={err ? 'alert' : 'status'} onClick={() => actions().clearError()}>
+    <div className={`toast ${err ? '' : 'notice'}`} role={err ? 'alert' : 'status'} onClick={clear}>
       {text}
     </div>
   );
