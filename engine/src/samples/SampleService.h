@@ -75,6 +75,9 @@ public:
 
     // Sampler auto-fetch hook (SamplePaths.h), message thread. fresh = a new load request (prepare).
     SampleFetchState autoFetch(const std::string& entryId, bool fresh);
+    // True (once per 30 s) when a sampler waits offline: the caller then runs refreshManifest() on the client
+    // worker; its end wakes the samplers again (poll jobsEnded), which retries their downloads.
+    bool wantsManifestRetry();
 
     // Pump (message thread): events to broadcast (samples_progress <= 5 Hz, samples_done, samples_error).
     // `jobsEnded` is set when a job ended since the last call (waiting samplers may now load).
@@ -137,6 +140,9 @@ private:
     std::map<std::string, FileTask> tasks_;
     std::vector<nlohmann::json> events_;
     std::set<std::string> autoFailed_, autoCancelled_;
+    std::set<std::string> offlineWaiters_; // entries a sampler waits for while the server is unreachable
+    bool manifestAttempted_ = false;       // a catalog request finished (success or not) since start
+    bool retryPosted_ = false;             // wantsManifestRetry() said yes, the refresh has not run yet
     bool jobsEnded_ = false;
     bool hadJobs_ = false;
     std::chrono::steady_clock::time_point lastProgress_{};

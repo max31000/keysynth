@@ -8,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   type AudioStatus,
   type DevicesEvent,
+  type EngineIdentity,
   type EngineMsg,
   type LogEvent,
   type ModuleInfo,
@@ -25,6 +26,7 @@ import {
 import { normalizePattern, setTimeSig } from '../lib/stepGrid';
 import { applyBypass, applyMoveFx, applyParam, applyZone, findLayer, findModule } from './patchOps';
 import { clearNotes, pushMidi, pushTelemetry } from './liveBus';
+import { checkIdentity, identityAccepted, type IdentityCheck } from '../platform/identity';
 
 export interface Stats {
   cpu: number;
@@ -34,6 +36,10 @@ export interface Stats {
 
 export interface EngineState {
   connection: { status: ConnectionStatus; attempt: number; url: string };
+  /** who answered `hello` on this connection (platform/identity.ts); 'pending' while not connected */
+  identity: IdentityCheck;
+  /** `engine` from the hello reply (pid for the «not keysynth» notice), null if absent */
+  engineInfo: EngineIdentity | null;
   catalog: ModuleInfo[];
   catalogMap: Record<string, ModuleInfo>;
   patch: Patch | null;
@@ -48,6 +54,8 @@ export interface EngineState {
   selectedModule: NodeId | null;
   logs: LogEvent[];
   lastError: string | null;
+  /** `log` with notify below error level (e.g. samples not downloaded): a neutral toast */
+  notice: string | null;
   /** current drum pattern (engine snapshot + optimistic step edits) */
   pattern: PatternSnapshot | null;
   patterns: PatternEntry[];
@@ -93,6 +101,7 @@ export interface EngineState {
   /** `restart_audio`: reopen the device with the driver's current settings (sound broke after a driver change). */
   restartAudio(): Promise<void>;
   clearError(): void;
+  clearNotice(): void;
   refreshPlugins(): Promise<void>;
   reloadPlugin(name: string): Promise<void>;
   dismissPluginNotice(): void;
@@ -202,6 +211,8 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
 
     return {
       connection: { status: client.status, attempt: 0, url: client.url },
+      identity: 'pending',
+      engineInfo: null,
       catalog: [],
       catalogMap: {},
       patch: null,
@@ -216,6 +227,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       selectedModule: null,
       logs: [],
       lastError: null,
+      notice: null,
       pattern: null,
       patterns: [],
       plugins: {},
@@ -294,7 +306,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
             set({ logs: [...get().logs.slice(-49), msg] });
             // Only problems the engine flags for the player (`notify`) become a toast; transient warnings (a
             // plugin module unavailable while it compiles) and plugin errors (plugin toast) stay in the log.
-            if (msg.notify) set({ lastError: msg.message });
+            if (msg.notify) set(msg.level === 'error' ? { lastError: msg.message } : { notice: msg.message });
             break;
           case 'error':
             if (msg.id === undefined) set({ lastError: `${msg.code}: ${msg.message}` });
@@ -537,6 +549,7 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
       restartAudio: () =>
         structural(() => client.request({ type: 'restart_audio' }, { expect: 'devices', timeoutMs: 15000 })),
       clearError: () => set({ lastError: null }),
+      clearNotice: () => set({ notice: null }),
       refreshPlugins: () => structural(() => client.request({ type: 'list_plugins' }, { expect: 'list_plugins_ok' })),
       reloadPlugin: (name) =>
         structural(() => client.request({ type: 'reload_plugin', name }, { expect: 'reload_plugin_ok' })),
@@ -548,13 +561,15 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
 }
 
 /** Wire a store to its client: event dispatch, connection status, hello/bootstrap on (re)connect. */
-export function bindClient(store: EngineStore, client: EngineClient): () => void {
+/** `acceptMock`: dev builds drive the mock; production stops after its hello (`store/index.ts` passes MODE.dev). */
+export function bindClient(store: EngineStore, client: EngineClient, { acceptMock = true }: { acceptMock?: boolean } = {}): () => void {
   const offMsg = client.on('*', (m) => store.getState().handle(m as EngineMsg));
   const offStatus = client.onStatus((status, attempt) => {
     store.getState().connectionChanged(status);
     store.setState({ connection: { status, attempt, url: client.url } });
+    if (status !== 'open') store.setState({ identity: 'pending', engineInfo: null });
     if (status === 'open') {
-      void bootstrap(client).catch((e) => store.setState({ lastError: String(e) }));
+      void bootstrap(client, acceptMock, (identity, engineInfo) => store.setState({ identity, engineInfo })).catch((e) => store.setState({ lastError: String(e) }));
     } else if (status === 'reconnecting' || status === 'closed') {
       clearNotes();
     }
@@ -565,8 +580,23 @@ export function bindClient(store: EngineStore, client: EngineClient): () => void
   };
 }
 
-async function bootstrap(client: EngineClient): Promise<void> {
-  await client.request({ type: 'hello', client: 'ui', version: PROTOCOL_VERSION }, { expect: 'state' });
+async function bootstrap(
+  client: EngineClient,
+  acceptMock: boolean,
+  onIdentity: (c: IdentityCheck, info: EngineIdentity | null) => void,
+): Promise<void> {
+  let reply: unknown;
+  try {
+    reply = await client.request({ type: 'hello', client: 'ui', version: PROTOCOL_VERSION }, { expect: 'state' });
+  } catch {
+    // an error reply / no reply: whatever listens there does not speak the keysynth protocol
+    if (client.status === 'open') onIdentity('foreign', null);
+    return;
+  }
+  const identity = checkIdentity(reply);
+  const info = (reply as { engine?: EngineIdentity }).engine;
+  onIdentity(identity, info && typeof info === 'object' ? info : null);
+  if (!identityAccepted(identity, acceptMock)) return; // never drive a mock (production) or an unknown program
   await Promise.all([
     client.request({ type: 'get_catalog' }, { expect: 'catalog_ok' }),
     client.request({ type: 'list_presets' }, { expect: 'list_presets_ok' }),

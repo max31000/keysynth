@@ -20,6 +20,7 @@ import {
   type SamplesView,
 } from '../lib/samples';
 import { initialDiscovery, type DiscoveryState } from '../platform/discovery';
+import { checkIdentity, identityAccepted } from '../platform/identity';
 import {
   defaultDeviceName,
   linkEngine,
@@ -104,6 +105,11 @@ export interface CloudState {
 export interface CloudDeps {
   client: Pick<EngineClient, 'request' | 'on' | 'onStatus' | 'status'>;
   mode: AppMode;
+  /**
+   * The mock counts as an engine (dev builds; tests). Default true; `store/index.ts` passes `MODE.dev`, so a
+   * production page never links (sends a device token to) a mock or another program on the engine port.
+   */
+  acceptMock?: boolean;
   api: {
     mint(deviceId: string, name: string): Promise<Minted>;
     listDevices(): Promise<DeviceRow[]>;
@@ -187,7 +193,14 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
       }, relistDelay);
     };
 
+    /** the current connection's hello passed the identity check: only then cloud events count and a token may go out */
+    let engineAccepted = false;
+    client.onStatus((s) => {
+      if (s !== 'open') engineAccepted = false;
+    });
+
     const sendLink = async (token: string, replace: boolean) => {
+      if (!engineAccepted) throw new Error('not a keysynth engine');
       const msg = replace ? { type: 'cloud_link' as const, token, replace: true } : { type: 'cloud_link' as const, token };
       // strictId: a `cloud_status` broadcast (online flip, another tab) must not pass for our reply
       return client.request(msg, { expect: 'cloud_status', timeoutMs: 20000, strictId: true });
@@ -195,7 +208,7 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
 
     const doLink = async (replace: boolean) => {
       const cloud = get().cloud;
-      if (!cloud) return;
+      if (!cloud || !engineAccepted) return; // never mint a device token for a mock / foreign server
       set({ link: { ...get().link, busy: true, error: null } });
       if (cloud.linked) reminted = true;
       // The engine lost a link to another account (token dropped): linking ours silently would hand that PC's
@@ -256,6 +269,11 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
           case 'state':
             // only the reply to `hello` carries these (PROTOCOL.md "Hello additions")
             if (msg.cloud || msg.version !== undefined || msg.trust) {
+              engineAccepted = identityAccepted(checkIdentity(msg), deps.acceptMock ?? true);
+              if (!engineAccepted) {
+                set({ engineVersion: null, trust: null, cloud: null, sync: null });
+                break;
+              }
               const prev = get().cloud;
               const c = msg.cloud ?? null;
               if (c?.linked && c.accountId) lastLinked = { accountId: c.accountId, name: c.accountName };
@@ -270,6 +288,7 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
             }
             break;
           case 'cloud_status': {
+            if (!engineAccepted) break; // a mock / foreign server: its link state must not drive a mint
             const status = stripStatus(msg);
             const merged = msg.merged;
             const prev = get().cloud;
@@ -285,7 +304,7 @@ export function createCloudStore(deps: CloudDeps): CloudStore {
             break;
           }
           case 'sync_status':
-            set({ sync: msg });
+            if (engineAccepted) set({ sync: msg });
             break;
           case 'samples_list_ok':
             set({ samples: viewFromList(msg), samplesLoading: false, samplesError: null });

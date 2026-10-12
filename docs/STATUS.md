@@ -3,6 +3,16 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Port-conflict incident fix (2026-10-12; a leftover dev mock on 7341 blocked the installed v0.1.0 and the platform
+  page drove the mock): ControlServer checks the listener table before binding (ix sets `SO_REUSEADDR`), owner
+  classification (`platform/PortOwner`, `control/PortConflict`), tray balloon/tooltip + 3 s retry instead of the
+  fatal box (ARCHITECTURE §11, §16); `hello.engine` identity, UI refuses non-keysynth servers (mock only in dev,
+  `MOCK` badge, no cloud link to it); mock on 7441, `dev:mock`, `start-dev.ps1 -Mock`, `stop-dev.ps1`, AGENTS rule
+  10; audio dialog / top bar layout (no wrapped buttons, long device names, 1024–1440 px); terse UI texts; samples
+  not downloaded (not linked / offline) are a notice + sampler-panel «Скачать сэмплы», not an error (offline
+  retries every 30 s). Tests: `[port]` (fake listener), sampler notice/offline/retry, UI identity states.
+  Not verified live: the tray balloon itself (a dev `--tray` run was checked via its log only) and the real ASIO
+  device (the installed app was not touched).
 - Cloud live (2026-10-12): `https://mvv42.ru/keysynth/` (frontend.yml), `keysynth-api` on 127.0.0.1:5020
   (backend.yml), release v0.1.0 with `keysynth-setup.exe` (release-windows.yml, first run green on the GitHub
   runner), nginx app conf + `_files` X-Accel location (mvv42-infra PR #1), DB `keysynth`, secrets synced, auth app

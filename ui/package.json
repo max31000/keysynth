@@ -4,6 +4,7 @@
   "description": "keysynth web UI",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "vite --mode mock",
     "dev:platform": "vite --mode platform-dev",
     "build": "tsc --noEmit && vite build",
     "build:platform": "tsc --noEmit && vite build --mode platform",

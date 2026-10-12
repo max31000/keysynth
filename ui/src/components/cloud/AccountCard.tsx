@@ -29,10 +29,7 @@ export function AccountCard() {
   } else if (!platform && !cloud.linked) {
     body = (
       <>
-        <p>
-          Синхронизация пресетов и загрузка сэмплов работают через аккаунт mvv42.ru. Откройте keysynth на сайте и
-          войдите — движок привяжется к аккаунту автоматически.
-        </p>
+        <p>Не привязан. Привязка — на mvv42.ru/keysynth после входа.</p>
         <a className="btn primary" href={PLATFORM_URL} target="_blank" rel="noopener">
           Открыть mvv42.ru/keysynth
         </a>
@@ -41,18 +38,18 @@ export function AccountCard() {
   } else if (platform && plan === 'login' && !cloud.linked) {
     body = (
       <>
-        <p>Войдите, чтобы привязать движок к аккаунту: пресеты будут синхронизироваться, сэмплы — скачиваться с сервера.</p>
+        <p>Не привязан.</p>
         <button type="button" className="btn primary" onClick={() => requestLogin(SERVICE_ID)}>
           Войти через Telegram
         </button>
       </>
     );
   } else if (platform && plan === 'no-access' && !cloud.linked) {
-    body = <p>У аккаунта «{me.name}» нет доступа к keysynth. Попросите владельца портала выдать приглашение.</p>;
+    body = <p>У аккаунта «{me.name}» нет доступа к keysynth.</p>;
   } else if (!cloud.linked) {
     body = (
       <>
-        <p>{link.busy ? 'Привязываю движок к аккаунту…' : link.held ? 'Движок отвязан от аккаунта. Пресеты хранятся только на этом ПК.' : 'Движок не привязан.'}</p>
+        <p>{link.busy ? 'Привязка…' : link.held ? 'Отвязан. Пресеты только на этом ПК.' : 'Не привязан.'}</p>
         {!link.busy && (
           <button type="button" className="btn primary" onClick={() => void a.retryLink()}>
             Привязать к аккаунту{me.name ? ` «${me.name}»` : ''}
@@ -90,8 +87,7 @@ export function AccountCard() {
         </dl>
         {foreign && (
           <p className="note warn">
-            Движок привязан к аккаунту «{cloud.accountName}», но среди устройств вашего аккаунта{me.name ? ` «${me.name}»` : ''} его
-            нет.{' '}
+            Привязан к «{cloud.accountName}», не к{me.name ? ` «${me.name}»` : ' вашему аккаунту'}.{' '}
             <button type="button" className="btn small" onClick={() => void a.retryLink()}>
               Привязать к моему
             </button>
@@ -99,7 +95,7 @@ export function AccountCard() {
         )}
         {platform && plan === 'login' && (
           <p className="note">
-            Вы не вошли — привязка движка не проверяется.{' '}
+            Вход не выполнен.{' '}
             <button type="button" className="btn small" onClick={() => requestLogin(SERVICE_ID)}>
               Войти
             </button>
@@ -107,12 +103,12 @@ export function AccountCard() {
         )}
         {link.merged && link.merged.presets + link.merged.patterns > 0 && (
           <p className="note">
-            Локальные пресеты перенесены в аккаунт: {link.merged.presets} пресетов, {link.merged.patterns} паттернов.
+            Перенесено в аккаунт: пресетов {link.merged.presets}, паттернов {link.merged.patterns}.
           </p>
         )}
         {!!sync?.conflicts.length && (
           <div className="note warn">
-            Конфликты синхронизации — оставлены локальные копии (переименуйте или удалите их в браузере пресетов):
+            Конфликты, локальные копии:
             <ul>
               {sync.conflicts.map((c) => (
                 <li key={c.file} className="mono">
@@ -131,7 +127,7 @@ export function AccountCard() {
             className="btn small ghost"
             disabled={link.busy}
             onClick={() => {
-              if (window.confirm('Отвязать движок от аккаунта? Пресеты аккаунта останутся на ПК, но перестанут синхронизироваться.'))
+              if (window.confirm('Отвязать движок от аккаунта? Синхронизация остановится, пресеты останутся на ПК.'))
                 void a.unlink();
             }}
           >

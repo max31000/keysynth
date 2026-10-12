@@ -1,6 +1,7 @@
 #include "control/ControlServer.h"
 
 #include "core/AppPaths.h"
+#include "platform/PortOwner.h"
 
 #include <ixwebsocket/IXHttpServer.h>
 #include <ixwebsocket/IXNetSystem.h>
@@ -77,11 +78,60 @@ std::optional<fs::path> ControlServer::resolveStatic(const std::string& uri, con
     return std::nullopt;
 }
 
+namespace {
+// ix reports bind errors with strerror(errno), i.e. "Unknown error" for Winsock codes: re-read the listener table
+// (the port may have been taken between the check and the bind), else keep ix's text.
+PortConflict bindFailure(int port, const std::string& ixError) {
+    if (auto c = findConflict(port, platform::tcpListeners(port))) return *c;
+    PortConflict u;
+    u.port = port;
+    u.error = ixError;
+    return u;
+}
+} // namespace
+
+std::optional<PortConflict> ControlServer::probe(int port) {
+    std::string err;
+    // Free for IPv4 loopback (a v6-only [::] listener passes): no conflict even if the table lists one.
+    if (platform::loopbackPortBindable(port, err)) return std::nullopt;
+    // Exclusive bind refused: a listener we can name is the conflict. Without one (only TIME_WAIT connections of a
+    // previous run, which also refuse an exclusive bind) let the real bind decide.
+    return findConflict(port, platform::tcpListeners(port));
+}
+
 std::string ControlServer::start(int wsPort, int httpPort) {
     ix::initNetSystem();
     wsPort_ = wsPort;
     httpPort_ = httpPort;
-    ws_ = std::make_unique<ix::WebSocketServer>(wsPort, "127.0.0.1");
+    wsConflict_ = listenWs();
+    httpConflict_ = httpWanted() ? listenHttp() : std::nullopt;
+    if (wsConflict_)
+        return "WebSocket listen on 127.0.0.1:" + std::to_string(wsPort) + " failed: " + conflictLogLine(*wsConflict_);
+    return {};
+}
+
+bool ControlServer::retryListen() {
+    bool changed = false;
+    if (!ws_) {
+        wsConflict_ = listenWs();
+        changed |= !wsConflict_.has_value();
+    }
+    if (!http_ && httpWanted()) {
+        httpConflict_ = listenHttp();
+        changed |= !httpConflict_.has_value();
+    }
+    return changed;
+}
+
+bool ControlServer::httpWanted() const {
+    std::error_code ec;
+    return httpPort_ > 0 && fs::is_regular_file(uiDist_ / "index.html", ec);
+}
+
+std::optional<PortConflict> ControlServer::listenWs() {
+    // Before the bind: ix sets SO_REUSEADDR, so on Windows its bind can succeed on top of another listener.
+    if (auto c = probe(wsPort_)) return c;
+    ws_ = std::make_unique<ix::WebSocketServer>(wsPort_, "127.0.0.1");
     ws_->disablePerMessageDeflate();
     std::weak_ptr<bool> alive = alive_;
     ws_->setOnConnectionCallback([this, alive](std::weak_ptr<ix::WebSocket> wsWeak,
@@ -135,37 +185,41 @@ std::string ControlServer::start(int wsPort, int httpPort) {
     auto res = ws_->listen();
     if (!res.first) {
         ws_.reset();
-        return "WebSocket listen on 127.0.0.1:" + std::to_string(wsPort) + " failed: " + res.second;
+        return bindFailure(wsPort_, res.second);
     }
     ws_->start();
+    return std::nullopt;
+}
 
-    std::error_code ec;
-    if (httpPort > 0 && fs::is_regular_file(uiDist_ / "index.html", ec)) {
-        http_ = std::make_unique<ix::HttpServer>(httpPort, "127.0.0.1");
-        const fs::path dist = uiDist_;
-        const int port = httpPort;
-        http_->setOnConnectionCallback([dist, port](ix::HttpRequestPtr req, std::shared_ptr<ix::ConnectionState>) {
-            ix::WebSocketHttpHeaders headers;
-            auto host = req->headers.find("Host");
-            if (host == req->headers.end() || !hostAllowed(host->second, port)) // DNS-rebinding guard
-                return std::make_shared<ix::HttpResponse>(403, "Forbidden", ix::HttpErrorCode::Ok, headers, "forbidden");
-            if (req->method != "GET" && req->method != "HEAD")
-                return std::make_shared<ix::HttpResponse>(405, "Method Not Allowed", ix::HttpErrorCode::Ok, headers, "");
-            auto file = resolveStatic(req->uri, dist);
-            if (!file) return std::make_shared<ix::HttpResponse>(404, "Not Found", ix::HttpErrorCode::Ok, headers, "not found");
-            std::ifstream f(*file, std::ios::binary);
-            std::stringstream ss;
-            ss << f.rdbuf();
-            headers["Content-Type"] = mimeFor(*file);
-            headers["Cache-Control"] = "no-cache";
-            return std::make_shared<ix::HttpResponse>(200, "OK", ix::HttpErrorCode::Ok, headers,
-                                                      req->method == "HEAD" ? std::string() : ss.str());
-        });
-        auto hr = http_->listen();
-        if (!hr.first) http_.reset(); // non-fatal: UI can still be served by the Vite dev server
-        else http_->start();
+std::optional<PortConflict> ControlServer::listenHttp() {
+    if (auto c = probe(httpPort_)) return c;
+    http_ = std::make_unique<ix::HttpServer>(httpPort_, "127.0.0.1");
+    const fs::path dist = uiDist_;
+    const int port = httpPort_;
+    http_->setOnConnectionCallback([dist, port](ix::HttpRequestPtr req, std::shared_ptr<ix::ConnectionState>) {
+        ix::WebSocketHttpHeaders headers;
+        auto host = req->headers.find("Host");
+        if (host == req->headers.end() || !hostAllowed(host->second, port)) // DNS-rebinding guard
+            return std::make_shared<ix::HttpResponse>(403, "Forbidden", ix::HttpErrorCode::Ok, headers, "forbidden");
+        if (req->method != "GET" && req->method != "HEAD")
+            return std::make_shared<ix::HttpResponse>(405, "Method Not Allowed", ix::HttpErrorCode::Ok, headers, "");
+        auto file = resolveStatic(req->uri, dist);
+        if (!file) return std::make_shared<ix::HttpResponse>(404, "Not Found", ix::HttpErrorCode::Ok, headers, "not found");
+        std::ifstream f(*file, std::ios::binary);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        headers["Content-Type"] = mimeFor(*file);
+        headers["Cache-Control"] = "no-cache";
+        return std::make_shared<ix::HttpResponse>(200, "OK", ix::HttpErrorCode::Ok, headers,
+                                                  req->method == "HEAD" ? std::string() : ss.str());
+    });
+    auto hr = http_->listen();
+    if (!hr.first) {
+        http_.reset(); // non-fatal: UI can still be served by the Vite dev server
+        return bindFailure(httpPort_, hr.second);
     }
-    return {};
+    http_->start();
+    return std::nullopt;
 }
 
 void ControlServer::stop() {

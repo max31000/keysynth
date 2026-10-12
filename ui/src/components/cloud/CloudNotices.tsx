@@ -27,20 +27,15 @@ export function LinkConfirm() {
         <p>
           {confirm?.current && confirm.current === me ? (
             <>
-              Движок привязан к аккаунту с именем <b>«{confirm.current}»</b>, но среди устройств вашего аккаунта его нет
-              (ключ отозван или это другой аккаунт). Привязать его к вашему аккаунту?
+              Привязан к <b>«{confirm.current}»</b>, но среди устройств вашего аккаунта его нет. Привязать к вашему?
             </>
           ) : (
             <>
-              Движок был привязан к аккаунту <b>«{confirm?.current ?? 'другой'}»</b>. Привязать его к вашему аккаунту
-              {me ? <b> «{me}»</b> : null}?
+              Привязан к <b>«{confirm?.current ?? 'другой'}»</b>. Привязать к{me ? <b> «{me}»</b> : ' вашему'}?
             </>
           )}
         </p>
-        <p className="muted">
-          Пресеты прежнего аккаунта останутся на этом ПК, но перестанут синхронизироваться. У каждого аккаунта — свой
-          набор пользовательских пресетов.
-        </p>
+        <p className="muted">Пресеты прежнего аккаунта останутся на ПК без синхронизации.</p>
         <div className="row gap end">
           <button type="button" className="btn" onClick={() => a.dismissConfirm()}>
             Оставить как есть
@@ -64,19 +59,19 @@ export function UpdateBanner() {
     <div className="update-banner" role="status">
       <span className="led on" />
       <span>
-        Доступна новая версия движка <b className="mono">{latest.version}</b>
+        Новая версия движка <b className="mono">{latest.version}</b>
         {version ? (
           <>
             {' '}
             (у вас <span className="mono">{version}</span>)
           </>
         ) : (
-          ' — ваша версия не поддерживает облачные функции'
+          ' (у вас версия без облака)'
         )}
         .
       </span>
       <a className="btn small primary" href={DOWNLOAD_URL} rel="noopener">
-        Скачать обновление
+        Скачать
       </a>
       <a className="btn small ghost" href={latest.url} target="_blank" rel="noopener">
         Что нового
@@ -135,7 +130,7 @@ export function SampleToast() {
           <i style={{ transform: `scaleX(${f.toFixed(3)})` }} />
         </div>
         <div className="hint mono">
-          {formatBytes(j.bytesDone)} / {formatBytes(j.bytesTotal)} {formatRate(j.rate)} {formatEta(j)} · инструмент зазвучит сам
+          {formatBytes(j.bytesDone)} / {formatBytes(j.bytesTotal)} {formatRate(j.rate)} {formatEta(j)}
         </div>
       </div>
     );

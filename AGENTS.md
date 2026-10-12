@@ -29,6 +29,10 @@ Read before changing anything. Keep this file short; details live in `docs/`.
 9. **Parallel work in worktrees:** before your final commit, `git merge main` into your branch, resolve, rebuild and
    rerun tests, so the lead's merge is a fast integration, not a conflict hunt. Never run a non-disconnected
    CMake configure concurrently with other agents against the shared `.deps/` (use `scripts/configure.ps1`).
+10. **Stop what you start.** Every background process you launch (mock, Vite, dev engine, test servers) is stopped
+    before you finish (`scripts/stop-dev.ps1`; it never touches the installed app). The dev mock uses its own port
+    (7441); never run anything on the engine's 7341/7340 — the owner's installed keysynth needs them. The Browser
+    pane's `preview_start` reads the **main checkout's** `.claude/launch.json`: from a worktree start servers yourself.
 
 ## Commands (Windows, PowerShell)
 ```

@@ -30,7 +30,15 @@ other, and treats cmake stderr warnings as output (only the exit code fails it).
 scripts/start.ps1              # play: builds ui/dist if missing/stale, engine (Release, real audio) + browser at :7340
 scripts/start.ps1 -BuildDir build-int -Port 7351 -HttpPort 7350 -NoAudio -NoBrowser   # smoke test, side by side
 scripts/start-dev.ps1          # UI work: engine --no-audio --no-midi + Vite dev server (:5173, ?engine=...)
+scripts/start-dev.ps1 -Mock    # UI work without the C++ engine: mock engine on :7441 + Vite (?engine=127.0.0.1:7441)
+scripts/stop-dev.ps1           # stop every dev mock / Vite / dev engine started from this repo or its worktrees
 ```
+
+The mock (`ui/mock/mock-engine.ts`, `npm run mock`) listens on **7441**, never on the engine's 7341, and reports
+`engine.kind: "mock"` in `hello`; production pages refuse it (PROTOCOL.md *Hello additions*), dev builds show a
+`MOCK` badge. `npm run dev:mock` / `npm run dev:platform` point Vite at it (`KS_ENGINE=ws://...` overrides, `?engine=`
+wins). `scripts/stop-dev.ps1` leaves the installed app (`%LOCALAPPDATA%\Programs\keysynth`) alone unless
+`-IncludeInstalled`; `-WhatIf` lists only.
 
 Both build `keysynth-engine` incrementally first when the build dir is configured (`-NoBuild`: use the exe as-is),
 fail at once if one of their ports is already taken (instead of attaching to another process), wait for the port,
@@ -216,8 +224,8 @@ non-ASCII characters (the cache and download path handle them; a library using t
 
 `npm run dev:platform` (in `ui/`) serves the UI at `http://127.0.0.1:5173/keysynth/` (base `/keysynth/`, platform
 mode) with stubs for the platform endpoints (`ui/dev/platformStub.ts`): `/auth/api/me|refresh|logout`,
-`/keysynth/api/devices` (fake `ksd_` tokens) and the GitHub latest-release query. Run `npm run mock` next to it (the
-mock engine accepts the tokens; "OTHER" in a token = another account). Stub controls: `/__stub/login`,
+`/keysynth/api/devices` (fake `ksd_` tokens) and the GitHub latest-release query. Run `npm run mock` next to it (port
+7441, the dev page's default engine; it accepts the tokens; "OTHER" in a token = another account). Stub controls: `/__stub/login`,
 `/__stub/logout`, `/__stub/account?id=other|me`, `/__stub/latest?v=0.2.0` (update banner; `v=` clears),
 `/__stub/state`. `?lna=ignore` skips the Local Network Access permission query (embedded test browsers report
 `denied` for every permission). States to check: download card (no engine; click «Подключить движок»), connecting,

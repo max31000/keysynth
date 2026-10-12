@@ -57,7 +57,7 @@ UiOpener::~UiOpener() {
 void UiOpener::openPreferred() {
     if (busy_.exchange(true)) return;
     if (worker_.joinable()) worker_.join(); // the previous probe has finished (busy_ was false)
-    worker_ = std::thread([this, local = localAvailable_ ? localUrl_ : std::string()] {
+    worker_ = std::thread([this, local = localAvailable_ && localAvailable_() ? localUrl_ : std::string()] {
         const bool web = platform::probeHealth(platform::kWebHealthUrl, 3000);
         const std::string url = web || local.empty() ? std::string(platform::kWebUiUrl) : local;
         std::printf("open UI: %s%s\n", url.c_str(), web ? "" : " (mvv42.ru unreachable)");
@@ -69,7 +69,7 @@ void UiOpener::openPreferred() {
 }
 
 void UiOpener::openLocal() const {
-    if (localAvailable_) platform::openInBrowser(localUrl_);
+    if (localAvailable_ && localAvailable_()) platform::openInBrowser(localUrl_);
 }
 
 } // namespace ks::app

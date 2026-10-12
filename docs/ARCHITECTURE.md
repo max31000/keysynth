@@ -160,6 +160,7 @@ class Module {
   virtual void loadState(const nlohmann::json&) {}        // control thread, before prepare
   virtual bool loadStateWroteParams() const { return false; } // loadState wrote params (fm .syx voice)
   virtual std::string loadError() const { return {}; }    // control thread: failed resource load (bad sfz/syx)
+  virtual std::optional<MissingResource> missingResource() const; // control thread: missing for a non-error reason
   virtual bool isReady() const { return true; }           // false while heavy resources load asynchronously
   virtual void setOfflineMode(bool) {}                    // control thread, after prepare: faster-than-RT render
   virtual void resourcesChanged() {}                      // control thread: a missing resource may exist now
@@ -183,6 +184,9 @@ class Module {
   dirty) and the built node already carries the new state, so the next build reuses the module.
 - **Load errors** (`loadError`): polled by `Session::pollModuleErrors` on the 30 Hz pump and reported once per module
   instance as a `log` error event (PROTOCOL.md); `OfflineRenderer` adds them to its warnings (ks-render prints them).
+  `missingResource` (`{ id, reason: "not_linked" | "offline", detail }`, sampler only: samples that can be downloaded
+  but are not, §15) replaces the error with one friendly `log` warn notice per (reason, entry) per run; the detail
+  (searched paths) only goes to stdout / engine.log.
 
 - `ProcessContext`: sampleRate, numSamples, sampleTime, transport (tempo, ppq position, playing), and per-layer
   `ChannelState` {pitchBend (-1..1), modWheel, aftertouch, cc64 sustain, cc66 sostenuto, cc67 soft, expression}
@@ -431,6 +435,17 @@ JSON over WebSocket, see `docs/PROTOCOL.md` (source of truth for UI and engine; 
   ixwebsocket has no pre-upgrade hook, so a refused WS handshake is closed with 4003 right after the upgrade and
   never reaches the protocol handler. Rules and the `web` allow-list: PROTOCOL.md *Sessions, Origin, Host*
   (`control/Trust.h`, checked in `ProtocolHandler` before dispatch).
+- **Port conflicts.** ixwebsocket sets `SO_REUSEADDR`, which on Windows lets a second socket bind a port that is
+  already listening. So before each bind `ControlServer::probe` tries an exclusive bind (`SO_EXCLUSIVEADDRUSE`) of
+  exactly `127.0.0.1:<port>`; when refused, the owner is named from the listener table (`platform/PortOwner`:
+  `GetExtendedTcpTable` IPv4 + IPv6 → pid → image; a listener on `127.0.0.1`, `0.0.0.0` or `[::]`) and classified
+  (`control/PortConflict`: `keysynth` = image `keysynth-engine.exe`, else `foreign`). Refused without a nameable
+  listener (TIME_WAIT connections of a previous run) → the real bind decides. A v6-only `[::]` / `[::1]` listener
+  and a non-exclusive `0.0.0.0` one (the more specific 127.0.0.1 bind wins loopback traffic) do not block; `[::1]`
+  is logged (`localhost` clients may reach it). WS (7341) and HTTP (7340) bind independently.
+  Headless runs exit 1 with the classified message; desktop mode handles it without a modal box (§16). The WS port
+  is probed before audio/plugins/cloud start, bound after them (a hello must not wait for a slow device open).
+  `retryListen()` binds whatever is still missing.
 - Every path in a request is resolved and must lie inside allow-listed roots (app `presets/`, the profile root
   `userdata/`, `assets/`, the plugins dir, the sample cache; AppPaths). Handlers validate input and reply `error`
   instead of crashing.
@@ -525,6 +540,13 @@ installer*. The engine stays one process; desktop mode only adds a tray icon and
 - **Open UI**: GET `https://mvv42.ru/keysynth/health` (3 s, no redirects) on a worker; 200 → web UI
   `https://mvv42.ru/keysynth/`, else the local UI `http://127.0.0.1:<http-port>/` when the static server runs.
   Plain launch opens it at start; `--tray` (autostart) and `keysynth://` (the web page started us) do not.
+- **Port busy at start** (§11 *Port conflicts*): owner `keysynth` (another engine outside our single instance,
+  e.g. a headless dev build) → open the UI (it talks to that engine; not for `--tray` / `keysynth://`) and exit 0.
+  `foreign` → keep running in the tray: balloon + tooltip «Порт 7341 занят процессом <name> (PID n). Закройте его —
+  keysynth переподключится автоматически.» (English when the display language is not Russian), retry every 3 s,
+  balloon again once bound. Until the WS port is bound the UI is not opened (a click on the tray repeats the
+  balloon; a pending open-on-start runs after binding), so a browser never lands on the foreign server. HTTP-port
+  conflicts only disable «Открыть локально» until bound (tooltip + log).
 - **Autostart**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `keysynth` =
   `"<exe>" --tray`, written by the tray toggle or the installer task (same value).
 - **Faust** in the install: `faust.dll` + `share/faust/*.lib` next to the exe are preferred over the compile-time

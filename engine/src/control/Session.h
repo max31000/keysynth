@@ -117,7 +117,11 @@ public:
     nlohmann::json transportTelemetry() const; // { ppq, playing, step, bar }
     // Reports new Module::loadError()s of the latest graph's modules once each via `log("error", ...)` (failed sample
     // loads finish asynchronously, so this runs on the 30 Hz pump). Returns the number of new reports.
+    // Module::missingResource() (samples not downloaded: not linked / offline) is a friendly `log("warn", ...)`
+    // notice instead, once per (reason, entry) per run; the technical detail only goes to stdout (engine.log).
     int pollModuleErrors();
+    // The notice text (tests).
+    static std::string missingSamplesMessage(const std::string& presetName, const std::string& reason);
 
 private:
     void logWarnings(const std::vector<std::string>& w);
@@ -136,6 +140,7 @@ private:
     std::string patternPath_;
     bool patternEdited_ = false;
     std::map<const Module*, std::string> reportedErrors_; // pollModuleErrors: module -> last reported error
+    std::set<std::string> notifiedMissing_;                // pollModuleErrors: "<reason>|<entry>" already notified
     std::mutex profileMutex_;
 };
 
