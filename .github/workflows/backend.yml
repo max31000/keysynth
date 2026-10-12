@@ -1,0 +1,235 @@
+# keysynth-api: test -> build image -> push GHCR -> deploy on the VDS with health check and rollback.
+#
+# INLINE copy of max31000/mvv42-infra .github/workflows/deploy-dotnet-api.yml (commit 9f5332b, 2026-10-11),
+# because this repo is public and cannot call the private infra repo's reusable workflows
+# (docs/specs/2026-10-12-cloud.md §11). Re-sync by hand when the infra workflow changes.
+# Differences: inputs are fixed values below; tests run in a separate job (also on PRs, without deploy).
+#
+# Container env: non-secret lines in PLAIN_ENV, secret lines assembled from repo secrets into the env file
+# /etc/mvv42/env/keysynth-api.env (mode 600; never on a command line). NOTE (as in infra): appleboy/ssh-action
+# transports `envs` by prefixing the remote command, so APP_ENV_B64 / GHCR_TOKEN are visible in the remote
+# process list while the SSH session runs. Accepted risk: single-user VDS.
+#
+# Secrets: VDS_HOST, VDS_USER, VDS_SSH_KEY, DB_CONNECTION_STRING; optional TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['server/**', '.github/workflows/backend.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_ID: keysynth
+  CONTAINER: keysynth-api
+  IMAGE_NAME: keysynth-api
+  PORT: 5020
+  CPORT: 8080
+  NETWORK: cashpulse-network
+  HEALTH_PATH: /health
+  HEALTH_TIMEOUT: 60
+  VOLUME_OWNER: '1654:1654'
+  VOLS: '/var/lib/keysynth:/data:ro'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test (MySQL repository tests run via Testcontainers on the runner's Docker)
+        working-directory: server
+        env:
+          KS_TESTS_DOCKER: '1'
+        run: dotnet test Keysynth.sln -c Release
+
+  build-deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: deploy-api-keysynth
+      cancel-in-progress: false
+    steps:
+      - name: Resolve image name
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "IMAGE=ghcr.io/${OWNER,,}/$IMAGE_NAME" >> "$GITHUB_ENV"
+
+      - name: Build container env file (values are not printed)
+        env:
+          PLAIN_ENV: |
+            ASPNETCORE_ENVIRONMENT=Production
+            Keysynth__SamplesRoot=/data/samples
+          SECRET_ENV: |
+            ConnectionStrings__DefaultConnection=${{ secrets.DB_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+          umask 077
+          f="$RUNNER_TEMP/app.env"
+          : > "$f"
+          add() { # $1 = label, $2 = text
+            local n=0 line
+            while IFS= read -r line; do
+              n=$((n + 1))
+              line="${line%$'\r'}"
+              [[ -z "${line// }" || "$line" == \#* ]] && continue
+              # Only the line number is reported: the line may contain a secret.
+              [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_.]*= ]] || { echo "::error::$1 line $n is not KEY=VALUE (multi-line values are not supported)"; exit 1; }
+              printf '%s\n' "$line" >> "$f"
+            done <<< "$2"
+          }
+          add env "$PLAIN_ENV"
+          add secrets "$SECRET_ENV"
+          grep -q '^ConnectionStrings__DefaultConnection=.' "$f" || { echo "::error::secret DB_CONNECTION_STRING is not set"; exit 1; }
+          echo "container env keys: $(cut -d= -f1 "$f" | sort | tr '\n' ' ')"
+          b64="$(base64 -w0 "$f")"
+          echo "::add-mask::$b64"
+          echo "APP_ENV_B64=$b64" >> "$GITHUB_ENV"
+          rm -f "$f"
+
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          context: server
+          file: server/Dockerfile
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=keysynth
+          cache-to: type=gha,mode=max,scope=keysynth
+
+      - name: Deploy on VDS
+        uses: appleboy/ssh-action@v1
+        env:
+          IMAGE_REF: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: ${{ secrets.VDS_USER }}
+          key: ${{ secrets.VDS_SSH_KEY }}
+          envs: CONTAINER,IMAGE_REF,VOLS,APP_ENV_B64,PORT,CPORT,NETWORK,HEALTH_PATH,HEALTH_TIMEOUT,VOLUME_OWNER,GHCR_USER,GHCR_TOKEN
+          script: |
+            bash -s <<'REMOTE'
+            set -euo pipefail
+            ENV_DIR=/etc/mvv42/env
+            ENV_FILE="$ENV_DIR/$CONTAINER.env"
+            PREV="$CONTAINER-prev"
+
+            # 1. env file (mode 600, never on the command line)
+            install -d -m 700 "$ENV_DIR"
+            ( umask 077; printf '%s' "$APP_ENV_B64" | base64 -d > "$ENV_FILE.new" )
+            mv -f "$ENV_FILE.new" "$ENV_FILE"
+
+            # 2. pull with a throw-away docker config (does not touch stored registry logins)
+            DOCKER_CONFIG="$(mktemp -d)"; export DOCKER_CONFIG
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin > /dev/null
+            docker pull -q "$IMAGE_REF"
+            docker logout ghcr.io > /dev/null || true
+            rm -rf "$DOCKER_CONFIG"; unset DOCKER_CONFIG
+
+            # 3. volumes
+            vol_args=()
+            for v in $VOLS; do
+              host="${v%%:*}"
+              mkdir -p "$host"
+              if [ -n "$VOLUME_OWNER" ]; then chown "$VOLUME_OWNER" "$host"; fi
+              vol_args+=(-v "$v")
+            done
+
+            docker network inspect "$NETWORK" > /dev/null 2>&1 || { echo "docker network $NETWORK does not exist" >&2; exit 1; }
+
+            # 4. keep the current container (stopped) as fallback, start the new one.
+            # From the moment the old container is stopped, ANY failure restores it via the ERR trap.
+            docker rm -f "$PREV" > /dev/null 2>&1 || true
+            had_prev=false
+            renamed=false
+            restore_prev() {
+              trap - ERR
+              set +e
+              if $renamed; then
+                docker rm -f "$CONTAINER" > /dev/null 2>&1
+                docker rename "$PREV" "$CONTAINER"
+              fi
+              if $had_prev; then
+                if docker start "$CONTAINER" > /dev/null; then
+                  echo "!! previous container restored" >&2
+                else
+                  echo "!! FAILED to restore the previous container - fix by hand" >&2
+                fi
+              else
+                docker rm -f "$CONTAINER" > /dev/null 2>&1
+              fi
+            }
+            trap 'restore_prev; exit 1' ERR
+            if docker inspect "$CONTAINER" > /dev/null 2>&1; then
+              had_prev=true
+              docker stop -t 20 "$CONTAINER" > /dev/null
+              docker rename "$CONTAINER" "$PREV"
+              renamed=true
+            fi
+            if ! docker run -d --name "$CONTAINER" --restart unless-stopped \
+                --network "$NETWORK" -p "127.0.0.1:$PORT:$CPORT" \
+                --env-file "$ENV_FILE" "${vol_args[@]}" "$IMAGE_REF" > /dev/null; then
+              echo "!! docker run failed" >&2
+              restore_prev; exit 1
+            fi
+
+            # 5. health: retry loop
+            url="http://127.0.0.1:$PORT$HEALTH_PATH"
+            deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
+            healthy=false
+            while [ "$(date +%s)" -lt "$deadline" ]; do
+              if curl -fsS -o /dev/null --max-time 3 "$url"; then healthy=true; break; fi
+              sleep 2
+            done
+
+            if $healthy; then
+              trap - ERR
+              echo "healthy: $url"
+              if $had_prev; then docker rm "$PREV" > /dev/null || true; fi
+              docker image prune -f > /dev/null || true
+              exit 0
+            fi
+
+            echo "!! $CONTAINER not healthy after ${HEALTH_TIMEOUT}s; last log lines:" >&2
+            docker logs --tail 60 "$CONTAINER" 2>&1 | sed 's/^/    /' >&2 || true
+            restore_prev
+            exit 1
+            REMOTE
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] || exit 0
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="$TG_CHAT" \
+            --data-urlencode text="❌ $APP_ID API deploy failed: $RUN_URL" > /dev/null

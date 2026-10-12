@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{282F67BE-8D88-41B3-BC19-F59F64E91467}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keysynth.Core", "src\Keysynth.Core\Keysynth.Core.csproj", "{3C0064A7-54A4-41F3-B65D-4E35FB712C24}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keysynth.Infrastructure", "src\Keysynth.Infrastructure\Keysynth.Infrastructure.csproj", "{F5012692-5D52-4DC6-8576-F06FDB896248}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keysynth.Api", "src\Keysynth.Api\Keysynth.Api.csproj", "{B0C98C0A-3EBD-4F99-B26B-97A1FECA16D2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{9F69634D-BACC-4847-9252-F8E5B9EE26E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keysynth.Tests", "tests\Keysynth.Tests\Keysynth.Tests.csproj", "{64766FD1-81AA-4A61-8F40-15B19F13CD04}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keysynth.IntegrationTests", "tests\Keysynth.IntegrationTests\Keysynth.IntegrationTests.csproj", "{F0171164-5044-4DC6-8064-B831E622B303}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3C0064A7-54A4-41F3-B65D-4E35FB712C24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C0064A7-54A4-41F3-B65D-4E35FB712C24}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C0064A7-54A4-41F3-B65D-4E35FB712C24}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C0064A7-54A4-41F3-B65D-4E35FB712C24}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F5012692-5D52-4DC6-8576-F06FDB896248}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5012692-5D52-4DC6-8576-F06FDB896248}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5012692-5D52-4DC6-8576-F06FDB896248}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5012692-5D52-4DC6-8576-F06FDB896248}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B0C98C0A-3EBD-4F99-B26B-97A1FECA16D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0C98C0A-3EBD-4F99-B26B-97A1FECA16D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0C98C0A-3EBD-4F99-B26B-97A1FECA16D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0C98C0A-3EBD-4F99-B26B-97A1FECA16D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{64766FD1-81AA-4A61-8F40-15B19F13CD04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{64766FD1-81AA-4A61-8F40-15B19F13CD04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{64766FD1-81AA-4A61-8F40-15B19F13CD04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{64766FD1-81AA-4A61-8F40-15B19F13CD04}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F0171164-5044-4DC6-8064-B831E622B303}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F0171164-5044-4DC6-8064-B831E622B303}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F0171164-5044-4DC6-8064-B831E622B303}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F0171164-5044-4DC6-8064-B831E622B303}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3C0064A7-54A4-41F3-B65D-4E35FB712C24} = {282F67BE-8D88-41B3-BC19-F59F64E91467}
+		{F5012692-5D52-4DC6-8576-F06FDB896248} = {282F67BE-8D88-41B3-BC19-F59F64E91467}
+		{B0C98C0A-3EBD-4F99-B26B-97A1FECA16D2} = {282F67BE-8D88-41B3-BC19-F59F64E91467}
+		{64766FD1-81AA-4A61-8F40-15B19F13CD04} = {9F69634D-BACC-4847-9252-F8E5B9EE26E8}
+		{F0171164-5044-4DC6-8064-B831E622B303} = {9F69634D-BACC-4847-9252-F8E5B9EE26E8}
+	EndGlobalSection
+EndGlobal
