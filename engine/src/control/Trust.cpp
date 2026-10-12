@@ -9,7 +9,13 @@ using nlohmann::json;
 
 namespace ks {
 
-const char* toString(Trust t) { return t == Trust::Web ? "web" : "local"; }
+const char* toString(Trust t) {
+    switch (t) {
+    case Trust::Web: return "web";
+    case Trust::Remote: return "remote";
+    default: return "local";
+    }
+}
 
 namespace {
 std::string lower(std::string s) {
@@ -113,7 +119,7 @@ std::string checkPatch(const json& p) {
 
 } // namespace
 
-std::string webRestriction(const json& msg) {
+std::string webRestriction(const json& msg, const char* sessionKind) {
     static const std::set<std::string> open = {
         "hello",      "get_catalog",   "set_param",     "get_patch",     "list_presets",   "add_layer",
         "remove_layer", "set_zone",    "set_instrument", "add_fx",       "remove_fx",      "move_fx",
@@ -145,7 +151,23 @@ std::string webRestriction(const json& msg) {
         const std::string e = checkPatch(*it);
         return e.empty() ? std::string() : "set_patch: " + e;
     }
-    return "'" + type + "' is not available to web sessions";
+    return "'" + type + "' is not available to " + sessionKind + " sessions";
+}
+
+std::string remoteRestriction(const json& msg) {
+    static const std::set<std::string> denied = {"cloud_link",       "cloud_unlink",   "set_audio_device",
+                                                 "open_audio_panel", "samples_delete", "reload_plugin"};
+    const std::string type = msg.value("type", std::string());
+    if (denied.count(type)) return "'" + type + "' is not available to remote sessions";
+    return webRestriction(msg, "remote");
+}
+
+std::string trustRestriction(Trust t, const json& msg) {
+    switch (t) {
+    case Trust::Web: return webRestriction(msg);
+    case Trust::Remote: return remoteRestriction(msg);
+    default: return {};
+    }
 }
 
 } // namespace ks

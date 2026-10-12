@@ -220,6 +220,28 @@ the server indexes every file of each `<lib>/` dir (sha256 at startup — use `-
 every `.sfz` an entry referencing all files of its library. Note: sfizz does not load `sample=` paths with
 non-ASCII characters (the cache and download path handle them; a library using them would fail in sfizz itself).
 
+### Relay E2E (`scripts/dev_relay_e2e.py`, engine as relay host)
+
+`scripts/dev_relay_server.py` = the dev cloud API above (it imports `dev_cloud_server.py`) plus a stdlib relay hub
+at `/keysynth/api/relay` implementing the spec §3/§10 envelope (`docs/specs/2026-10-12-remote.md`; host auth =
+bearer device token, else 401 before the upgrade; controllers unauthenticated `?role=controller&cid=<id>`; app
+pings every `--ping` s). The E2E starts it (port 8766) and the engine (`--no-audio --no-midi --no-plugins
+--no-tray --port 7351 --http-port 0 --cloud-api http://127.0.0.1:8766/keysynth`, temp `KS_DATA_DIR`), links the
+engine over the local WS, then drives two controllers through the relay: `hello` → `trust:"remote"`,
+`list_presets` / `load_preset` round trip (+ `state` to everyone), `set_param` echoed as `param` to the other
+controller and the local client but not the sender (`except`), forbidden messages → `error forbidden`,
+telemetry + `pause`/`resume`. It stops everything it started (also on failure, printing both logs' tails).
+
+```powershell
+python scripts/dev_relay_e2e.py                          # ~10 s; --engine <exe> (default build-relay/bin/Release)
+python scripts/dev_relay_e2e.py --idle 50 --server-ping 1000   # heartbeat: only the engine's own 20 s ping keeps it up
+```
+
+Unit tests: `ks-tests "[relay]"` (remote trust table generated from PROTOCOL.md's request table — a new request
+fails it until classified; envelope routing through ControlServer's virtual clients; RemoteRouter rates and pause;
+RelayClient backoff / heartbeat / 401 / re-link with a fake socket; `[net]`: the WinHTTP socket against a local
+ixwebsocket server on 47391–47399).
+
 ### Web UI in platform mode (`npm run dev:platform`)
 
 `npm run dev:platform` (in `ui/`) serves the UI at `http://127.0.0.1:5173/keysynth/` (base `/keysynth/`, platform

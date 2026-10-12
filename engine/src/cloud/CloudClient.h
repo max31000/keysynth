@@ -64,6 +64,7 @@ public:
     bool linked() const;
     std::string accountId() const;
     std::string deviceId() const;
+    std::string deviceName() const;
     const std::string& baseUrl() const noexcept { return base_; }
     // Bumped on every status change (link, unlink, online <-> offline, error, token dropped).
     uint64_t statusVersion() const noexcept { return version_.load(); }

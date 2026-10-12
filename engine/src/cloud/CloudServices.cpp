@@ -47,6 +47,7 @@ CloudServices::CloudServices(Session& session, Options opt) : session_(session),
     so.retryBaseMs = opt_.retryBaseMs;
     samples_ = std::make_unique<samples::SampleService>(*client_, so);
     sync_ = std::make_unique<SyncService>(*client_, session_.profileMutex(), opt_.syncIntervalMs);
+    relay_ = std::make_unique<RelayClient>(*client_, engineVersion(), opt_.relay);
 }
 
 CloudServices::~CloudServices() { stop(); }
@@ -69,6 +70,7 @@ void CloudServices::start() {
 }
 
 void CloudServices::stop() {
+    relay_->stop(); // started separately (bindRelay)
     if (!started_) return;
     started_ = false;
     if (opt_.sampleHook) setSampleFetchHook({});
@@ -176,6 +178,7 @@ void CloudServices::handle(const std::string& type, const json& msg, const json&
                 q.push_back({clientId, {Outgoing::Target::Others, statusEvent(nullptr)}});
                 if (switched) q.push_back({clientId, {Outgoing::Target::Broadcast, session_.stateJson()}});
                 lastCloudVersion_ = client_->statusVersion();
+                relay_->wake();
                 client_->post([this] { samples_->maybeRefreshManifest(); });
             });
         });
@@ -190,6 +193,7 @@ void CloudServices::handle(const std::string& type, const json& msg, const json&
         out.push_back({Outgoing::Target::Others, statusEvent(nullptr)});
         if (switched) out.push_back({Outgoing::Target::Broadcast, session_.stateJson()});
         lastCloudVersion_ = client_->statusVersion();
+        relay_->wake();
         return;
     }
     if (type == "sync_now") {
@@ -253,6 +257,7 @@ std::vector<AddressedOutgoing> CloudServices::poll() {
 
     if (const uint64_t v = client_->statusVersion(); v != lastCloudVersion_) {
         lastCloudVersion_ = v;
+        relay_->wake();                       // link / token may have changed
         const bool switched = applyProfile(); // token dropped after a 401
         q.push_back({{}, {Outgoing::Target::Broadcast, statusEvent(nullptr)}});
         if (switched) q.push_back({{}, {Outgoing::Target::Broadcast, session_.stateJson()}});

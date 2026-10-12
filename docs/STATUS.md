@@ -3,6 +3,12 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Remote R-B (engine as relay host, spec `docs/specs/2026-10-12-remote.md` §10, ARCHITECTURE §15 *Relay host*):
+  `platform/WinHttpWebSocket`, `cloud/RelayClient`, `Trust::Remote`, virtual clients `r:<cid>` + `control/RemoteRouter`
+  (envelopes, lossy, rates, pause); `[relay]` tests; `scripts/dev_relay_server.py` + `scripts/dev_relay_e2e.py`
+  (passes, also with `--idle 50`). Open: PROTOCOL.md `trust:"remote"` row / Relay section (R-A owns PROTOCOL),
+  real mvv42.ru relay (R-A) not tried yet. Known/accepted: a WinHTTP handle closed by abort() may be used once more
+  by the other socket thread (returns an invalid-handle error).
 - Port-conflict incident fix (2026-10-12; a leftover dev mock on 7341 blocked the installed v0.1.0 and the platform
   page drove the mock): ControlServer checks the listener table before binding (ix sets `SO_REUSEADDR`), owner
   classification (`platform/PortOwner`, `control/PortConflict`), tray balloon/tooltip + 3 s retry instead of the

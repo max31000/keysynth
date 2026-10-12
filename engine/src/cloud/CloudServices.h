@@ -4,6 +4,7 @@
 // results of background work are delivered by poll() (30 Hz pump) as addressed messages.
 
 #include "cloud/CloudClient.h"
+#include "cloud/RelayClient.h"
 #include "cloud/SyncService.h"
 #include "control/ProtocolHandler.h"
 #include "samples/SampleService.h"
@@ -28,6 +29,7 @@ public:
         int downloadWorkers = 2;
         int retryBaseMs = 1000;
         bool sampleHook = true; // register the sampler auto-fetch hook + cache dir (process-wide)
+        RelayClient::Options relay; // relay host (started by the app: bindRelay)
     };
 
     CloudServices(Session& session, Options opt);
@@ -54,6 +56,7 @@ public:
     CloudClient& client() noexcept { return *client_; }
     samples::SampleService& samples() noexcept { return *samples_; }
     SyncService& sync() noexcept { return *sync_; }
+    RelayClient& relay() noexcept { return *relay_; }
 
 private:
     using Continuation = std::function<void(std::vector<AddressedOutgoing>&)>;
@@ -66,6 +69,7 @@ private:
     std::unique_ptr<CloudClient> client_;
     std::unique_ptr<samples::SampleService> samples_;
     std::unique_ptr<SyncService> sync_;
+    std::unique_ptr<RelayClient> relay_;
     std::mutex laterM_;
     std::vector<Continuation> later_;
     std::string appliedAccount_;

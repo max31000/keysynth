@@ -13,7 +13,8 @@
 //   --no-midi            do not open MIDI inputs
 //   --no-plugins         do not load/watch plugins/ (Faust JIT + DLL plugins, docs/PLUGINS.md)
 //   --no-cloud           no cloud link / sample downloads / preset sync
-//   --cloud-api URL      API base (dev builds only; also KS_CLOUD_API, alias --cloud-base / KS_CLOUD_BASE)
+//   --cloud-api URL      API base (dev builds only; also KS_CLOUD_API, alias --cloud-base / KS_CLOUD_BASE); the
+//                        relay host connects to <URL>/api/relay while linked
 //   --web-origin ORIGIN  extra `web` origin (dev builds only; also KS_WEB_ORIGIN)
 
 #include "app/DesktopShell.h"
@@ -131,6 +132,7 @@ public:
         if (cloud_) srv_.dispatchAsync(cloud_->poll()); // cloud replies, sync/sample events
         const auto midi = s_.pollMidi();
         const auto tele = s_.pollTelemetry();
+        srv_.tickRemote(); // coalesced params / midi batch of relayed controllers
         if (srv_.clientCount() == 0) return;
         if (!midi.is_null()) srv_.broadcast(midi);
         srv_.broadcast(tele);
@@ -365,6 +367,9 @@ int main(int argc, char** argv) {
         cloud = std::make_unique<ks::cloud::CloudServices>(session, copt);
         handler.setCloud(cloud.get());
         cloud->start();
+        // Relay host (ARCHITECTURE §15 *Relay*): remote controllers become virtual clients of the server.
+        ks::cloud::bindRelay(cloud->relay(), server,
+                             [](std::function<void()> f) { juce::MessageManager::callAsync(std::move(f)); });
         const auto cs = cloud->client().status();
         std::printf("cloud: %s, %s (device %s), data %s\n", copt.baseUrl.c_str(),
                     cs.linked ? ("linked to " + cs.accountName).c_str() : "not linked", cs.deviceId.c_str(),
