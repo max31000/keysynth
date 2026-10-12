@@ -1,0 +1,483 @@
+/* keysynth — «Пульт» (touch remote view) and relay status. Tokens from styles.css / cloud.css (imported after). */
+
+/* ───────── relay status (top bar, Пульт) ───────── */
+.relay-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.relay-pill .conn {
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font: 500 12px/1 var(--font-ru);
+}
+.relay-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.relay-rtt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.relay-switch {
+  height: 26px;
+  max-width: 170px;
+  font: 13px/1 var(--font-ru);
+}
+@media (max-width: 1279px) {
+  .topbar .relay-host {
+    max-width: 90px;
+  }
+  .topbar .relay-switch {
+    max-width: 110px;
+  }
+}
+@media (max-width: 1099px) {
+  .topbar .relay-host {
+    max-width: 64px;
+  }
+  .topbar .relay-switch {
+    max-width: 88px;
+  }
+}
+
+/* the editor needs 900 px (.app min-width): on a portrait tablet it scrolls sideways instead of being cut off */
+@media (max-width: 899px) {
+  body {
+    overflow-x: auto;
+  }
+}
+.relay-hosts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+.pult-btn {
+  font-family: var(--font-ru);
+}
+
+/* ───────── Пульт ───────── */
+.pult {
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 30vw, 380px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'top top'
+    'presets side';
+  gap: 12px;
+  padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  font-family: var(--font-ru);
+  background:
+    radial-gradient(900px 420px at 30% -10%, rgba(242, 160, 61, 0.05), transparent 60%),
+    var(--bg);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.pult button {
+  touch-action: manipulation;
+}
+
+.pult-top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+}
+.pult-current {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pult .panel-label {
+  font-family: var(--font-ru);
+  letter-spacing: 0.08em;
+}
+.pult-current-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 22px/1.1 var(--font-ru);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pult-dirty {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pult-top .btn {
+  height: 40px;
+  padding: 0 16px;
+  font-family: var(--font-ru);
+}
+
+/* presets */
+.pult-presets {
+  grid-area: presets;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pult-tabs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pult-seg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--inset);
+}
+.pult-seg button {
+  height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-2);
+  font: 500 15px/1 var(--font-ru);
+  cursor: pointer;
+}
+.pult-seg button:last-child {
+  border-right: 0;
+}
+.pult-seg button.on {
+  background: linear-gradient(180deg, #2c2a25, #221f1a);
+  color: var(--accent-hi);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.pult-search {
+  flex: 1;
+  min-width: 160px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--inset);
+  color: var(--text);
+  font: 16px/1 var(--font-ru); /* ≥ 16 px: iOS does not zoom into the field */
+  user-select: text;
+}
+.pult-search:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
+
+.pult-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-auto-rows: 88px;
+  gap: 10px;
+  align-content: start;
+  padding-bottom: 4px;
+}
+.pult-tile {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #23272c, #1a1d21);
+  transition: border-color 0.12s;
+}
+.pult-tile.current {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, #2f2a21, #221e18);
+  box-shadow: 0 0 0 1px var(--accent-dim), 0 0 18px rgba(242, 160, 61, 0.12);
+}
+.pult-tile.loading {
+  border-color: var(--accent-dim);
+}
+.pult-tile-main {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 40px 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.pult-tile-main:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+.pult-tile-name {
+  font: 600 17px/1.2 var(--font-ru);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.pult-tile-cat {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.pult-tile.current .pult-tile-cat {
+  color: var(--accent);
+}
+.pult-star {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pult-star.on {
+  color: var(--accent-hi);
+}
+.pult-empty {
+  grid-column: 1 / -1;
+  margin: 24px 4px;
+  font-size: 15px;
+}
+
+/* side: volume, drums, panic */
+.pult-side {
+  grid-area: side;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pult-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel) 120px);
+}
+.pult-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.pult-value {
+  font-size: 15px;
+  color: var(--text);
+}
+.pult-pattern {
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pult-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.pult-range::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.pult-range::-moz-range-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+}
+.pult-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 34px;
+  height: 34px;
+  margin-top: -12px;
+  border-radius: 50%;
+  border: 1px solid #b8742a;
+  background: radial-gradient(circle at 40% 35%, #ffd08a, var(--accent) 70%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.pult-range::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #b8742a;
+  background: radial-gradient(circle at 40% 35%, #ffd08a, var(--accent) 70%);
+}
+.pult-meter {
+  height: 14px;
+}
+
+.pult-drums-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pult-play {
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a2e34, #1f2226);
+  color: var(--text);
+  font: 600 19px/1 var(--font-ru);
+  cursor: pointer;
+}
+.pult-play.playing {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: linear-gradient(180deg, #1f2b20, #182019);
+  box-shadow: 0 0 16px rgba(124, 207, 122, 0.15);
+}
+.pult-tempo {
+  display: grid;
+  grid-template-columns: 52px 52px minmax(0, 1fr) 52px 52px;
+  gap: 6px;
+  align-items: stretch;
+}
+.pult-tempo button {
+  height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a2e34, #1f2226);
+  color: var(--text);
+  font: 600 18px/1 var(--font-mono);
+  cursor: pointer;
+}
+.pult-tempo button:active,
+.pult-play:active {
+  filter: brightness(1.25);
+}
+.pult-bpm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--inset);
+  font-size: 24px;
+  color: var(--accent-hi);
+}
+.pult-bpm small {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+.pult-panic {
+  margin-top: auto;
+  height: 64px;
+  border-radius: 6px;
+  border: 1px solid #5a2a24;
+  background: linear-gradient(180deg, #3a1d1a, #2a1513);
+  color: #ff9d8f;
+  font: 600 16px/1 var(--font-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.pult-panic:active:not(:disabled) {
+  background: linear-gradient(180deg, #5a2621, #3d1a16);
+}
+.pult-panic:disabled {
+  opacity: 0.45;
+}
+
+/* portrait tablets / narrow windows: controls below the tiles */
+@media (max-width: 900px), (orientation: portrait) and (max-width: 1100px) {
+  .pult {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'top'
+      'presets'
+      'side';
+  }
+  .pult-side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'vol drums'
+      'panic drums';
+    align-items: stretch;
+  }
+  .pult-volume {
+    grid-area: vol;
+  }
+  .pult-drums {
+    grid-area: drums;
+  }
+  .pult-panic {
+    grid-area: panic;
+    margin-top: 0;
+    height: auto;
+    min-height: 56px;
+  }
+}
+@media (max-width: 600px) {
+  .pult-side {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'vol' 'drums' 'panic';
+  }
+  .pult-current-name {
+    font-size: 18px;
+  }
+}
+/* short landscape screens (1024×768 minus browser chrome): tighter cards */
+@media (max-height: 800px) and (orientation: landscape) {
+  .pult-card {
+    padding: 12px 14px 14px;
+    gap: 10px;
+  }
+  .pult-play,
+  .pult-panic {
+    height: 56px;
+  }
+  .pult-tempo button {
+    height: 48px;
+  }
+}

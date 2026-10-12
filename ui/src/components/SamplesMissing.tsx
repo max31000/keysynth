@@ -7,6 +7,7 @@ import { findModule } from '../store/patchOps';
 import { live, onFrame } from '../store/liveBus';
 import { entryIdFromSfz, findEntry, formatBytes, jobForEntry } from '../lib/samples';
 import { MODE } from '../platform/mode';
+import { canSend } from '../platform/trust';
 
 /** 0 = present, 1 = not linked, 2 = server unreachable (the engine retries) */
 function useMissingReadout(node: number): number {
@@ -30,6 +31,7 @@ export function SamplesMissing({ node }: { node: number }) {
   const samples = useCloud((s) => s.samples);
   const jobs = useCloud((s) => s.jobs);
   const linked = useCloud((s) => !!s.cloud?.linked);
+  const canLink = useCloud((s) => canSend(s.trust, 'cloud_link'));
   if (!entryId || reason === 0) return null;
   const found = samples ? findEntry(samples.groups, entryId) : null;
   const job = jobForEntry(jobs, entryId);
@@ -45,7 +47,7 @@ export function SamplesMissing({ node }: { node: number }) {
           Скачать сэмплы ({formatBytes(left)})
         </button>
       )}
-      {!linked && MODE.mode === 'platform' && (
+      {!linked && MODE.mode === 'platform' && canLink && (
         <button type="button" className="btn small primary" onClick={() => void cloudActions().retryLink()}>
           Подключить
         </button>

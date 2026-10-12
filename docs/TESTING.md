@@ -256,6 +256,27 @@ toast (load «jRhodes Stereo» / «Salamander Grand»), update banner — at 144
 writes `ui/dist-platform/` (deployed by `.github/workflows/frontend.yml`); `npm run build` (`ui/dist/`, base `/`) is
 the engine's offline UI.
 
+### Web UI as relay controller + «Пульт» (`npm run relay-mock`)
+
+Spec `docs/specs/2026-10-12-remote.md` (§10 wins); code `ui/src/platform/relay.ts` (RelayLink + RelayTransport),
+`platform/route.ts`, `store/remoteStore.ts`, `components/remote/`. The platform page uses the relay when signed in
+with access and this browser never saw a local engine (`keysynth.engineSeen` unset); the PC tab stays direct.
+
+```
+cd ui
+npm run mock                         # mock engine :7441
+npm run relay-mock -- --hosts 2      # mock relay :7442 (hosts "Mock PC", "Mock PC 2" bridged to :7441, trust remote)
+npm run dev:platform                 # page → ws://127.0.0.1:7442/keysynth/api/relay (KS_RELAY=… overrides)
+```
+Open `http://127.0.0.1:5173/keysynth/` in a profile without `keysynth.engineSeen` (or dev aid `?remote=1` forces the
+relay, `?remote=0` direct). Host on/off: `http://127.0.0.1:7442/__relay/online?host=mock-1&v=0|1`; state:
+`/__relay/state`. Check: host choice card (2 online), RTT pill + switcher in the top bar, «Нет движков в сети» / offline
+banner, denied features hidden (audio device form, ASIO panel, unlink, sample delete, plugin reload), PC tab (direct,
+`?engine=127.0.0.1:7441`) and controller in sync. «Пульт» (top bar button; default on touch tablets ≥ 768 px):
+preset tiles (Избранное / Недавние / Все + search), volume, drums start/stop + tempo, Panic — at 1024×768, 820×1180,
+1180×820 and 1440. Tests: `tests/relay.test.ts` (fake sockets/timers), `tests/remote.test.ts`,
+`tests/relay-integration.test.ts` (real sockets through the relay mock). Engine as a real relay host: *Relay E2E* above.
+
 Quick protocol smoke test (Python, `python -m pip install websockets`):
 
 ```python

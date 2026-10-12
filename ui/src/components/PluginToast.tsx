@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { actions, useCloud, useEngine } from '../store';
 import type { PluginStatus } from '../protocol/types';
+import { canSend } from '../platform/trust';
 
 const LABEL: Record<PluginStatus['state'], string> = {
   compiling: 'compiling…',
@@ -16,7 +17,7 @@ const LABEL: Record<PluginStatus['state'], string> = {
 export function PluginToast() {
   const p = useEngine((s) => s.pluginNotice);
   // `reload_plugin` is forbidden for pages from mvv42.ru (PROTOCOL.md "Sessions, Origin, Host")
-  const canReload = useCloud((s) => s.trust !== 'web');
+  const canReload = useCloud((s) => canSend(s.trust, 'reload_plugin'));
   useEffect(() => {
     if (!p || (p.state !== 'ok' && p.state !== 'removed')) return;
     const t = setTimeout(() => actions().dismissPluginNotice(), 3500);

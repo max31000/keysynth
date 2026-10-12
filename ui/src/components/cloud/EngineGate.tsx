@@ -2,7 +2,8 @@
 // permission, and «not a keysynth engine» (platform/identity.ts). Shown instead of the synth until a keysynth
 // engine's `state` arrives. Texts: facts and actions only.
 
-import { connectEngine, reconnectEngine, useCloud, useEngine } from '../../store';
+import { connectEngine, reconnectEngine, useCloud, useEngine, useRemote } from '../../store';
+import { RelayCard } from '../remote/RelayCard';
 import { DOWNLOAD_URL } from '../../platform/version';
 import { PLATFORM_URL } from '../../platform/mode';
 import { INSIDE_SHELL } from '../../platform/PlatformBridge';
@@ -101,6 +102,7 @@ const portOf = (url: string) => /:(\d+)/.exec(url.replace(/^wss?:\/\//, ''))?.[1
 
 export function EngineGate({ notKeysynth = false }: { notKeysynth?: boolean }) {
   const d = useCloud((s) => s.discovery);
+  const relay = useRemote((s) => s.route === 'relay');
   const url = useEngine((s) => s.connection.url);
   const phase = d.phase;
   const busy = !notKeysynth && (phase === 'connecting' || phase === 'connected');
@@ -130,46 +132,50 @@ export function EngineGate({ notKeysynth = false }: { notKeysynth?: boolean }) {
         <AccountButton />
       </header>
 
-      <section className={`gate-card phase-${notKeysynth ? 'not-keysynth' : phase}`} aria-live="polite">
-        <div className="gate-status">
-          <span className={`led ${led}`} />
-          <span className="panel-label">{url}</span>
-        </div>
-        <h1>{notKeysynth ? notKeysynthTitle(portOf(url)) : TITLE[phase]}</h1>
+      {relay && !notKeysynth ? (
+        <RelayCard />
+      ) : (
+        <section className={`gate-card phase-${notKeysynth ? 'not-keysynth' : phase}`} aria-live="polite">
+          <div className="gate-status">
+            <span className={`led ${led}`} />
+            <span className="panel-label">{url}</span>
+          </div>
+          <h1>{notKeysynth ? notKeysynthTitle(portOf(url)) : TITLE[phase]}</h1>
 
-        {notKeysynth && <NotKeysynth />}
-        {!notKeysynth && phase === 'not-running' && (
-          <p className="gate-lead">
-            Нет ответа на <code>127.0.0.1:7341</code>. Запустите keysynth из меню «Пуск». Запущен, но связи нет — обновите.
-          </p>
-        )}
-        {!notKeysynth && phase === 'permission-denied' && <DeniedHelp />}
+          {notKeysynth && <NotKeysynth />}
+          {!notKeysynth && phase === 'not-running' && (
+            <p className="gate-lead">
+              Нет ответа на <code>127.0.0.1:7341</code>. Запустите keysynth из меню «Пуск». Запущен, но связи нет — обновите.
+            </p>
+          )}
+          {!notKeysynth && phase === 'permission-denied' && <DeniedHelp />}
 
-        <div className="gate-actions">
-          {showDownload && (
-            <a className="btn primary big" href={DOWNLOAD_URL} rel="noopener">
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
-                <path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M3 13h10" fill="none" stroke="currentColor" strokeWidth="1.6" />
-              </svg>
-              Скачать для Windows
+          <div className="gate-actions">
+            {showDownload && (
+              <a className="btn primary big" href={DOWNLOAD_URL} rel="noopener">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+                  <path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M3 13h10" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+                Скачать для Windows
+              </a>
+            )}
+            {!busy && (
+              <button type="button" className="btn big" onClick={() => (notKeysynth ? reconnectEngine() : connectEngine())}>
+                {phase === 'never-seen' && !notKeysynth ? 'Подключить' : 'Повторить'}
+              </button>
+            )}
+            {!busy && !notKeysynth && <LaunchLink />}
+            {busy && <span className="gate-spinner" aria-label="Подключение" />}
+          </div>
+
+          {!notKeysynth && (phase === 'never-seen' || phase === 'not-running') && <Steps />}
+          <p className="gate-foot hint">
+            <a href="https://github.com/max31000/keysynth/releases" target="_blank" rel="noopener">
+              GitHub Releases
             </a>
-          )}
-          {!busy && (
-            <button type="button" className="btn big" onClick={() => (notKeysynth ? reconnectEngine() : connectEngine())}>
-              {phase === 'never-seen' && !notKeysynth ? 'Подключить' : 'Повторить'}
-            </button>
-          )}
-          {!busy && !notKeysynth && <LaunchLink />}
-          {busy && <span className="gate-spinner" aria-label="Подключение" />}
-        </div>
-
-        {!notKeysynth && (phase === 'never-seen' || phase === 'not-running') && <Steps />}
-        <p className="gate-foot hint">
-          <a href="https://github.com/max31000/keysynth/releases" target="_blank" rel="noopener">
-            GitHub Releases
-          </a>
-        </p>
-      </section>
+          </p>
+        </section>
+      )}
     </div>
   );
 }

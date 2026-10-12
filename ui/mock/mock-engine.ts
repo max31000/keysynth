@@ -55,6 +55,10 @@ const WEB_ALLOWED = new Set([
   'save_preset', 'save_pattern', 'load_preset', 'get_pattern', 'transport', 'set_patch', 'cloud_link', 'cloud_unlink',
   'sync_now', 'samples_list', 'samples_fetch', 'samples_cancel', 'samples_delete',
 ]);
+/** Remote (relay) sessions: web + these denied (docs/specs/2026-10-12-remote.md §10.3). */
+const REMOTE_DENIED = new Set(['cloud_link', 'cloud_unlink', 'set_audio_device', 'open_audio_panel', 'samples_delete', 'reload_plugin']);
+/** Set by mock/relay-mock.ts on its per-controller connections: the session gets trust `remote`. */
+export const RELAY_HEADER = 'x-keysynth-relay';
 const MOCK_VERSION = '0.1.0';
 /** Default mock port (the real engine: 7341). */
 export const MOCK_PORT = 7441;
@@ -230,7 +234,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   const jobs: MockJob[] = [];
   let lastSyncAt: string | null = null;
   let syncState: 'disabled' | 'idle' | 'syncing' | 'offline' | 'error' = 'disabled';
-  const trustOf = new WeakMap<WebSocket, 'local' | 'web'>();
+  const trustOf = new WeakMap<WebSocket, 'local' | 'web' | 'remote'>();
   const cloudStatus = () => ({
     linked: !!link, accountId: link?.accountId ?? null, accountName: link?.accountName ?? null, deviceId,
     expiresAt: link?.expiresAt ?? null, online: true, error: null as string | null,
@@ -387,8 +391,9 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   function handle(ws: WebSocket, m: Record<string, unknown>) {
     const id = typeof m.id === 'number' ? m.id : undefined;
     const num = (k: string) => (typeof m[k] === 'number' ? (m[k] as number) : undefined);
-    if (trustOf.get(ws) === 'web') {
-      const why = webForbidden(m);
+    const trust = trustOf.get(ws);
+    if (trust === 'web' || trust === 'remote') {
+      const why = trust === 'remote' && REMOTE_DENIED.has(String(m.type)) ? `'${String(m.type)}' is not available to remote sessions` : webForbidden(m);
       if (why) return err(ws, id, 'forbidden', why);
     }
     switch (m.type) {
@@ -797,7 +802,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
   }
 
   wss.on('connection', (ws, req) => {
-    trustOf.set(ws, req.headers.origin === WEB_ORIGIN ? 'web' : 'local');
+    trustOf.set(ws, req.headers[RELAY_HEADER] === '1' ? 'remote' : req.headers.origin === WEB_ORIGIN ? 'web' : 'local');
     log('client connected');
     ws.on('message', (raw) => {
       let m: unknown;

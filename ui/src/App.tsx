@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { actions, connectEngine, useCloud, useEngine } from './store';
+import { actions, connectEngine, retryRelay, useCloud, useEngine, useRemote } from './store';
 import { TopBar } from './components/TopBar';
 import { PresetBrowser } from './components/PresetBrowser';
 import { Rack } from './components/Rack';
@@ -14,6 +14,8 @@ import { LinkConfirm, SampleToast, UpdateBanner } from './components/cloud/Cloud
 import { PlatformBridge } from './platform/PlatformBridge';
 import { MODE } from './platform/mode';
 import { identityRejected } from './platform/identity';
+import { RemoteView } from './components/remote/RemoteView';
+import { useView } from './lib/view';
 
 function Toast() {
   const err = useEngine((s) => s.lastError);
@@ -39,7 +41,28 @@ function OfflineBanner() {
   const url = useEngine((s) => s.connection.url);
   const hasPatch = useEngine((s) => s.patch !== null);
   const phase = useCloud((s) => s.discovery.phase);
+  const relay = useRemote((s) => (s.route === 'relay' ? s.relay : null));
   if (status === 'open') return null;
+  if (relay) {
+    const host = relay.hosts.find((h) => h.deviceId === relay.hostId);
+    return (
+      <div className="offline stale">
+        <span className="led" />
+        {relay.status !== 'open'
+          ? 'Нет связи с mvv42.ru, переподключение…'
+          : host && !host.online
+            ? `«${host.name}» не в сети.`
+            : host
+              ? `Подключение к «${host.name}»…`
+              : relay.hosts.some((h) => h.online)
+                ? 'Движок не выбран.'
+                : 'Нет движков в сети.'}
+        <button type="button" className="btn small" onClick={() => retryRelay()}>
+          Повторить
+        </button>
+      </div>
+    );
+  }
   if (MODE.mode === 'platform')
     return (
       <div className="offline stale">
@@ -64,6 +87,7 @@ function OfflineBanner() {
 export function App() {
   const [audioOpen, setAudioOpen] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
+  const [view, setView] = useView();
   const hasPatch = useEngine((s) => s.patch !== null);
   // a dev mock / another program on the engine port: never show it as the synth (platform/identity.ts)
   const notKeysynth = useEngine((s) => identityRejected(s.identity, MODE.dev));
@@ -73,9 +97,17 @@ export function App() {
       {platform && <PlatformBridge />}
       {notKeysynth || (platform && !hasPatch) ? (
         <EngineGate notKeysynth={notKeysynth} />
+      ) : view === 'pult' ? (
+        <>
+          <RemoteView onEditor={() => setView('editor')} />
+          <OfflineBanner />
+          <UpdateBanner />
+          <Toast />
+          <SampleToast />
+        </>
       ) : (
         <div className="app">
-          <TopBar onAudioSettings={() => setAudioOpen(true)} onCloud={() => setCloudOpen(true)} />
+          <TopBar onAudioSettings={() => setAudioOpen(true)} onCloud={() => setCloudOpen(true)} onPult={() => setView('pult')} />
           <PresetBrowser />
           <Rack />
           <MasterSection />

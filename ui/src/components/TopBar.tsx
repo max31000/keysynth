@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { actions, useCloud, useEngine } from '../store';
+import { actions, useCloud, useEngine, useRemote } from '../store';
 import { live, onFrame } from '../store/liveBus';
 import type { ParamSpec } from '../protocol/types';
 import { LATENCY_WARN_MS, bufferMs, latencyHint, latencyTooHigh } from '../lib/latency';
@@ -7,6 +7,8 @@ import { Knob } from './Knob';
 import { SyncPill } from './cloud/SyncPill';
 import { AccountButton } from './cloud/AccountButton';
 import { jobFraction } from '../lib/samples';
+import { canSend } from '../platform/trust';
+import { RelayPill } from './remote/RelayStatus';
 
 const METRO_SPEC: ParamSpec = {
   id: 'metronome_volume',
@@ -22,7 +24,7 @@ const METRO_SPEC: ParamSpec = {
   choices: [],
 };
 
-function ConnectionPill() {
+export function ConnectionPill() {
   const c = useEngine((s) => s.connection);
   const mock = useEngine((s) => s.identity === 'mock');
   const label =
@@ -152,8 +154,10 @@ function SamplesButton({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-export function TopBar({ onAudioSettings, onCloud }: { onAudioSettings: () => void; onCloud: () => void }) {
+export function TopBar({ onAudioSettings, onCloud, onPult }: { onAudioSettings: () => void; onCloud: () => void; onPult: () => void }) {
   const audio = useEngine((s) => s.audio);
+  const relay = useRemote((s) => s.route === 'relay');
+  const canPanel = useCloud((s) => canSend(s.trust, 'open_audio_panel'));
   const stats = useEngine((s) => s.stats);
   const t = useEngine((s) => s.transport);
   const open = useEngine((s) => s.connection.status === 'open');
@@ -169,7 +173,7 @@ export function TopBar({ onAudioSettings, onCloud }: { onAudioSettings: () => vo
         </span>
         <span className="brand-name">keysynth</span>
       </div>
-      <ConnectionPill />
+      {relay ? <RelayPill /> : <ConnectionPill />}
 
       <button type="button" className="audio-info" onClick={onAudioSettings} title="Audio settings">
         {audio ? (
@@ -196,7 +200,7 @@ export function TopBar({ onAudioSettings, onCloud }: { onAudioSettings: () => vo
           <span className="latency-badge-text" title={`Output latency above ${LATENCY_WARN_MS} ms: ${latencyHint(audio)}`}>
             ⚠<span className="latency-badge-words"> High latency</span>
           </span>
-          {audio.hasControlPanel && (
+          {audio.hasControlPanel && canPanel && (
             <button type="button" className="btn small" onClick={() => void actions().openAudioPanel()} title={latencyHint(audio)} disabled={!!audio.panelOpen}>
               Open ASIO panel
             </button>
@@ -259,6 +263,9 @@ export function TopBar({ onAudioSettings, onCloud }: { onAudioSettings: () => vo
       </button>
 
       <div className="cloud-zone">
+        <button type="button" className="btn small pult-btn" onClick={onPult} title="Сенсорный пульт">
+          Пульт
+        </button>
         <SamplesButton onOpen={onCloud} />
         <SyncPill onOpen={onCloud} />
         <AccountButton />
