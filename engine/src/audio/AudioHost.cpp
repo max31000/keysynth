@@ -85,7 +85,7 @@ void AudioHost::saveSettings() const {
                   // ASIO: re-request bufferSize at startup only when the user chose it (else: the driver's size).
                   {"bufferExplicit", explicitBuffer_ > 0 && explicitBuffer_ == s.bufferSize}};
     std::error_code ec;
-    std::filesystem::create_directories(paths_.userdata, ec);
+    std::filesystem::create_directories(paths_.settingsFile.parent_path(), ec);
     std::ofstream f(paths_.settingsFile, std::ios::binary | std::ios::trunc);
     if (f) f << j.dump(2) << '\n';
 }

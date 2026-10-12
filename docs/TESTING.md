@@ -48,7 +48,11 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll]`. `[faust]` tests SKIP when libfaust is missing; `[dll]` tests build plugins with
+[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll] [cloud] [sync] [samplecache]`. `[cloud]` tests
+(trust rules, Host check, manifest path fuzz, DPAPI, link flow, sync algorithm, downloader/resume/delete, sampler
+auto-fetch) run against an in-memory fake API (`engine/tests/FakeCloud.h`, no network). Hidden `[.cloud-live]`
+(`ks-tests "[cloud-live]"`) uses the real HTTPS transport: `$env:KS_CLOUD_TOKEN` (device token) and optional
+`$env:KS_CLOUD_API` (default production base; works with the dev server below); it SKIPs without a token. `[faust]` tests SKIP when libfaust is missing; `[dll]` tests build plugins with
 `scripts/build_plugin.ps1` (≈ 4 s, SKIP when MSVC is missing). Run the full tier before merging anything that touches DSP or presets.
 
 ### Sample-based presets (`sampler`)
@@ -167,6 +171,30 @@ UI's "Open ASIO panel" button (protocol `open_audio_panel`, PROTOCOL.md *Audio l
 (open, driver restart with old → new buffer/rate, stop, stall, recovery attempts) is appended to
 `userdata/logs/audio.log` (path printed at startup) — attach it to audio bug reports. "Restart audio" in the audio
 dialog (`restart_audio`) reopens the device with the driver's current settings. Quit with Ctrl+C.
+
+Cloud flags: `--no-cloud` (no link / sample cache / sync), `--cloud-api URL` (alias `--cloud-base`; env
+`KS_CLOUD_API` / `KS_CLOUD_BASE`) and `--web-origin ORIGIN` (env `KS_WEB_ORIGIN`, an extra `web` origin) — the last
+two only in dev builds (no `installed.flag` next to the exe). `KS_DATA_DIR` moves the data root (settings,
+`cloud.json`, logs, sample cache, profiles) — use it for experiments so the repo's `userdata/` stays untouched.
+Installed mode is simulated by an empty `installed.flag` next to the exe (data root `%LOCALAPPDATA%\keysynth`).
+
+### Local cloud E2E (`scripts/dev_cloud_server.py`)
+
+A stdlib-only stand-in for the keysynth API (device token check, manifest + ETag, files with Range/If-Range, presets
+with revisions/tombstones; contract subset of `docs/specs/2026-10-12-cloud-api.md`):
+
+```powershell
+python scripts/dev_cloud_server.py --samples assets/samples --libs salamander --port 8765 --data renders/dev-presets.json
+#   prints:  device token: ksd_...   (or pass --token ksd_<43 chars>; POST /api/devices mints more)
+$env:KS_DATA_DIR = "$env:TEMP/ks-e2e"
+build/bin/Release/keysynth-engine.exe --no-audio --no-midi --cloud-api http://127.0.0.1:8765/keysynth/api
+```
+
+Then send `cloud_link { token }`, `samples_list`, `samples_fetch`, a `set_patch` whose sampler SFZ is only on the
+server (auto-fetch), `save_preset` + `sync_now` over the WebSocket (UI or a websockets script). Without `--index`
+the server indexes every file of each `<lib>/` dir (sha256 at startup — use `--libs` for big libraries) and makes
+every `.sfz` an entry referencing all files of its library. Note: sfizz does not load `sample=` paths with
+non-ASCII characters (the cache and download path handle them; a library using them would fail in sfizz itself).
 
 Quick protocol smoke test (Python, `python -m pip install websockets`):
 

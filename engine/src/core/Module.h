@@ -74,6 +74,9 @@ public:
     // Control thread, after prepare(), before going live: true when rendered faster than real time (ks-render,
     // tests). Streaming modules may then block on disk IO inside process() instead of dropping audio.
     virtual void setOfflineMode(bool /*offline*/) {}
+    // Control thread: a resource that was missing at prepare() may exist now (sample cache download finished or
+    // failed, ARCHITECTURE §15). Modules waiting for one load it now (no rebuild).
+    virtual void resourcesChanged() {}
 
 private:
     static std::atomic<int>& liveCount() noexcept {

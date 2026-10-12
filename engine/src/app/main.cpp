@@ -7,10 +7,14 @@
 //   --root DIR           repo root (default: auto-detected)
 //   --no-midi            do not open MIDI inputs
 //   --no-plugins         do not load/watch plugins/ (Faust JIT + DLL plugins, docs/PLUGINS.md)
+//   --no-cloud           no cloud link / sample downloads / preset sync
+//   --cloud-api URL      API base (dev builds only; also KS_CLOUD_API, alias --cloud-base / KS_CLOUD_BASE)
+//   --web-origin ORIGIN  extra `web` origin (dev builds only; also KS_WEB_ORIGIN)
 
 #include "audio/AudioHost.h"
 #include "audio/MidiHub.h"
 #include "audio/NullAudioDriver.h"
+#include "cloud/CloudServices.h"
 #include "control/ControlServer.h"
 #include "control/ProtocolHandler.h"
 #include "control/Session.h"
@@ -24,6 +28,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <cstdlib>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -36,12 +41,24 @@ std::atomic<bool> g_quit{false};
 extern "C" void onSignal(int) { g_quit.store(true); }
 
 struct Args {
-    bool noAudio = false, noMidi = false, noPlugins = false, help = false;
+    bool noAudio = false, noMidi = false, noPlugins = false, noCloud = false, help = false;
     int wsPort = 7341, httpPort = 7340;
     std::optional<int> buffer;
     std::optional<double> sampleRate;
-    std::string preset, root;
+    std::string preset, root, cloudApi, webOrigin;
 };
+
+std::string envOr(const char* a, const char* b) {
+#if defined(_MSC_VER)
+#pragma warning(suppress : 4996)
+#endif
+    const char* v = std::getenv(a);
+#if defined(_MSC_VER)
+#pragma warning(suppress : 4996)
+#endif
+    if (!v || !*v) v = b ? std::getenv(b) : nullptr;
+    return v ? std::string(v) : std::string();
+}
 
 Args parseArgs(int argc, char** argv, std::string& err) {
     Args a;
@@ -64,6 +81,9 @@ Args parseArgs(int argc, char** argv, std::string& err) {
             else if (s == "--sample-rate") a.sampleRate = std::stod(next());
             else if (s == "--preset") a.preset = next();
             else if (s == "--root") a.root = next();
+            else if (s == "--no-cloud") a.noCloud = true;
+            else if (s == "--cloud-api" || s == "--cloud-base") a.cloudApi = next();
+            else if (s == "--web-origin") a.webOrigin = next();
             else if (s == "--help" || s == "-h") a.help = true;
             else err = "unknown argument " + s;
         } catch (...) {
@@ -76,8 +96,8 @@ Args parseArgs(int argc, char** argv, std::string& err) {
 
 class Pump final : public juce::Timer {
 public:
-    Pump(ks::Session& s, ks::ControlServer& srv, ks::plugins::PluginHost* plugins)
-        : s_(s), srv_(srv), plugins_(plugins) { startTimerHz(30); }
+    Pump(ks::Session& s, ks::ControlServer& srv, ks::plugins::PluginHost* plugins, ks::cloud::CloudServices* cloud)
+        : s_(s), srv_(srv), plugins_(plugins), cloud_(cloud) { startTimerHz(30); }
     void timerCallback() override {
         if (g_quit.load()) {
             stopTimer();
@@ -87,6 +107,7 @@ public:
         s_.engine().collectGarbage(); // every 33 ms (ARCHITECTURE: <= 50 ms)
         if (plugins_) plugins_->poll(); // finished compiles -> registry; file watch every 500 ms; faults
         s_.pollModuleErrors();          // failed sample loads etc. -> `log` error events
+        if (cloud_) srv_.dispatchAsync(cloud_->poll()); // cloud replies, sync/sample events
         const auto midi = s_.pollMidi();
         const auto tele = s_.pollTelemetry();
         if (srv_.clientCount() == 0) return;
@@ -98,6 +119,7 @@ private:
     ks::Session& s_;
     ks::ControlServer& srv_;
     ks::plugins::PluginHost* plugins_;
+    ks::cloud::CloudServices* cloud_;
 };
 
 void printStatus(const ks::AudioStatus& st, const char* prefix) {
@@ -139,6 +161,12 @@ int main(int argc, char** argv) {
     ks::ProtocolHandler handler(session);
     ks::ControlServer server(
         handler, [](std::function<void()> f) { juce::MessageManager::callAsync(std::move(f)); }, paths.uiDist);
+    {
+        ks::OriginPolicy op;
+        op.devBuild = !paths.installed();
+        if (op.devBuild) op.extraWebOrigin = args.webOrigin.empty() ? envOr("KS_WEB_ORIGIN", nullptr) : args.webOrigin;
+        server.setOriginPolicy(op);
+    }
     session.log = [&server](const std::string& level, const std::string& msg, bool notify) {
         std::printf("[%s] %s\n", level.c_str(), msg.c_str());
         std::fflush(stdout);
@@ -151,7 +179,8 @@ int main(int argc, char** argv) {
     std::unique_ptr<ks::plugins::PluginHost> plugins;
     if (!args.noPlugins) {
         ks::plugins::PluginHost::Options popt;
-        popt.pluginsDir = paths.root / "plugins";
+        popt.pluginsDir = paths.pluginsDir;
+        popt.buildDir = paths.pluginBuildDir;
         plugins = std::make_unique<ks::plugins::PluginHost>(ks::defaultRegistry(), popt);
         plugins->onStatus = [&server, &session](const ks::plugins::PluginStatus& st) {
             if (st.state == "error" || st.state == "faulted")
@@ -171,6 +200,23 @@ int main(int argc, char** argv) {
                     fi["available"].get<bool>() ? fi["version"].get<std::string>().c_str()
                                                 : ("unavailable: " + fi["reason"].get<std::string>()).c_str());
         plugins->start();
+    }
+
+    // Cloud link, sample cache, preset sync (ARCHITECTURE §15).
+    std::unique_ptr<ks::cloud::CloudServices> cloud;
+    if (!args.noCloud) {
+        ks::cloud::CloudServices::Options copt;
+        if (!paths.installed()) {
+            const std::string api = args.cloudApi.empty() ? envOr("KS_CLOUD_API", "KS_CLOUD_BASE") : args.cloudApi;
+            if (!api.empty()) copt.baseUrl = api;
+        }
+        cloud = std::make_unique<ks::cloud::CloudServices>(session, copt);
+        handler.setCloud(cloud.get());
+        cloud->start();
+        const auto cs = cloud->client().status();
+        std::printf("cloud: %s, %s (device %s), data %s\n", copt.baseUrl.c_str(),
+                    cs.linked ? ("linked to " + cs.accountName).c_str() : "not linked", cs.deviceId.c_str(),
+                    ks::pathToUtf8(paths.dataRoot).c_str());
     }
 
     if (!args.preset.empty()) {
@@ -246,7 +292,7 @@ int main(int argc, char** argv) {
     std::printf("ready. Ctrl+C to quit.\n");
     std::fflush(stdout);
 
-    Pump pump(session, server, plugins.get());
+    Pump pump(session, server, plugins.get(), cloud.get());
     if (audioHost)
         juce::Timer::callAfterDelay(1000, [host = audioHost.get()] {
             std::printf("audio thread: MMCSS \"Pro Audio\" %s (err %lu), power throttling %s\n",
@@ -259,6 +305,8 @@ int main(int argc, char** argv) {
     std::printf("shutting down...\n");
     pump.stopTimer();
     server.stop();
+    handler.setCloud(nullptr);
+    if (cloud) cloud->stop();
     if (midi) midi->closeAll();
     if (audioHost) audioHost->stop();
     if (nullAudio) nullAudio->stop();

@@ -1,5 +1,6 @@
 #include "control/ProtocolHandler.h"
 
+#include "cloud/CloudServices.h"
 #include "plugins/PluginHost.h"
 #include "preset/PatchJson.h"
 #include "transport/Pattern.h"
@@ -78,6 +79,8 @@ struct Ctx {
     const json& msg;
     const json& id;
     std::vector<Outgoing>& out;
+    const ClientInfo& client;
+    cloud::CloudServices* cloud;
 
     void reply(json m) {
         if (!id.is_null()) m["id"] = id;
@@ -97,7 +100,17 @@ using Handler = std::function<void(Ctx&)>;
 
 const std::map<std::string, Handler>& handlers() {
     static const std::map<std::string, Handler> h = {
-        {"hello", [](Ctx& c) { c.reply(c.s.stateJson()); }},
+        {"hello",
+         [](Ctx& c) {
+             json st = c.s.stateJson();
+             st["version"] = engineVersion();
+             st["trust"] = toString(c.client.trust);
+             st["cloud"] = c.cloud ? c.cloud->cloudStatusJson() : cloud::CloudServices::offlineStatusJson();
+             c.reply(std::move(st));
+             json sync = c.cloud ? c.cloud->syncStatusJson() : cloud::CloudServices::disabledSyncStatusJson();
+             sync["type"] = "sync_status";
+             c.out.push_back({Outgoing::Target::Reply, std::move(sync)}); // event right after (no id)
+         }},
         {"get_catalog",
          [](Ctx& c) { c.reply({{"type", "catalog_ok"}, {"modules", c.s.registry().catalogJson()}}); }},
         {"set_param",
@@ -404,13 +417,21 @@ json ProtocolHandler::error(const json& id, const std::string& code, const std::
     return e;
 }
 
-std::vector<Outgoing> ProtocolHandler::handleText(const std::string& text) {
-    json msg = json::parse(text, nullptr, false);
-    if (msg.is_discarded()) return {{Outgoing::Target::Reply, error(nullptr, "parse_error", "invalid JSON")}};
-    return handle(msg);
+const char* engineVersion() {
+#if defined(KS_VERSION)
+    return KS_VERSION;
+#else
+    return "0.0.0";
+#endif
 }
 
-std::vector<Outgoing> ProtocolHandler::handle(const json& msg) {
+std::vector<Outgoing> ProtocolHandler::handleText(const std::string& text, const ClientInfo& client) {
+    json msg = json::parse(text, nullptr, false);
+    if (msg.is_discarded()) return {{Outgoing::Target::Reply, error(nullptr, "parse_error", "invalid JSON")}};
+    return handle(msg, client);
+}
+
+std::vector<Outgoing> ProtocolHandler::handle(const json& msg, const ClientInfo& client) {
     std::vector<Outgoing> out;
     if (!msg.is_object()) return {{Outgoing::Target::Reply, error(nullptr, "bad_request", "message must be an object")}};
     json id = nullptr;
@@ -418,12 +439,22 @@ std::vector<Outgoing> ProtocolHandler::handle(const json& msg) {
     auto t = msg.find("type");
     if (t == msg.end() || !t->is_string()) return {{Outgoing::Target::Reply, error(id, "bad_request", "missing 'type'")}};
     const std::string type = t->get<std::string>();
+    if (client.trust == Trust::Web)
+        if (const std::string why = webRestriction(msg); !why.empty())
+            return {{Outgoing::Target::Reply, error(id, "forbidden", why)}};
     const auto& h = handlers();
     auto it = h.find(type);
-    if (it == h.end()) return {{Outgoing::Target::Reply, error(id, "unknown_type", "unknown message type '" + type + "'")}};
-    Ctx c{session_, msg, id, out};
+    const bool cloudType = cloud::CloudServices::handlesType(type);
+    if (it == h.end() && !cloudType)
+        return {{Outgoing::Target::Reply, error(id, "unknown_type", "unknown message type '" + type + "'")}};
+    Ctx c{session_, msg, id, out, client, cloud_};
     try {
-        it->second(c);
+        if (cloudType) {
+            if (!cloud_) throw PatchError("not_available", "cloud services are not running");
+            cloud_->handle(type, msg, id, client, out);
+        } else {
+            it->second(c);
+        }
     } catch (const PatchError& e) {
         out.clear();
         out.push_back({Outgoing::Target::Reply, error(id, e.code(), e.what())});

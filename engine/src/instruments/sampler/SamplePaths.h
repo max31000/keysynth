@@ -7,14 +7,34 @@
 //   2. for paths below `assets/` that do not exist there: `$KS_ASSETS_DIR/<rest>` (KS_ASSETS_DIR points at a
 //      directory laid out like the repo's `assets/`, e.g. the main checkout's `M:/Projects/Piano/assets`).
 //   3. when the repo root is a git worktree under `<main>/.claude/worktrees/<name>`: `<main>/assets/<rest>`.
+//   4. for `assets/samples/<lib>/<path>`: the sample cache `<cache>/<lib>/<path>` (ARCHITECTURE §15; default
+//      AppPaths::discover().sampleCache, setSampleCacheDir() overrides).
 // A fallback candidate must lie inside its own assets directory (no `..` escapes).
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace ks {
+
+// Sample cache root searched by resolveSamplePath (thread-safe).
+void setSampleCacheDir(const std::filesystem::path& dir);
+std::filesystem::path sampleCacheDir();
+
+// Auto-fetch of a missing `assets/samples/<entry id>` (PROTOCOL.md "Auto-fetch on patch load"). The hook is set by
+// the sample service (message thread); the sampler asks it from prepare() (fresh = true) and resourcesChanged().
+enum class SampleFetchState {
+    Unavailable, // not linked / unknown entry: normal missing-sfz error
+    Waiting,     // a download job covers it: stay silent with `loading` = 1
+    Failed       // its download failed and was reported (samples_error): error state, no extra `log`
+};
+using SampleFetchHook = std::function<SampleFetchState(const std::string& entryId, bool fresh)>;
+void setSampleFetchHook(SampleFetchHook hook);
+SampleFetchState querySampleFetch(const std::string& entryId, bool fresh);
+// "assets/samples/<lib>/<path>" -> "<lib>/<path>"; nullopt for other specs.
+std::optional<std::string> sampleEntryIdOf(const std::string& sfzSpec);
 
 struct SamplePathResult {
     std::optional<std::filesystem::path> path; // existing file, or nullopt

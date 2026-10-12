@@ -42,6 +42,8 @@ Threads:
   (`juce::MessageManager::callAsync`) — never touch engine state from network threads.
 - **Loader threads** (`juce::ThreadPool`, below-normal priority) for samples; PluginHost has its own loader thread
   for plugin compilation (§10). Results return to the message thread.
+- **Cloud threads** (§15): one CloudClient worker (API calls), one SyncService worker, two sample download
+  workers. Network IO only; results are queued and drained by the message thread's 30 Hz pump.
 
 ## 3. Repository layout
 
@@ -65,7 +67,9 @@ engine/
   src/audio/      AudioHost (devices, ASIO, settings), MidiHub (all MIDI inputs).
   src/plugins/    PluginHost: Faust JIT (libfaust C API) + C ABI DLLs (sdk/include/keysynth/plugin_abi.h), hot reload.
   src/render/     OfflineRenderer (patch + notes/MIDI → buffer/WAV without a device).
-  src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, SEH wrapper).
+  src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, SEH wrapper, DPAPI).
+  src/cloud/      CloudClient (HTTPS to mvv42.ru, device token), SyncService (presets), CloudServices (§15).
+  src/samples/    SampleCache + downloader (manifest, jobs, resume, verify), manifest path rules (§15).
   src/app/        main.cpp — wiring only.
   tools/          ks-render (offline render), ks-bench (CPU per preset).
   tests/          Catch2 tests.
@@ -152,8 +156,13 @@ class Module {
   virtual std::string loadError() const { return {}; }    // control thread: failed resource load (bad sfz/syx)
   virtual bool isReady() const { return true; }           // false while heavy resources load asynchronously
   virtual void setOfflineMode(bool) {}                    // control thread, after prepare: faster-than-RT render
+  virtual void resourcesChanged() {}                      // control thread: a missing resource may exist now
 };
 ```
+
+- **Missing resources that arrive later** (`resourcesChanged`): the sample cache finished (or gave up on) a download
+  (§15). Session calls it on every module of the latest graph; `sampler` instances waiting for that SFZ start their
+  load (no rebuild, the module is not replaced).
 
 - **Asynchronous loading** (`isReady`): a module whose `prepare()` starts a background load (samples) renders
   silence and returns `false` until it is done; it never blocks the audio or message thread on it. `OfflineRenderer`
@@ -410,11 +419,15 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
 ## 11. Control protocol & security
 
 JSON over WebSocket, see `docs/PROTOCOL.md` (source of truth for UI and engine; TS types mirror it).
-- Bind 127.0.0.1 only. Reject WS handshakes whose `Origin` is not `http://localhost|127.0.0.1:{7341,5173}` or the
-  static UI port (7340, served by `ix::HttpServer` from `ui/dist`). Handshakes without `Origin` (non-browser local
-  clients) are accepted. WS paths other than `/` and `/ws` are rejected.
-- Every path in a request is resolved and must lie inside allow-listed roots (repo `presets/`, `userdata/`,
-  `assets/`, `plugins/`). Handlers validate input and reply `error` instead of crashing.
+- Bind 127.0.0.1 only. `Host` must be `127.0.0.1:<port>` / `localhost:<port>` (DNS rebinding) on WS and HTTP.
+  `Origin` classifies the session as `local` (absent, the local UI ports, `:5173` in dev builds only) or `web`
+  (`https://mvv42.ru`); anything else (incl. `null`) is refused. WS paths other than `/` and `/ws` are rejected.
+  ixwebsocket has no pre-upgrade hook, so a refused WS handshake is closed with 4003 right after the upgrade and
+  never reaches the protocol handler. Rules and the `web` allow-list: PROTOCOL.md *Sessions, Origin, Host*
+  (`control/Trust.h`, checked in `ProtocolHandler` before dispatch).
+- Every path in a request is resolved and must lie inside allow-listed roots (app `presets/`, the profile root
+  `userdata/`, `assets/`, the plugins dir, the sample cache; AppPaths). Handlers validate input and reply `error`
+  instead of crashing.
 
 ## 12. Testing & tooling (details: docs/TESTING.md)
 
@@ -436,5 +449,36 @@ New protocol message: `docs/PROTOCOL.md` + engine handler + `ui/src/protocol/typ
 
 ## 14. Licensing
 
-Repo: AGPL-3.0-or-later (JUCE 8 open-source licence; bundled ASIO SDK GPLv3). `THIRD_PARTY_NOTICES.md` lists all
-dependencies (msfa Apache-2.0, sfizz BSD-2, ixwebsocket BSD-3, nlohmann MIT, Catch2 BSL-1.0, sample libraries).
+Repo: AGPL-3.0-or-later (JUCE 8 open-source licence; bundled ASIO SDK GPLv3).
+`THIRD_PARTY_NOTICES.md` lists all dependencies (msfa Apache-2.0, sfizz BSD-2, ixwebsocket BSD-3, nlohmann MIT,
+Catch2 BSL-1.0, sample libraries).
+
+## 15. Cloud, sample cache, sync
+
+Design `docs/specs/2026-10-12-cloud.md` (§11 wins), REST + storage contract `docs/specs/2026-10-12-cloud-api.md`,
+wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thread.
+
+- **AppPaths** (`core/AppPaths`): *installed* mode iff `installed.flag` is next to the exe (app dir = exe dir, data
+  root `%LOCALAPPDATA%\keysynth`), else *dev* (repo checkout, data root `<repo>/userdata`, as before); `KS_DATA_DIR`
+  replaces the data root (`discover()` only). Holds every location of the contract table (settings, `cloud.json`,
+  logs, plugins + build/Faust cache, sample cache) and the **active profile** (`userdata`: local profile or
+  `accounts/<id>`). Wire paths are *logical* (`userdata/…` = active profile, `presets/…` = app dir,
+  `assets/samples/…` = asset dirs or cache); `resolveAllowed` maps logical → disk, `relativeToRoot` disk → logical.
+- **HTTP** behind `cloud::HttpTransport` (one blocking `send()` with streaming sink + cancel flag); production =
+  `JuceHttpTransport` (JUCE `WebInputStream`, WinINet on Windows, no redirects followed), tests = fakes. Base URL
+  compiled in (`https://mvv42.ru/keysynth/api`), dev override `--cloud-api` / `KS_CLOUD_API` (dev builds only).
+- **CloudClient** (`cloud/`): `cloud.json` (deviceId, link; the token DPAPI-protected via `platform/Dpapi`), link /
+  unlink / status, bearer header on every call, drops the token on any 401. One worker thread for its own calls;
+  `api()` is callable from other workers (thread-safe, token under a mutex).
+- **SampleService** (`samples/`): manifest (cached `manifest.json` + ETag), `cache.json` index, jobs (entry /
+  library / all, FIFO, auto-fetch at the front), 2 download workers, `.part` + `Range`/`If-Range` resume, SHA-256
+  verify (`core/Sha256`), atomic rename, strict manifest path validation (`samples/SamplePathRules`) before any
+  write, refcounted delete. Progress/done/error are queued and drained by the pump (≤ 5 Hz progress).
+  The sampler's path resolution (`instruments/sampler/SamplePaths`) also searches the cache root; a missing
+  `assets/samples/<entry>` asks the registered fetch hook (SampleService) and waits with `loading` = 1; job end →
+  `Session::notifyResourcesChanged()` → `Module::resourcesChanged()`.
+- **SyncService** (`cloud/`): presets only, engine is the only writer; algorithm of the REST contract §3.4 on its
+  own worker (link, 60 s, local change, `sync_now`); local file steps under `Session::profileMutex()` (also held
+  by preset saves on the message thread), never across network calls.
+- **CloudServices** (`cloud/`) owns the three, implements the cloud protocol messages (async replies through
+  `poll()`), switches Session profiles on link/unlink, and is optional (tests and `ks-render` run without it).

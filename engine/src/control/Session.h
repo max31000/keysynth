@@ -14,6 +14,8 @@
 
 #include <functional>
 #include <map>
+#include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -68,6 +70,19 @@ public:
 
     const std::string& presetPath() const noexcept { return presetPath_; }
 
+    // --- profiles (ARCHITECTURE §15, PROTOCOL.md "Profiles") ---
+    // Switch the active profile ("" = local, else accounts/<id>). Clears presetPath / pattern path that pointed into
+    // the old profile. Returns false for an invalid id.
+    bool setProfile(const std::string& accountId);
+    // Held around every write of profile preset files (saves here, SyncService file steps).
+    std::mutex& profileMutex() noexcept { return profileMutex_; }
+    // Called after a user preset was saved (SyncService: pending + push).
+    std::function<void()> onUserPresetsChanged;
+    // Sample cache changed (a download ended): Module::resourcesChanged() on every module of the latest graph.
+    void notifyResourcesChanged();
+    // Entry ids ("<lib>/<sfz>") of the current patch`s sampler slots.
+    std::set<std::string> samplerEntriesInUse() const;
+
     // --- rhythm (drum sequencer, ARCHITECTURE §8). Throw PatchError on bad input. ---
     struct PatternInfo {
         std::string path, name;
@@ -121,6 +136,7 @@ private:
     std::string patternPath_;
     bool patternEdited_ = false;
     std::map<const Module*, std::string> reportedErrors_; // pollModuleErrors: module -> last reported error
+    std::mutex profileMutex_;
 };
 
 } // namespace ks
