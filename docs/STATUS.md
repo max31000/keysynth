@@ -76,6 +76,13 @@ Update when a chunk of work lands. Newest first inside each section.
 - Later: looper, recording, MIDI controller mapping, cross-instance sample cache, sandboxing paths inside SFZ files.
 
 ## Known issues / decisions log
+- WP-D (web UI) decisions: only `@mvv42/kit/platform` is used (Mvv42Provider/AccountButton bring Mantine + global
+  kit CSS that restyles the synth); own account button. `permissions.query` for LNA is treated as a hint (shown as
+  denied only after a failed attempt). Owner check = our `GET /api/devices` row with the engine's `expiresAt`.
+  Review items not fixed: account card's `plan()` reads `Date.now()`/socket status outside the store (may be stale
+  until the next store change); «Портал» menu link is `/` (dev server root under `dev:platform`); `keysynth://open`
+  is untested from the shell iframe (hidden there). Not yet verified in real Chrome against mvv42.ru (LNA prompt,
+  iframe permission) — needs WP-E deploy.
 - WP-B review items not fixed (accepted for v1): a `web` session's `load_preset` does not re-check paths *inside* the
   preset file (synced presets are server-controlled; still bounded by AppPaths roots); `set_patch` from `web` may
   hand a state blob to an already installed `plugin:` DLL (`load_state`, guarded); WS refusals are a 4003 close after
