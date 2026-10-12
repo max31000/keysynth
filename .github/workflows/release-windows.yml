@@ -1,0 +1,130 @@
+# Windows release: tag vX.Y.Z -> build + test -> Inno Setup installer -> GitHub Release assets
+#   keysynth-setup.exe (stable name for the direct "latest/download" link) and keysynth-setup-X.Y.Z.exe.
+# Manual dispatch builds the same installer as a workflow artifact only (no release).
+# Local equivalent and details: docs/TESTING.md "Release / installer", ARCHITECTURE §16.
+name: Release (Windows)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'X.Y.Z (default: project() version in CMakeLists.txt)'
+        required: false
+        default: ''
+
+# Build job (runs npm ci lifecycle scripts, third-party build steps) is read-only; only `release` can write.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $v = ''
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            if ($env:GITHUB_REF_NAME -notmatch '^v(\d+\.\d+\.\d+)$') { throw "tag must be vX.Y.Z (got $env:GITHUB_REF_NAME)" }
+            $v = $Matches[1]
+          } elseif ($env:INPUT_VERSION) {
+            $v = $env:INPUT_VERSION
+          } else {
+            $v = (Select-String -Path CMakeLists.txt -Pattern 'project\(keysynth VERSION (\d+\.\d+\.\d+)').Matches[0].Groups[1].Value
+          }
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "bad version '$v'" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "keysynth $v"
+
+      - name: Toolchain info
+        run: |
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property displayName
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationVersion
+          cmake --version
+          node --version
+
+      - name: Cache dependency sources (.deps)
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: deps-${{ runner.os }}-
+
+      - name: Cache Faust
+        uses: actions/cache@v4
+        with:
+          path: .tools/faust
+          key: faust-${{ runner.os }}-${{ hashFiles('scripts/fetch_faust.ps1') }}
+
+      - name: Fetch Faust
+        run: scripts/fetch_faust.ps1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Configure (sfizz ON, Faust ON)
+        run: scripts/configure.ps1 -BuildDir build -Generator auto -ExtraArgs '-DKS_VERSION=${{ steps.ver.outputs.version }}','-DKS_WITH_SFIZZ=ON','-DKS_WITH_FAUST=ON'
+
+      - name: Build (Release)
+        run: cmake --build build --config Release --target keysynth-app ks-tests --parallel
+
+      - name: Tests (default tier; hidden [.samples] / [.cloud-live] / [.full] are not run)
+        run: |
+          build/bin/Release/ks-tests.exe --reporter compact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Inno Setup
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") -and -not (Get-Command ISCC.exe -ErrorAction SilentlyContinue)) {
+            choco install innosetup --version=6.7.3 -y --no-progress
+          }
+
+      - name: Installer
+        run: scripts/build_installer.ps1 -BuildDir build -Version ${{ steps.ver.outputs.version }} -NoBuild -CleanUi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keysynth-setup-${{ steps.ver.outputs.version }}
+          path: |
+            out/keysynth-setup.exe
+            out/keysynth-setup-${{ steps.ver.outputs.version }}.exe
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: installer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: keysynth-setup-${{ needs.installer.outputs.version }}
+          path: out
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/keysynth-setup.exe
+            out/keysynth-setup-${{ needs.installer.outputs.version }}.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true

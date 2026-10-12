@@ -1,4 +1,9 @@
-// keysynth-engine: headless JUCE app (no window). Wiring only — see docs/ARCHITECTURE.md §2.
+// keysynth-engine: JUCE app without windows (optional tray icon). Wiring only — see docs/ARCHITECTURE.md §2, §16.
+//   --tray               desktop mode without opening the browser (autostart). Installed mode defaults to desktop
+//                        mode + open the UI. Desktop mode = tray icon + single instance (named mutex).
+//   --no-tray            no tray / single instance even when installed (headless, CI, tests)
+//   --quit               ask the running desktop instance to quit (exit code 1 if none), then exit
+//   keysynth://...       protocol launch (web page "start" button): desktop mode without opening the browser
 //   --no-audio           drive the engine from a timer thread (null device), for UI/protocol work
 //   --port N             WebSocket port (default 7341); --http-port N static UI port (default 7340, 0 = off)
 //   --asio-buffer N      request this buffer size from the audio device
@@ -11,6 +16,8 @@
 //   --cloud-api URL      API base (dev builds only; also KS_CLOUD_API, alias --cloud-base / KS_CLOUD_BASE)
 //   --web-origin ORIGIN  extra `web` origin (dev builds only; also KS_WEB_ORIGIN)
 
+#include "app/DesktopShell.h"
+#include "app/Tray.h"
 #include "audio/AudioHost.h"
 #include "audio/MidiHub.h"
 #include "audio/NullAudioDriver.h"
@@ -22,6 +29,7 @@
 #include "core/Engine.h"
 #include "core/ModuleRegistry.h"
 #include "core/RtCheck.h"
+#include "platform/DesktopIntegration.h"
 #include "plugins/PluginHost.h"
 
 #include <juce_events/juce_events.h>
@@ -30,6 +38,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstdio>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -42,6 +51,7 @@ extern "C" void onSignal(int) { g_quit.store(true); }
 
 struct Args {
     bool noAudio = false, noMidi = false, noPlugins = false, noCloud = false, help = false;
+    bool tray = false, noTray = false, quit = false, protocol = false;
     int wsPort = 7341, httpPort = 7340;
     std::optional<int> buffer;
     std::optional<double> sampleRate;
@@ -62,6 +72,10 @@ std::string envOr(const char* a, const char* b) {
 
 Args parseArgs(int argc, char** argv, std::string& err) {
     Args a;
+    if (ks::platform::isProtocolLaunch(argc, argv)) { // every other argument is ignored (shell-split URL)
+        a.protocol = true;
+        return a;
+    }
     for (int i = 1; i < argc; ++i) {
         const std::string s = argv[i];
         auto next = [&]() -> std::string {
@@ -84,6 +98,9 @@ Args parseArgs(int argc, char** argv, std::string& err) {
             else if (s == "--no-cloud") a.noCloud = true;
             else if (s == "--cloud-api" || s == "--cloud-base") a.cloudApi = next();
             else if (s == "--web-origin") a.webOrigin = next();
+            else if (s == "--tray") a.tray = true;
+            else if (s == "--no-tray") a.noTray = true;
+            else if (s == "--quit") a.quit = true;
             else if (s == "--help" || s == "-h") a.help = true;
             else err = "unknown argument " + s;
         } catch (...) {
@@ -131,6 +148,31 @@ void printStatus(const ks::AudioStatus& st, const char* prefix) {
     std::fflush(stdout);
 }
 
+std::string trayTooltip(const ks::Session& session, ks::cloud::CloudServices* cloud) {
+    const bool ru = ks::app::trayRussian();
+    std::string t = std::string("keysynth ") + ks::engineVersion();
+    if (const ks::AudioControl* a = session.audio()) {
+        const ks::AudioStatus st = a->status();
+        if (st.running) {
+            // Truncate by characters, not bytes (Cyrillic device names are multi-byte UTF-8).
+            const std::string dev = juce::String::fromUTF8(st.name.c_str()).substring(0, 40).toStdString();
+            char line[96];
+            std::snprintf(line, sizeof(line), "\n%.1f kHz, %d (%.1f ms)", st.sampleRate / 1000.0, st.bufferSize,
+                          st.sampleRate > 0 ? 1000.0 * st.bufferSize / st.sampleRate : 0.0);
+            t += "\n" + st.type + ": " + dev + line;
+        } else {
+            t += ru ? "\nЗвук: нет устройства" : "\nAudio: no device";
+        }
+    }
+    if (cloud) {
+        const auto cs = cloud->client().status();
+        const std::string who = juce::String::fromUTF8(cs.accountName.c_str()).substring(0, 24).toStdString();
+        if (cs.linked) t += (ru ? "\nОблако: " : "\nCloud: ") + who;
+        else t += ru ? "\nОблако: не подключено" : "\nCloud: not linked";
+    }
+    return t;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -139,20 +181,44 @@ int main(int argc, char** argv) {
     if (!err.empty() || args.help) {
         if (!err.empty()) std::fprintf(stderr, "error: %s\n", err.c_str());
         std::printf("usage: keysynth-engine [--no-audio] [--no-midi] [--port N] [--http-port N] [--asio-buffer N]\n"
-                    "                       [--sample-rate HZ] [--preset PATH] [--root DIR]\n");
+                    "                       [--sample-rate HZ] [--preset PATH] [--root DIR] [--no-plugins] [--no-cloud]\n"
+                    "                       [--tray | --no-tray] [--quit] [keysynth://open]\n");
         return err.empty() ? 0 : 2;
     }
+    if (args.quit) return ks::platform::SingleInstance::send(ks::platform::SingleInstance::Command::Quit) ? 0 : 1;
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
 #if defined(SIGBREAK)
     std::signal(SIGBREAK, onSignal);
 #endif
 
-    juce::ScopedJuceInitialiser_GUI juceInit; // message manager (no GUI is created)
+    juce::ScopedJuceInitialiser_GUI juceInit; // message manager (+ the tray icon in desktop mode)
 
-    const auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
-    const ks::AppPaths paths = args.root.empty() ? ks::AppPaths::discover(exeDir.getFullPathName().toStdString())
-                                                 : ks::AppPaths::fromRoot(args.root);
+    const auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+    const auto exeDir = exeFile.getParentDirectory();
+    // Wide path: the install dir is under the user's profile, often non-ASCII (C:/Users/<Cyrillic name>/...).
+    const ks::AppPaths paths =
+        args.root.empty() ? ks::AppPaths::discover(std::filesystem::path(exeDir.getFullPathName().toWideCharPointer()))
+                          : ks::AppPaths::fromRoot(args.root);
+
+    // Desktop mode (ARCHITECTURE §16): tray + single instance. A second launch hands over to the first and exits.
+    const auto mode = ks::platform::desktopMode(paths.installed(), args.tray, args.noTray, args.protocol);
+    const bool desktop = mode.desktop, openOnStart = mode.openOnStart;
+    const std::string localUrl = ks::platform::localUiUrl(args.httpPort, args.wsPort);
+    std::unique_ptr<ks::platform::SingleInstance> instance;
+    if (desktop) {
+        instance = std::make_unique<ks::platform::SingleInstance>();
+        if (!instance->isPrimary()) {
+            std::printf("keysynth is already running%s\n", openOnStart ? ": opening the UI" : "");
+            if (openOnStart && !ks::platform::SingleInstance::send(ks::platform::SingleInstance::Command::Open)) {
+                const bool web = ks::platform::probeHealth(ks::platform::kWebHealthUrl, 3000);
+                ks::platform::openInBrowser(web ? ks::platform::kWebUiUrl : localUrl);
+            }
+            return 0;
+        }
+    }
+    // After the instance check: only the primary desktop instance rotates the log.
+    ks::app::setupGuiOutput(paths.logsDir, desktop);
     std::printf("keysynth-engine — root %s%s\n", ks::pathToUtf8(paths.root).c_str(),
                 ks::rt::checksEnabled() ? " (RT checks on)" : "");
 
@@ -282,7 +348,7 @@ int main(int argc, char** argv) {
 
     const std::string serr = server.start(args.wsPort, args.httpPort);
     if (!serr.empty()) {
-        std::fprintf(stderr, "control server: %s\n", serr.c_str());
+        ks::app::reportFatal("keysynth: control server: " + serr);
         return 1;
     }
     std::printf("control: ws://127.0.0.1:%d%s\n", args.wsPort,
@@ -293,6 +359,38 @@ int main(int argc, char** argv) {
     std::fflush(stdout);
 
     Pump pump(session, server, plugins.get(), cloud.get());
+
+    std::unique_ptr<ks::app::UiOpener> opener;
+    std::unique_ptr<ks::app::Tray> tray;
+    if (desktop) {
+        opener = std::make_unique<ks::app::UiOpener>(localUrl, server.httpRunning());
+        ks::app::TrayActions ta;
+        ta.tooltip = [&session, c = cloud.get()] { return trayTooltip(session, c); };
+        ta.openUi = [o = opener.get()] { o->openPreferred(); };
+        ta.openLocal = [o = opener.get()] { o->openLocal(); };
+        ta.localAvailable = [&server] { return server.httpRunning(); };
+        ta.restartAudio = [&session, &server]() -> std::string {
+            ks::AudioControl* a = session.audio();
+            if (!a) return "no audio host";
+            if (a->status().panelOpen) return "close the driver's control panel first";
+            std::string e = a->restart();
+            if (server.clientCount() > 0) {
+                server.broadcast(session.devicesJson());
+                server.broadcast(session.stateJson());
+            }
+            return e;
+        };
+        const std::filesystem::path exePath(exeFile.getFullPathName().toWideCharPointer());
+        ta.autostartEnabled = [] { return ks::platform::autostartEnabled(); };
+        ta.setAutostart = [exePath](bool on) { return ks::platform::setAutostart(on, exePath); };
+        ta.quit = [] { g_quit.store(true); };
+        ta.poll = [inst = instance.get(), o = opener.get()] {
+            if (inst->takeQuitRequest()) g_quit.store(true);
+            if (inst->takeOpenRequest()) o->openPreferred();
+        };
+        tray = std::make_unique<ks::app::Tray>(std::move(ta), ks::engineVersion());
+        if (openOnStart) opener->openPreferred();
+    }
     if (audioHost)
         juce::Timer::callAfterDelay(1000, [host = audioHost.get()] {
             std::printf("audio thread: MMCSS \"Pro Audio\" %s (err %lu), power throttling %s\n",
@@ -303,6 +401,9 @@ int main(int argc, char** argv) {
     juce::MessageManager::getInstance()->runDispatchLoop();
 
     std::printf("shutting down...\n");
+    juce::PopupMenu::dismissAllActiveMenus();
+    tray.reset();
+    opener.reset(); // joins a running health probe (<= 3 s)
     pump.stopTimer();
     server.stop();
     handler.setCloud(nullptr);

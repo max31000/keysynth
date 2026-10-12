@@ -12,6 +12,20 @@ option(KS_WITH_FAUST "Faust JIT plugin support (libfaust, LLVM backend)" ON)
 string(REGEX REPLACE "/[.]claude/worktrees/.*$" "" KS_MAIN_CHECKOUT "${CMAKE_SOURCE_DIR}") # CMake paths use /
 set(KS_FAUST_DIR "${KS_MAIN_CHECKOUT}/.tools/faust" CACHE PATH "Faust install (bin/, lib/faust.dll, include/, share/faust/)")
 
+# Version: project() is the default; release CI passes the tag (-DKS_VERSION=1.2.3, without "v"). The numeric
+# X.Y.Z.0 form goes into the exe version resource (engine/src/app/keysynth.rc.in).
+# Empty cache default, so a project() bump is never shadowed by a stale cached value.
+set(KS_VERSION "" CACHE STRING "keysynth version override X.Y.Z (empty: project() version)")
+if(KS_VERSION STREQUAL "")
+    set(KS_VERSION "${PROJECT_VERSION}")
+endif()
+if(NOT KS_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+    message(FATAL_ERROR "KS_VERSION must start with X.Y.Z (got '${KS_VERSION}')")
+endif()
+set(KS_VERSION_MAJOR ${CMAKE_MATCH_1})
+set(KS_VERSION_MINOR ${CMAKE_MATCH_2})
+set(KS_VERSION_PATCH ${CMAKE_MATCH_3})
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
