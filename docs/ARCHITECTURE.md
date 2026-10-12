@@ -472,7 +472,7 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   `assets/samples/…` = asset dirs or cache); `resolveAllowed` maps logical → disk, `relativeToRoot` disk → logical.
 - **HTTP** behind `cloud::HttpTransport` (one blocking `send()` with streaming sink + cancel flag); production =
   `JuceHttpTransport` (JUCE `WebInputStream`, WinINet on Windows, no redirects followed), tests = fakes. Base URL
-  compiled in (`https://mvv42.ru/keysynth/api`), dev override `--cloud-api` / `KS_CLOUD_API` (dev builds only).
+  compiled in (service root `https://mvv42.ru/keysynth`; requests go to `<root>/api/...`, nginx maps `/keysynth/api/` → app `/api/`), dev override `--cloud-api` / `KS_CLOUD_API` (dev builds only).
 - **CloudClient** (`cloud/`): `cloud.json` (deviceId, link; the token DPAPI-protected via `platform/Dpapi`), link /
   unlink / status, bearer header on every call, drops the token on any 401. One worker thread for its own calls;
   `api()` is callable from other workers (thread-safe, token under a mutex).

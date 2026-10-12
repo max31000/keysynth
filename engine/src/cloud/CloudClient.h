@@ -19,7 +19,7 @@
 
 namespace ks::cloud {
 
-inline constexpr const char* kDefaultApiBase = "https://mvv42.ru/keysynth/api";
+inline constexpr const char* kDefaultApiBase = "https://mvv42.ru/keysynth";
 inline constexpr const char* kTokenEntropy = "keysynth-cloud-v1";
 
 struct LinkInfo {

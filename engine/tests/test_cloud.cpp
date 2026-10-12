@@ -443,3 +443,13 @@ TEST_CASE("cloud: link, merge, account mismatch, unlink, 401 drop", "[cloud][pro
     CHECK(dropped);
     CHECK(f.session->paths().accountId.empty());
 }
+
+// Regression (v0.1.0): the compiled base was ".../keysynth/api" and requests appended "/api/...", producing
+// "/keysynth/api/api/devices/me" (404 behind nginx, which maps /keysynth/api/ -> app /api/). The base is the
+// service root; every request path starts with "/api/".
+TEST_CASE("Cloud: default API base yields single /api prefix", "[cloud]") {
+    const std::string base = ks::cloud::kDefaultApiBase;
+    REQUIRE(base == "https://mvv42.ru/keysynth");
+    REQUIRE((base + "/api/devices/me") == "https://mvv42.ru/keysynth/api/devices/me");
+    REQUIRE(base.find("/api") == std::string::npos);
+}
