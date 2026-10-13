@@ -8,6 +8,7 @@
 #include "core/GraphBuilder.h"
 #include "core/ModuleRegistry.h"
 #include "core/RtCheck.h"
+#include "platform/DynamicLibrary.h"
 #include "plugins/DllPlugin.h"
 #include "plugins/FaustJit.h"
 #include "plugins/FaustModule.h"
@@ -25,6 +26,10 @@
 #include <fstream>
 #include <random>
 #include <sstream>
+
+#if !defined(_WIN32)
+#include <sys/wait.h> // WIFEXITED
+#endif
 
 using namespace ks;
 using namespace ks::plugins;
@@ -179,19 +184,27 @@ process = *(gain), *(gain);
 )";
 
 // ------------------------------------------------------------------------------------------------------------
-// Build a C++ plugin with scripts/build_plugin.ps1. Returns false (and SKIPs) if MSVC is missing.
+// Build a C++ plugin with scripts/build_plugin.ps1 (.sh on macOS). Returns false (and SKIPs) without a compiler.
 bool buildDll(const fs::path& pluginsDir, const std::string& name, std::string& log) {
-    const fs::path script = fs::path(KS_SOURCE_DIR) / "scripts" / "build_plugin.ps1";
     const fs::path logFile = pluginsDir / (name + "-build.log");
+#if defined(_WIN32)
+    const fs::path script = fs::path(KS_SOURCE_DIR) / "scripts" / "build_plugin.ps1";
     const std::string cmd = "\"powershell -NoProfile -ExecutionPolicy Bypass -File \"" + pathToUtf8(script) +
                             "\" -Name " + name + " -PluginsDir \"" + pathToUtf8(pluginsDir) + "\" > \"" +
                             pathToUtf8(logFile) + "\" 2>&1\"";
     const int rc = std::system(cmd.c_str());
+#else
+    const fs::path script = fs::path(KS_SOURCE_DIR) / "scripts" / "build_plugin.sh";
+    const std::string cmd = "bash '" + pathToUtf8(script) + "' " + name + " --plugins-dir '" + pathToUtf8(pluginsDir) +
+                            "' > '" + pathToUtf8(logFile) + "' 2>&1";
+    const int status = std::system(cmd.c_str());
+    const int rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+#endif
     std::ifstream f(logFile);
     std::stringstream ss;
     ss << f.rdbuf();
     log = ss.str();
-    if (rc == 3) SKIP("MSVC not found: " + log);
+    if (rc == 3) SKIP("C++ compiler not found: " + log);
     return rc == 0;
 }
 
@@ -738,7 +751,7 @@ TEST_CASE("DLL plugin: build, load, process, state, reload, unload", "[plugins][
     {
         std::error_code ec;
         int copies = 0;
-        for (const auto& e : fs::directory_iterator(t.root / "tmp", ec)) copies += e.path().extension() == ".dll";
+        for (const auto& e : fs::directory_iterator(t.root / "tmp", ec)) copies += e.path().extension() == platform::kSharedLibraryExt;
         CHECK(copies == 1); // only v2's temp copy remains
     }
 
@@ -751,7 +764,7 @@ TEST_CASE("DLL plugin: build, load, process, state, reload, unload", "[plugins][
     CHECK(lib2.expired());
 }
 
-TEST_CASE("DLL plugin: SEH fault isolation (crash -> muted, engine survives)", "[plugins][dll]") {
+TEST_CASE("DLL plugin: fault isolation (crash -> muted, engine survives)", "[plugins][dll]") {
     TestHost t("seh");
     writeFile(t.plugins / "crashy" / "crashy.cpp", R"(
 #include <keysynth/plugin_abi.h>

@@ -104,7 +104,7 @@ thread_local int t_signal = 0;
 thread_local bool t_altStack = false;
 
 struct sigaction g_previous[std::size(kFaultSignals)];
-std::atomic<int> g_installed{0}; // 0 none, 1 installing, 2 done
+std::atomic<bool> g_installing{false};
 
 // Alternate signal stacks (a stack overflow can only be handled on another stack). Static pool: claiming one is
 // lock- and allocation-free; threads beyond the pool still get the guard, just not for stack overflows.
@@ -112,6 +112,18 @@ constexpr size_t kAltStackSize = 64 * 1024;
 constexpr int kAltStacks = 16;
 alignas(16) unsigned char g_altStackMem[kAltStacks][kAltStackSize];
 std::atomic<int> g_altStackNext{0};
+
+// Windows exception codes for the caught signals (DynamicLibrary.h).
+uint32_t windowsCode(int sig) noexcept {
+    switch (sig) {
+    case SIGSEGV:
+    case SIGBUS: return 0xC0000005u; // EXCEPTION_ACCESS_VIOLATION
+    case SIGILL: return 0xC000001Du; // EXCEPTION_ILLEGAL_INSTRUCTION
+    case SIGFPE: return 0xC0000094u; // EXCEPTION_INT_DIVIDE_BY_ZERO
+    default: return 0xC0000001u;
+    }
+}
+constexpr uint32_t kCppExceptionCode = 0xE06D7363u; // MSVC's C++ exception code
 
 void onFault(int sig, siginfo_t* info, void* uctx) {
     if (t_jump != nullptr) {
@@ -137,10 +149,16 @@ void onFault(int sig, siginfo_t* info, void* uctx) {
     }
 }
 
+bool handlersInstalled() noexcept {
+    struct sigaction cur{};
+    return sigaction(SIGSEGV, nullptr, &cur) == 0 && (cur.sa_flags & SA_SIGINFO) && cur.sa_sigaction == &onFault;
+}
+
+// (Re)install the handlers when someone replaced them (a crash reporter, a test framework that installs its own
+// around each test): the replaced handler becomes the one a fault outside guardedCall is forwarded to.
 void installHandlers() noexcept {
-    int expected = 0;
-    if (!g_installed.compare_exchange_strong(expected, 1)) {
-        while (g_installed.load(std::memory_order_acquire) != 2) {
+    if (g_installing.exchange(true)) {
+        while (g_installing.load()) {
         }
         return;
     }
@@ -148,8 +166,13 @@ void installHandlers() noexcept {
     sa.sa_sigaction = &onFault;
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
-    for (size_t i = 0; i < std::size(kFaultSignals); ++i) sigaction(kFaultSignals[i], &sa, &g_previous[i]);
-    g_installed.store(2, std::memory_order_release);
+    for (size_t i = 0; i < std::size(kFaultSignals); ++i) {
+        struct sigaction prev{};
+        if (sigaction(kFaultSignals[i], &sa, &prev) == 0 &&
+            !((prev.sa_flags & SA_SIGINFO) && prev.sa_sigaction == &onFault))
+            g_previous[i] = prev;
+    }
+    g_installing.store(false);
 }
 
 void claimAltStack() noexcept {
@@ -167,7 +190,7 @@ void claimAltStack() noexcept {
 } // namespace
 
 bool guardedCall(GuardedFn fn, void* ctx, uint32_t* code) noexcept {
-    if (g_installed.load(std::memory_order_acquire) != 2) installHandlers();
+    if (!handlersInstalled()) installHandlers(); // one sigaction query per call
     if (!t_altStack) claimAltStack();
     sigjmp_buf jb;
     sigjmp_buf* const outer = t_jump; // nested guards (a plugin call inside another): innermost wins
@@ -175,12 +198,18 @@ bool guardedCall(GuardedFn fn, void* ctx, uint32_t* code) noexcept {
     // "on alternate stack" state, so a later overflow is still delivered on the alternate stack.
     if (sigsetjmp(jb, 1) == 0) {
         t_jump = &jb;
-        fn(ctx);
+        try {
+            fn(ctx);
+        } catch (...) { // must not cross the C ABI (SEH catches these on Windows too)
+            t_jump = outer;
+            if (code) *code = kCppExceptionCode;
+            return false;
+        }
         t_jump = outer;
         return true;
     }
     t_jump = outer;
-    if (code) *code = static_cast<uint32_t>(t_signal);
+    if (code) *code = windowsCode(t_signal);
     return false;
 }
 

@@ -1,6 +1,6 @@
 #pragma once
 // C ABI plugin DLLs (sdk/include/keysynth/plugin_abi.h, ARCHITECTURE §10).
-//  - PluginLibrary: a *copy* of plugins/.build/<name>-<hash>.dll under %TEMP%/keysynth-plugins/<pid>/ (so the
+//  - PluginLibrary: a *copy* of plugins/.build/<name>-<hash>.dll (.dylib) under %TEMP%/keysynth-plugins/<pid>/ (so the
 //    build can overwrite/delete the original while it is loaded), LoadLibrary'd, descriptor validated and
 //    copied. FreeLibrary + delete the copy in the destructor (control/loader thread; last owner).
 //  - DllModule: one plugin instance. Every call into the plugin runs inside an SEH guard with MXCSR saved and

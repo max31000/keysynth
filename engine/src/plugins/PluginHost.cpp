@@ -145,7 +145,13 @@ bool isHex(std::string_view s) {
     return !s.empty() && s.size() <= 32 && s.find_first_not_of("0123456789abcdefABCDEF") == std::string_view::npos;
 }
 
-// Newest plugins/.build/<name>-<hex>.dll.
+#if defined(_WIN32)
+constexpr const char* kBuildPluginScript = "scripts/build_plugin.ps1";
+#else
+constexpr const char* kBuildPluginScript = "scripts/build_plugin.sh";
+#endif
+
+// Newest plugins/.build/<name>-<hex>.dll (.dylib on macOS).
 fs::path newestDll(const fs::path& buildDir, const std::string& name) {
     fs::path best;
     fs::file_time_type bestT{};
@@ -153,7 +159,7 @@ fs::path newestDll(const fs::path& buildDir, const std::string& name) {
     std::vector<fs::directory_entry> entries;
     listDir(buildDir, entries);
     for (const auto& e : entries) {
-        if (!e.is_regular_file(ec) || e.path().extension() != ".dll") continue;
+        if (!e.is_regular_file(ec) || e.path().extension() != platform::kSharedLibraryExt) continue;
         const std::string stem = pathToUtf8(e.path().stem());
         if (stem.size() <= name.size() + 1 || stem.compare(0, name.size() + 1, name + "-") != 0) continue;
         if (!isHex(std::string_view(stem).substr(name.size() + 1))) continue;
@@ -291,7 +297,7 @@ bool PluginHost::reload(const std::string& name, std::string& error) {
     }
     if (it->second.artifact.empty()) {
         error = "plugin '" + name + "' has nothing to load" +
-                (it->second.source == PluginSource::Dll ? " (run scripts/build_plugin.ps1 " + name + ")" : "");
+                (it->second.source == PluginSource::Dll ? " (run " + std::string(kBuildPluginScript) + " " + name + ")" : "");
         return false;
     }
     enqueue(name, it->second);
@@ -379,7 +385,7 @@ void PluginHost::scan(bool force) {
                 s.typeId = "plugin:" + name;
                 s.source = "dll";
                 s.state = "error";
-                s.message = "not built: run scripts/build_plugin.ps1 " + name;
+                s.message = "not built: run " + std::string(kBuildPluginScript) + " " + name;
                 if (auto st = status_.find(name); st != status_.end()) {
                     s.version = st->second.version;
                     s.moduleKind = st->second.moduleKind;

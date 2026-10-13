@@ -1,6 +1,6 @@
 #pragma once
 // PluginHost (ARCHITECTURE §10, docs/PLUGINS.md): discovers plugins/<name>/ (Faust <name>.dsp, or C++ <name>.cpp
-// built by scripts/build_plugin.ps1 into plugins/.build/<name>-<hash>.dll), compiles/loads them on a loader
+// built by scripts/build_plugin.ps1 / .sh into plugins/.build/<name>-<hash>.dll / .dylib), compiles/loads them on a loader
 // thread, registers `plugin:<name>` in the ModuleRegistry and hot-reloads on file changes.
 //
 // Threads: every public method is control-thread only. The loader thread only compiles/loads and hands
@@ -89,7 +89,7 @@ private:
         PluginSource source = PluginSource::Faust;
         std::filesystem::path dir;
         std::string signature; // files + sizes + mtimes
-        std::filesystem::path artifact; // .dsp or newest .dll
+        std::filesystem::path artifact; // .dsp or newest .dll / .dylib
         uint64_t requested = 0;  // generation of the newest queued job
     };
     struct Job {

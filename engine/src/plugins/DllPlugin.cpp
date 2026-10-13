@@ -58,7 +58,7 @@ std::shared_ptr<PluginLibrary> PluginLibrary::load(const fs::path& dll, const fs
     std::error_code ec;
     fs::create_directories(tempDir, ec);
     const fs::path copy =
-        tempDir / (pathToUtf8(dll.stem()) + "-" + std::to_string(copyCounter().fetch_add(1) + 1) + ".dll");
+        tempDir / (pathToUtf8(dll.stem()) + "-" + std::to_string(copyCounter().fetch_add(1) + 1) + platform::kSharedLibraryExt);
     fs::copy_file(dll, copy, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         error = "cannot copy " + pathToUtf8(dll) + " to temp: " + ec.message();

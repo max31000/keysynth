@@ -23,10 +23,11 @@ void* findSymbol(void* lib, const char* name) noexcept;
 void closeLibrary(void* lib) noexcept;
 
 // Runs fn(ctx) inside a hardware-fault guard. Returns false if a fault (access violation, illegal instruction,
-// stack overflow, ...) escaped fn; `code` receives the exception code (Windows: SEH code, e.g. C0000005) or the
-// signal number (POSIX: SIGSEGV, SIGBUS, SIGILL, SIGFPE). Breakpoints (__debugbreak / __builtin_trap, asserts in
+// stack overflow, a C++ exception, ...) escaped fn; `code` receives a Windows exception code on every platform, so
+// fault messages are identical (POSIX maps SIGSEGV/SIGBUS -> C0000005, SIGILL -> C000001D, SIGFPE -> C0000094,
+// a C++ exception -> E06D7363). Breakpoints (__debugbreak / __builtin_trap, asserts in
 // Debug plugins) are not caught, so a debugger still stops there. RT-safe: no allocation (POSIX: the signal
-// handlers are installed once, on the first call; each thread claims an alternate signal stack from a static pool
+// handlers are (re)installed by the call when missing; each thread claims an alternate signal stack from a static pool
 // so a stack overflow is caught too). fn must not rely on C++ unwinding: frames between the fault and the guard
 // are abandoned (Windows SEH and POSIX siglongjmp alike).
 using GuardedFn = void (*)(void* ctx);
