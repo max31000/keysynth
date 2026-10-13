@@ -3,6 +3,11 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- v0.5.0 presets +73 (keys/acoustic: piano, EP, organ, bells, brass, strings, choir, splits) → 203 factory presets,
+  all at −16 LUFS. Synth/FX preset batch (~65) pending (agent launch blocked by the permission classifier).
+- v0.4.0 MIDI tools per layer (`arp`, `chord`, `hold`; module kind Midi) + songs/setlists (`song_*`, control keys,
+  `/api/songs` sync, «Пульт» song mode, 6 factory songs).
+- v0.3.0 effects `vocoder` (+ engine audio input bus), `wah`, `echo` (Echorec), `tapestop`; OnePoleSmoother in double.
 - Per-layer MIDI tools + setlists (ARCHITECTURE §17, §18): `ModuleKind::Midi` + `processMidi`, `layer.midi[]`
   (no format bump), `arp` (6 modes, octaves, NoteDivision sync / free rate, gate/legato, swing, latch, retrigger,
   velocity modes; transport grid or own sample clock), `chord` (12 types + memory, voicings, inversions,

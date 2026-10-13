@@ -86,7 +86,7 @@
     }
   ],
   "master": {
-    "volume_db": 2.3,
+    "volume_db": -2,
     "fx": [
       {
         "type": "limiter",
