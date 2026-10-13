@@ -7,6 +7,7 @@
 #include <iterator>
 #else
 #include <dlfcn.h>
+#include <pthread.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <unistd.h>
@@ -98,20 +99,36 @@ namespace {
 
 constexpr int kFaultSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE};
 
-// Per-thread guard state. Plain (trivially constructible) thread_locals: no allocation on first use.
+// Per-thread guard state, trivially constructible (no constructor runs; note that on Darwin the first access to a
+// thread's TLV block may still malloc once inside dyld — once per thread, outside RtCheck's operator-new hook).
 thread_local sigjmp_buf* t_jump = nullptr;
 thread_local int t_signal = 0;
 thread_local bool t_altStack = false;
 
 struct sigaction g_previous[std::size(kFaultSignals)];
 std::atomic<bool> g_installing{false};
+// A fault outside any guard was handed to the default action: never reinstall (the re-executed instruction must
+// terminate the process, not loop into our handler again).
+std::atomic<bool> g_crashing{false};
 
-// Alternate signal stacks (a stack overflow can only be handled on another stack). Static pool: claiming one is
-// lock- and allocation-free; threads beyond the pool still get the guard, just not for stack overflows.
+// Alternate signal stacks (a stack overflow can only be handled on another stack). Static pool of slots, claimed
+// lock- and allocation-free and given back by a pthread key destructor when the thread exits (device restarts
+// create new audio threads); threads beyond the pool still get the guard, just not for stack overflows.
 constexpr size_t kAltStackSize = 64 * 1024;
 constexpr int kAltStacks = 16;
 alignas(16) unsigned char g_altStackMem[kAltStacks][kAltStackSize];
-std::atomic<int> g_altStackNext{0};
+std::atomic<bool> g_altStackUsed[kAltStacks];
+pthread_key_t g_altStackKey;
+std::atomic<bool> g_altStackKeyReady{false};
+
+void releaseAltStack(void* value) { // thread exit (pthread key destructor)
+    const auto slot = reinterpret_cast<intptr_t>(value) - 1;
+    if (slot < 0 || slot >= kAltStacks) return;
+    stack_t off{};
+    off.ss_flags = SS_DISABLE;
+    sigaltstack(&off, nullptr);
+    g_altStackUsed[slot].store(false, std::memory_order_release);
+}
 
 // Windows exception codes for the caught signals (DynamicLibrary.h).
 uint32_t windowsCode(int sig) noexcept {
@@ -144,6 +161,7 @@ void onFault(int sig, siginfo_t* info, void* uctx) {
             return;
         }
         // Default action: restore it; returning re-executes the faulting instruction, which now terminates.
+        g_crashing.store(true);
         signal(sig, SIG_DFL);
         return;
     }
@@ -157,6 +175,7 @@ bool handlersInstalled() noexcept {
 // (Re)install the handlers when someone replaced them (a crash reporter, a test framework that installs its own
 // around each test): the replaced handler becomes the one a fault outside guardedCall is forwarded to.
 void installHandlers() noexcept {
+    if (g_crashing.load()) return;
     if (g_installing.exchange(true)) {
         while (g_installing.load()) {
         }
@@ -166,6 +185,8 @@ void installHandlers() noexcept {
     sa.sa_sigaction = &onFault;
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
+    if (!g_altStackKeyReady.load()) // first install only (no allocation on Darwin: fixed TSD slots)
+        g_altStackKeyReady.store(pthread_key_create(&g_altStackKey, &releaseAltStack) == 0);
     for (size_t i = 0; i < std::size(kFaultSignals); ++i) {
         struct sigaction prev{};
         if (sigaction(kFaultSignals[i], &sa, &prev) == 0 &&
@@ -179,18 +200,28 @@ void claimAltStack() noexcept {
     t_altStack = true; // one attempt per thread
     stack_t current{};
     if (sigaltstack(nullptr, &current) == 0 && !(current.ss_flags & SS_DISABLE)) return; // the thread has one
-    const int slot = g_altStackNext.fetch_add(1);
-    if (slot >= kAltStacks) return;
-    stack_t st{};
-    st.ss_sp = g_altStackMem[slot];
-    st.ss_size = kAltStackSize;
-    sigaltstack(&st, nullptr);
+    if (!g_altStackKeyReady.load()) return; // could not register the release: don't leak a slot
+    for (int slot = 0; slot < kAltStacks; ++slot) {
+        bool expected = false;
+        if (!g_altStackUsed[slot].compare_exchange_strong(expected, true, std::memory_order_acq_rel)) continue;
+        stack_t st{};
+        st.ss_sp = g_altStackMem[slot];
+        st.ss_size = kAltStackSize;
+        if (sigaltstack(&st, nullptr) != 0) {
+            g_altStackUsed[slot].store(false, std::memory_order_release);
+            return;
+        }
+        pthread_setspecific(g_altStackKey, reinterpret_cast<void*>(static_cast<intptr_t>(slot) + 1));
+        return;
+    }
 }
 
 } // namespace
 
 bool guardedCall(GuardedFn fn, void* ctx, uint32_t* code) noexcept {
-    if (!handlersInstalled()) installHandlers(); // one sigaction query per call
+    // One sigaction query per call (plus sigprocmask in sigsetjmp): a few hundred ns, bounded; it keeps the guard
+    // working after another component (crash reporter, test framework) replaced the handlers.
+    if (!handlersInstalled()) installHandlers();
     if (!t_altStack) claimAltStack();
     sigjmp_buf jb;
     sigjmp_buf* const outer = t_jump; // nested guards (a plugin call inside another): innermost wins

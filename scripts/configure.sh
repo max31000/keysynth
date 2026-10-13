@@ -30,7 +30,7 @@ trap 'rmdir "$lock" 2>/dev/null || true' EXIT
 generator=()
 command -v ninja >/dev/null && generator=(-G Ninja)
 
-cmake -S "$repo" -B "$build" "${generator[@]}" \
+cmake -S "$repo" -B "$build" ${generator[@]+"${generator[@]}"} \
     -DCMAKE_BUILD_TYPE=Release \
     -DFETCHCONTENT_BASE_DIR="$deps" \
     "$@"

@@ -347,8 +347,9 @@ scripts/build_plugin.sh cpp_bitcrusher # C++ plugin -> plugins/.build/<name>-<ha
 
 Binaries are in `build/bin/` (single-config Ninja; `keysynth-app` in `build/bin/Release/app/`). `[dll]` tests build
 their plugins with `build_plugin.sh` (clang++); the fault-isolation test crashes a plugin on purpose (SIGSEGV is
-caught, the message reads `0xC0000005` as on Windows). The `[cloud]` secret test writes one keychain item
-(`keysynth` / `secret-key:keysynth-cloud-v1`) — the same key a linked engine uses, never a token.
+caught, the message reads `0xC0000005` as on Windows). The `[cloud]` secret test creates (or reuses) the per-user
+key file `~/Library/Application Support/keysynth/.keys/keysynth-cloud-v1.key` — the key a linked engine uses, never a
+token.
 
 CI: `.github/workflows/engine-macos.yml` (push to main / PRs touching the engine): build + `ks-tests` on macos-15.
 

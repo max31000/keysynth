@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop leftover dev processes of THIS checkout on macOS (counterpart of scripts/stop-dev.ps1): the engine / test /
-# tool binaries under <repo>/build*, node (Vite, mock) started from <repo>/ui, and whatever of those listens on the
-# dev ports 7441/7440/7341/7340. Never touches the installed /Applications/keysynth.app.
+# tool binaries under <repo>/build* (and worktrees), node (Vite, mock) started from <repo>/ui. Matched by command
+# line / working directory, never by port: the installed /Applications/keysynth.app is never touched.
 #
 #   scripts/stop-dev.sh            # stop
 #   scripts/stop-dev.sh --dry-run  # only list

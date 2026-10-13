@@ -8,10 +8,17 @@
 #elif defined(__APPLE__)
 #include <CommonCrypto/CommonCryptor.h>
 #include <CommonCrypto/CommonHMAC.h>
-#include <Security/Security.h>
+#include <Security/SecRandom.h>
 #include <SystemConfiguration/SystemConfiguration.h>
+#include <fcntl.h>
+#include <pwd.h>
 #include <string.h> // timingsafe_bcmp
+#include <sys/stat.h>
 #include <unistd.h>
+
+#include <cctype>
+#include <cerrno>
+#include <filesystem>
 #endif
 
 #include <cstdlib>
@@ -61,59 +68,59 @@ std::string computerName() {
 #elif defined(__APPLE__)
 namespace {
 
-// Blob: "KSK1" | iv[16] | AES-256-CBC(PKCS7) ciphertext | HMAC-SHA256(magic | iv | ciphertext)[32]. Keys: one
-// random 64-byte item per `entropy` in the user's login keychain (generic password, service "keysynth", account
-// "secret-key:<entropy>"); bytes 0..31 encrypt, 32..63 authenticate. Same guarantees as DPAPI CurrentUser: the
-// blob is useless without this user's keychain, and a different entropy selects a different key.
+// Blob: "KSK1" | iv[16] | AES-256-CBC(PKCS7) ciphertext | HMAC-SHA256(magic | iv | ciphertext)[32]. Key: 64 random
+// bytes per `entropy` in ~/Library/Application Support/keysynth/.keys/<entropy>.key (dir 0700, file 0600); bytes
+// 0..31 encrypt, 32..63 authenticate. Same guarantee as DPAPI CurrentUser (only this OS user can decrypt; a
+// different entropy selects a different key). Not the keychain: its items trust the creating binary's signature,
+// which changes with every ad-hoc-signed release, so each update would prompt for the login password.
 constexpr char kMagic[4] = {'K', 'S', 'K', '1'};
 constexpr size_t kIv = kCCBlockSizeAES128, kMac = CC_SHA256_DIGEST_LENGTH, kKey = 64;
 
-CFStringRef cfstr(const std::string& s) {
-    return CFStringCreateWithBytes(nullptr, reinterpret_cast<const UInt8*>(s.data()), static_cast<CFIndex>(s.size()),
-                                   kCFStringEncodingUTF8, false);
+std::string keyDir() {
+    const char* home = std::getenv("HOME");
+    if (!home || !*home) {
+        const passwd* pw = getpwuid(getuid());
+        home = pw ? pw->pw_dir : nullptr;
+    }
+    return home && *home ? std::string(home) + "/Library/Application Support/keysynth/.keys" : std::string();
 }
 
-CFMutableDictionaryRef keyQuery(const std::string& entropy) {
-    CFMutableDictionaryRef q = CFDictionaryCreateMutable(nullptr, 0, &kCFTypeDictionaryKeyCallBacks,
-                                                         &kCFTypeDictionaryValueCallBacks);
-    CFStringRef account = cfstr("secret-key:" + entropy);
-    CFDictionarySetValue(q, kSecClass, kSecClassGenericPassword);
-    CFDictionarySetValue(q, kSecAttrService, CFSTR("keysynth"));
-    CFDictionarySetValue(q, kSecAttrAccount, account);
-    CFRelease(account);
-    return q;
+std::string keyFile(const std::string& entropy) {
+    std::string name;
+    for (unsigned char c : entropy) name += std::isalnum(c) || c == '-' || c == '_' ? static_cast<char>(c) : '_';
+    const std::string dir = keyDir();
+    return dir.empty() ? std::string() : dir + "/" + name + ".key";
 }
 
 std::optional<std::string> loadKey(const std::string& entropy) {
-    CFMutableDictionaryRef q = keyQuery(entropy);
-    CFDictionarySetValue(q, kSecReturnData, kCFBooleanTrue);
-    CFDictionarySetValue(q, kSecMatchLimit, kSecMatchLimitOne);
-    CFTypeRef out = nullptr;
-    const OSStatus st = SecItemCopyMatching(q, &out);
-    CFRelease(q);
-    if (st != errSecSuccess || out == nullptr) return std::nullopt;
-    std::optional<std::string> key;
-    if (CFGetTypeID(out) == CFDataGetTypeID() && CFDataGetLength(static_cast<CFDataRef>(out)) == kKey)
-        key = std::string(reinterpret_cast<const char*>(CFDataGetBytePtr(static_cast<CFDataRef>(out))), kKey);
-    CFRelease(out);
+    const std::string path = keyFile(entropy);
+    if (path.empty()) return std::nullopt;
+    const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return std::nullopt;
+    std::string key(kKey, '\0');
+    const ssize_t n = ::read(fd, key.data(), kKey);
+    ::close(fd);
+    if (n != static_cast<ssize_t>(kKey)) return std::nullopt;
     return key;
 }
 
 std::optional<std::string> loadOrCreateKey(const std::string& entropy) {
     if (auto k = loadKey(entropy)) return k;
+    const std::string dir = keyDir(), path = keyFile(entropy);
+    if (dir.empty()) return std::nullopt;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    ::chmod(dir.c_str(), 0700);
     std::string key(kKey, '\0');
     if (SecRandomCopyBytes(kSecRandomDefault, kKey, key.data()) != errSecSuccess) return std::nullopt;
-    CFMutableDictionaryRef q = keyQuery(entropy);
-    CFDataRef data = CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(key.data()), static_cast<CFIndex>(kKey));
-    CFStringRef label = CFSTR("keysynth device secret key");
-    CFDictionarySetValue(q, kSecValueData, data);
-    CFDictionarySetValue(q, kSecAttrLabel, label);
-    CFDictionarySetValue(q, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly);
-    const OSStatus st = SecItemAdd(q, nullptr);
-    CFRelease(data);
-    CFRelease(q);
-    if (st == errSecDuplicateItem) return loadKey(entropy); // another process won the race
-    if (st != errSecSuccess) return std::nullopt;
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) return errno == EEXIST ? loadKey(entropy) : std::nullopt; // another process won the race
+    const bool ok = ::write(fd, key.data(), kKey) == static_cast<ssize_t>(kKey) && ::fsync(fd) == 0;
+    ::close(fd);
+    if (!ok) {
+        ::unlink(path.c_str());
+        return std::nullopt;
+    }
     return key;
 }
 

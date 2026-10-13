@@ -160,7 +160,9 @@ public:
         if ([uc.scheme isEqualToString:@"http"]) uc.scheme = @"ws";
         else if ([uc.scheme isEqualToString:@"https"]) uc.scheme = @"wss";
         NSMutableURLRequest* req = [NSMutableURLRequest requestWithURL:uc.URL];
-        req.timeoutInterval = hs.timeoutMs / 1000.0;
+        // A task's timeout is an *idle* timeout (and the request's wins over the session's): keep it long, the relay
+        // heartbeat closes a dead link earlier. The handshake timeout is the wait below.
+        req.timeoutInterval = 600;
         for (const auto& [k, v] : hs.headers)
             [req setValue:[NSString stringWithUTF8String:v.c_str()] forHTTPHeaderField:[NSString stringWithUTF8String:k.c_str()]];
 
@@ -177,11 +179,16 @@ public:
         NSOperationQueue* queue = [[NSOperationQueue alloc] init];
         queue.maxConcurrentOperationCount = 1; // serial callbacks
         NSURLSessionConfiguration* cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
-        cfg.timeoutIntervalForRequest = 600; // idle receive; the relay heartbeat closes earlier
-        session_ = [NSURLSession sessionWithConfiguration:cfg delegate:delegate delegateQueue:queue];
-        task_ = [session_ webSocketTaskWithRequest:req];
-        task_.maximumMessageSize = kMaxMessage;
-        [task_ resume];
+        cfg.timeoutIntervalForRequest = 600;
+        NSURLSession* session = [NSURLSession sessionWithConfiguration:cfg delegate:delegate delegateQueue:queue];
+        NSURLSessionWebSocketTask* task = [session webSocketTaskWithRequest:req];
+        task.maximumMessageSize = kMaxMessage;
+        {
+            std::lock_guard<std::mutex> lk(core_->m); // abort() may read task_ from another thread
+            session_ = session;
+            task_ = task;
+        }
+        [task resume];
 
         std::unique_lock<std::mutex> lk(core_->m);
         const bool done = core_->cv.wait_for(lk, std::chrono::milliseconds(hs.timeoutMs), [&] {
@@ -237,12 +244,14 @@ public:
     }
 
     void abort() override {
+        NSURLSessionWebSocketTask* task = nil;
         {
             std::lock_guard<std::mutex> lk(core_->m);
             core_->aborted = true;
             core_->cv.notify_all();
+            task = task_;
         }
-        [task_ cancel]; // an open socket: the receive loop fails -> onClose(1006) on the delegate queue
+        [task cancel]; // an open socket: the receive loop fails -> onClose(1006) on the delegate queue
     }
 
     size_t queuedBytes() const override {

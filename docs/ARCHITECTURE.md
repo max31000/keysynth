@@ -77,7 +77,7 @@ engine/
   src/plugins/    PluginHost: Faust JIT (libfaust C API) + C ABI DLLs (sdk/include/keysynth/plugin_abi.h), hot reload.
   src/render/     OfflineRenderer (patch + notes/MIDI → buffer/WAV without a device).
   src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, fault guard (SEH / signals), secrets at rest
-                  (DPAPI / keychain key), relay WebSocket (WinHTTP / NSURLSession), port owner, desktop
+                  (DPAPI / per-user key file), relay WebSocket (WinHTTP / NSURLSession), port owner, desktop
                   integration: single instance, autostart, Apple Events, browser launch — §16).
   src/cloud/      CloudClient (HTTPS to mvv42.ru, device token), SyncService (presets), CloudServices (§15).
   src/samples/    SampleCache + downloader (manifest, jobs, resume, verify), manifest path rules (§15).
@@ -543,8 +543,10 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   `JuceHttpTransport` (JUCE `WebInputStream`, WinINet on Windows, NSURLSession on macOS, no redirects followed), tests = fakes. Base URL
   compiled in (service root `https://mvv42.ru/keysynth`; requests go to `<root>/api/...`, nginx maps `/keysynth/api/` → app `/api/`), dev override `--cloud-api` / `KS_CLOUD_API` (dev builds only).
 - **CloudClient** (`cloud/`): `cloud.json` (deviceId, link; the token protected via `platform/Dpapi`: DPAPI on
-  Windows; macOS: AES-256-CBC + HMAC-SHA256 with a random per-user key in the login keychain, item `keysynth` /
-  `secret-key:<entropy>` — same blob-at-rest contract), link /
+  Windows; macOS: AES-256-CBC + HMAC-SHA256 with a random per-user key file
+  `~/Library/Application Support/keysynth/.keys/<entropy>.key` (0600) — same blob-at-rest contract and the same
+  "only this OS user" guarantee as DPAPI; not the keychain, whose items trust the creating binary's signature and
+  would prompt after every ad-hoc-signed update), link /
   unlink / status, bearer header on every call, drops the token on any 401. One worker thread for its own calls;
   `api()` is callable from other workers (thread-safe, token under a mutex).
 - **SampleService** (`samples/`): manifest (cached `manifest.json` + ETag), `cache.json` index, jobs (entry /

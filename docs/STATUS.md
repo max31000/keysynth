@@ -4,7 +4,7 @@ Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
 - macOS port (Apple Silicon, macOS 13+), same features as Windows (ARCHITECTURE §1, §16 *macOS*; TESTING *macOS*):
-  CoreAudio/CoreMIDI (default buffer 128), POSIX/Cocoa platform layer (keychain-held token key, NSURLSession relay
+  CoreAudio/CoreMIDI (default buffer 128), POSIX/Cocoa platform layer (per-user 0600 token key file, NSURLSession relay
   socket, libproc port owner, flock + socket single instance, Apple Events, SMAppService login item, signal-based
   plugin fault guard, FPCR flush-to-zero), Faust (official arm64 libfaust), C++ plugins as `.dylib`,
   `keysynth.app` menu-bar app + dmg (`scripts/build_app_macos.sh`, ad-hoc signed), `.sh` launchers, OS-aware web

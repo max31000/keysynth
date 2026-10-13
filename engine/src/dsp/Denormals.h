@@ -7,7 +7,7 @@
 #if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__SSE__)
 #include <xmmintrin.h>
 #define KS_HAS_SSE_CSR 1
-#elif defined(__aarch64__) || defined(_M_ARM64)
+#elif defined(__aarch64__) // GCC/clang inline asm (MSVC ARM64 would need _ReadStatusReg)
 #define KS_HAS_ARM_FPCR 1
 #endif
 

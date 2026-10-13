@@ -1,7 +1,7 @@
 #pragma once
 // Secrets at rest (device token in cloud.json, cloud-api spec §6.2), bound to the current OS user.
-// Windows: DPAPI (CryptProtectData, CurrentUser scope). macOS: AES-256-CBC + HMAC-SHA256 with a random key kept in
-// the user's login keychain (one item per entropy; see Dpapi.cpp). Other platforms: not available (protect()
+// Windows: DPAPI (CryptProtectData, CurrentUser scope). macOS: AES-256-CBC + HMAC-SHA256 with a random per-user
+// key file (0600, one per entropy; see Dpapi.cpp). Other platforms: not available (protect()
 // returns nullopt, callers stay unlinked).
 
 #include <optional>

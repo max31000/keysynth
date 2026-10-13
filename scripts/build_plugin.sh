@@ -49,7 +49,7 @@ headers=()
 while IFS= read -r f; do headers+=("$f"); done < <(find "$src_dir" -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inl' \) | LC_ALL=C sort)
 hash="$(
     {
-        for f in "${sources[@]}" "${headers[@]}"; do
+        for f in "${sources[@]}" ${headers[@]+"${headers[@]}"}; do # bash 3.2: empty arrays need the + guard
             printf '%s\n' "${f#"$src_dir"}"
             cat "$f"
         done

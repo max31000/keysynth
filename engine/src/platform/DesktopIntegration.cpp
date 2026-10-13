@@ -17,6 +17,7 @@
 #if !defined(_WIN32)
 #include <cerrno>
 #include <cstring>
+#include <climits>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/socket.h>
@@ -121,8 +122,16 @@ bool appLaunchedByUrl() { return false; }
 namespace {
 
 std::string runtimeDir() {
-    const char* t = std::getenv("TMPDIR"); // per-user on macOS (/var/folders/...)
-    std::string d = t && *t ? t : "/tmp";
+    std::string d;
+#if defined(__APPLE__)
+    // The per-user temp dir (/var/folders/...), also when TMPDIR is unset (sudo, some launchd / ssh contexts).
+    char buf[PATH_MAX];
+    if (confstr(_CS_DARWIN_USER_TEMP_DIR, buf, sizeof(buf)) > 0) d = buf;
+#endif
+    if (d.empty()) {
+        const char* t = std::getenv("TMPDIR");
+        d = t && *t ? t : "/tmp";
+    }
     if (d.back() != '/') d += '/';
     return d;
 }
