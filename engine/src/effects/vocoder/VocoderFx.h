@@ -66,7 +66,8 @@ private:
         }
         float process(float x) noexcept { return k * s2.tick(k * s1.tick(x).bp).bp; }
     };
-    void configureBands(int n, float formantSemis) noexcept;
+    void configureBands(int n, float formantSemis) noexcept; // a band-count change resets the banks (enum switch)
+    void retuneCarrier(float formantSemis) noexcept;          // formant glide: carrier bank only
     float vowelSample() noexcept; // internal test modulator
 
     double sr_ = 48000.0;

@@ -212,7 +212,7 @@ std::string AudioHost::start(const Options& opt, bool startTimerNow) {
         sr = a->value("sampleRate", 0.0);
         buffer = a->value("bufferSize", 0);
         savedExplicit = a->value("bufferExplicit", false);
-        inputName_ = a->value("inputName", std::string());
+        if (auto in = a->find("inputName"); in != a->end() && in->is_string()) inputName_ = in->get<std::string>();
         if (auto ic = a->find("inputChannels"); ic != a->end()) inputChannels_ = channelsFromJson(*ic);
     }
     if (type.empty()) { // no saved device: no saved input selection either
@@ -276,6 +276,20 @@ std::string AudioHost::start(const Options& opt, bool startTimerNow) {
     }
     if (dev != nullptr) {
         rememberTarget();
+        // Fell back to another device than the saved one: the saved input selection belongs to the saved device.
+        if (!inputChannels_.empty() && (target_.type != type || target_.name != name)) {
+            inputName_.clear();
+            inputChannels_.clear();
+            if (!dev->getActiveInputChannels().isZero()) {
+                SelfOp op(selfOps_, selfReason_, "startup (fallback device, no input)");
+                auto setup = dm_.getAudioDeviceSetup();
+                applyInputs(setup, target_.type);
+                dm_.setAudioDeviceSetup(setup, true);
+                dev = dm_.getCurrentAudioDevice();
+            }
+        }
+    }
+    if (dev != nullptr) {
         // Explicit = re-requested later. ASIO: only when the driver offers a choice and accepted ours.
         const bool choice = !followsDriver(target_.type) || dev->getAvailableBufferSizes().size() > 1;
         explicitBuffer_ = buffer > 0 && choice && dev->getCurrentBufferSizeSamples() == buffer ? buffer : 0;
@@ -540,13 +554,16 @@ std::string AudioHost::setDevice(const std::string& type, const std::string& nam
     for (auto* t : dm_.getAvailableDeviceTypes()) typeOk = typeOk || str(t->getTypeName()) == type;
     if (!typeOk) return "unknown device type '" + type + "'";
     juce::String err;
+    const std::string keptInputName = inputName_;
+    const std::vector<int> keptInputs = inputChannels_;
     {
         SelfOp op(selfOps_, selfReason_, "set_audio_device");
         if (auto* dev = dm_.getCurrentAudioDevice()) {
             const int x = dev->getXRunCount();
             if (x > 0) xrunBase_.fetch_add(static_cast<uint64_t>(x));
         }
-        // The input selection belongs to a device: keep it only when the device stays the same.
+        // The input selection belongs to a device: keep it only when the device stays the same (restored below
+        // when the switch fails, so the current device keeps its inputs).
         if (type != target_.type || name != target_.name) {
             inputName_.clear();
             inputChannels_.clear();
@@ -574,6 +591,8 @@ std::string AudioHost::setDevice(const std::string& type, const std::string& nam
     } else {
         // The user sees the error in the reply; no automatic retries of a device they just asked for.
         expectRunning_ = false;
+        inputName_ = keptInputName; // target_ still names the previous device
+        inputChannels_ = keptInputs;
         logEvent("error", "set_device_failed", "set_audio_device " + type + " / " + name + ": " + str(err), false);
     }
     // The synchronous restart flagged an async re-report; set_audio_device reports the change itself (`devices`
@@ -623,7 +642,8 @@ std::string AudioHost::setInput(const std::string& inputName, const std::vector<
             auto back = dm_.getAudioDeviceSetup();
             back.outputDeviceName = jstr(target_.name);
             applyInputs(back, target_.type);
-            dm_.setAudioDeviceSetup(back, true);
+            if (const juce::String e2 = dm_.setAudioDeviceSetup(back, true); e2.isNotEmpty())
+                logEvent("error", "set_input_restore_failed", str(e2), false); // the watchdog takes over
         }
     }
     if (err.isEmpty()) {

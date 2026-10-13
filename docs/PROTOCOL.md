@@ -75,7 +75,8 @@ ASIO). The device is reopened with the same
 output settings (the graph is kept when rate/buffer did not change); errors: more than 2 / negative / duplicate
 indices → `bad_request`, an index the device does not have or a failed reopen → `device_error`, driver panel open →
 `busy`. The selection is saved in `userdata/settings.json` and re-applied on every reopen of that device;
-`set_audio_device` to another device clears it. `telemetry.meters.input` is the input peak (dBFS, −120 = silent or
+`set_audio_device` to another device clears it. Non-ASIO types report `inputChannelNames` only while an
+input device is open (pick the device with `channels: [0]`, then choose channels). `telemetry.meters.input` is the input peak (dBFS, −120 = silent or
 no input) since the last telemetry frame. `remote` sessions may not send it (like `set_audio_device`).
 
 ### Audio latency (buffer size, ASIO control panel)

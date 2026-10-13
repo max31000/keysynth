@@ -156,7 +156,14 @@ void TapeStopFx::process(AudioBlock& io, MidiEventSpan events, const ProcessCont
         default: break;
         }
         if (state_ == State::Stopping || state_ == State::Starting || state_ == State::Stopped)
-            d_ = std::min(d_ + (1.0 - static_cast<double>(v_)), maxD);
+            d_ += 1.0 - static_cast<double>(v_);
+        if (d_ >= maxD) { // stop/start mashed for seconds without ever finishing: out of tape -> stand still
+            d_ = maxD;
+            if (state_ != State::Stopped) {
+                v_ = 0.0f;
+                state_ = State::Stopped; // gain_ fades out over 2 ms; the next start begins fresh
+            }
+        }
 
         gain_.setTarget(state_ == State::Stopped ? 0.0f : fadeGain(v_));
         const float g = gain_.next();

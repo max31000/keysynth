@@ -772,7 +772,14 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         const sorted = [...(ch as number[])].sort((a, b) => a - b);
         if (sorted.length === 2 && sorted[0] === sorted[1]) return err(ws, id, 'bad_request', 'duplicate input channel index');
         if (sorted.some((c) => c >= 2)) return err(ws, id, 'device_error', 'the device has 2 input channel(s)');
-        audio = { ...audio, inputChannels: sorted, inputName: sorted.length ? audio.name : '' };
+        const asio = audio.type === 'ASIO';
+        const inName = asio ? audio.name : typeof m.name === 'string' ? m.name : '';
+        audio = {
+          ...audio,
+          inputChannels: sorted,
+          inputName: sorted.length ? inName : '',
+          inputChannelNames: asio || sorted.length ? ['Input 1', 'Input 2'] : [],
+        };
         for (const c of wss.clients) send(c, c === ws ? devicesMsg(id) : devicesMsg());
         broadcastState();
         return;

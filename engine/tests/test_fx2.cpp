@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -413,6 +414,19 @@ TEST_CASE("Vocoder: band layout and band energy follows the modulator spectrum",
         UNSCOPED_INFO("vowels wet " << db(rms(s.l, 0, n) / carrierRms) << " dB re carrier");
         REQUIRE(std::fabs(db(rms(s.l, 0, n) / carrierRms)) < 9.0);
     }
+}
+
+TEST_CASE("Vocoder: NaN / Inf on the input bus does not poison the output", "[fx2][vocoder]") {
+    const size_t n = 24000;
+    Stereo mic = sine(1000.0, 0.25, n);
+    mic.l[100] = mic.r[100] = std::numeric_limits<float>::quiet_NaN();
+    mic.l[5000] = mic.r[5000] = std::numeric_limits<float>::infinity();
+    auto m = make("vocoder", {{"sibilance", 1.0f}});
+    Stereo s = saw(110.0, 0.3, n);
+    Runner r;
+    r.run(*m, s, &mic);
+    REQUIRE(allFinite(s));
+    REQUIRE(rms(s.l, 12000, n) > 1e-3);
 }
 
 TEST_CASE("Vocoder: sibilance adds HF noise on consonants, only while the carrier sounds", "[fx2][vocoder]") {

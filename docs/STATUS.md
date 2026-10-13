@@ -8,7 +8,11 @@ Update when a chunk of work lands. Newest first inside each section.
   (`ProcessContext::input`, `Engine::process(inputs…)`, `set_audio_input`, settings, `telemetry.meters.input`, UI
   audio-dialog input selector + meter); tests `test_fx2.cpp` (`[fx2]`), audio-host / protocol / trust cases; 9 factory
   presets (vocoder ×3, Echorec ×2, wah ×3, tape stop). Not verified live: a real mic on the UR22C (the fake ASIO
-  driver test covers open/persist/meter).
+  driver test covers open/persist/meter/rollback). Review (opus) fixed: input selection kept on a failed device
+  switch / cleared on a startup fallback device, vocoder NaN-input guard + gated HF pass, echo wow excursion capped,
+  tape-stop delay cap, rule-8 smoother reuse. Not done (accepted): no tail test for echo swell >= 0.93 (tail capped
+  at 120 s by design); wah +9.5 dB resonance makeup relies on the preset/master limiter at extreme Q; set_audio_input
+  shape is validated in the handler and defensively again in AudioHost.
 - Fix: `dsp::OnePoleSmoother` keeps its state in double — the float version stalled a few samples short of large
   targets (delay times in samples) and then snapped, so `delay` time changes clicked at the end of the glide.
 - v0.2.0 remote control via relay (spec docs/specs/2026-10-12-remote.md): server RelayHub `/api/relay`

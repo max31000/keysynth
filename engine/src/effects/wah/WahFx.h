@@ -7,7 +7,7 @@
 //   mode Auto:   `pedal` + `sens` x input envelope (attack_ms / release_ms),
 //   mode LFO:    lerp(`pedal`, LFO, `depth`), LFO at `rate` Hz or `sync` (phase locked to the transport).
 // `range` scales the sweep around its geometric centre (1 = model, < 1 narrower), `q` the resonance.
-// Zero latency, no tail beyond the filter ring (a few ms).
+// Zero latency; the tail is the band-pass ring (worst case: high Q at the heel, ~0.3 s to -60 dB).
 
 #include "core/Module.h"
 #include "dsp/EnvelopeFollower.h"

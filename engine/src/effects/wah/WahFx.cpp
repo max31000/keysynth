@@ -72,7 +72,8 @@ void WahFx::reset() {
 }
 
 int WahFx::tailSamples() const {
-    // Band-pass ring: Q / (pi f) to -60 dB is ~ 6.9 Q / (pi f); worst case Q 20 x 1.25 at 200 Hz heel -> ~0.3 s.
+    // Band-pass ring to -60 dB ~ 6.9 Q / (pi f): worst cases Q 16 at the ~220 Hz heel (range 1.5) and Q 25 at the
+    // toe are both below 0.2 s; 0.3 s leaves margin.
     return static_cast<int>(0.3 * sr_);
 }
 

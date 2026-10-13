@@ -219,11 +219,14 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
                 aria-label="Input channel 1"
                 disabled={!canInput || inBusy || panelOpen || inNames.length === 0}
                 value={first}
-                onChange={(e) => void setInput([Number(e.target.value), second], audio?.inputName)}
+                onChange={(e) => {
+                  const c = Number(e.target.value);
+                  void setInput(c < 0 ? [] : [c, second], audio?.inputName); // channel 1 off = input off
+                }}
               >
                 <option value={-1}>Off</option>
                 {inNames.map((n, i) => (
-                  <option key={n} value={i}>
+                  <option key={i} value={i}>
                     {n}
                   </option>
                 ))}
@@ -240,7 +243,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
               >
                 <option value={-1}>Off</option>
                 {inNames.map((n, i) => (
-                  <option key={n} value={i} disabled={i === first}>
+                  <option key={i} value={i} disabled={i === first}>
                     {n}
                   </option>
                 ))}

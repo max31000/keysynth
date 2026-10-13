@@ -585,6 +585,17 @@ TEST_CASE("audio host: input channels are opened, metered, persisted and re-appl
     REQUIRE(std::fabs(f.engine.telemetry().inputL.load() - 0.25f) < 1e-6f);
     REQUIRE(std::fabs(f.engine.telemetry().inputR.load() - 0.5f) < 1e-6f);
 
+    // A reopen that fails keeps the previous selection (rolled back) and reports the error.
+    f.driver.failOpens = 1;
+    REQUIRE(!f.host->setInput("", {1}).empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{0, 1});
+    REQUIRE(f.savedAudio()["inputChannels"] == nlohmann::json::array({0, 1}));
+
+    // A failed switch to another device keeps the current device's inputs.
+    REQUIRE(!f.host->setDevice("ASIO", "No Such Driver", 0, 0).empty());
+    REQUIRE(f.host->restart().empty());
+    REQUIRE(f.host->status().inputChannels == std::vector<int>{0, 1});
+
     // Off again.
     REQUIRE(f.host->setInput("", {}).empty());
     REQUIRE(f.host->status().inputChannels.empty());

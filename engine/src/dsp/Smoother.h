@@ -13,9 +13,7 @@ public:
         sampleRate_ = sampleRate;
         setTime(timeSeconds);
     }
-    void setTime(float timeSeconds) noexcept {
-        coef_ = timeSeconds <= 0.0f ? 1.0 : 1.0 - std::exp(-1.0 / (static_cast<double>(timeSeconds) * sampleRate_));
-    }
+    void setTime(float timeSeconds) noexcept { coef_ = onePoleCoefD(timeSeconds, sampleRate_); }
     void setTarget(float t) noexcept { target_ = t; }
     void snap(float v) noexcept { value_ = target_ = v; }
     // State in double: a float approach stalls short of large targets (delay times of thousands of samples: the

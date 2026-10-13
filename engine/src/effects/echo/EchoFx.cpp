@@ -63,7 +63,7 @@ void EchoFx::prepare(double sampleRate, int) {
     flutter_.setSampleRate(sampleRate);
     wow_.setRate(0.7f);
     flutter_.setRate(9.5f);
-    spacingCoef_ = 1.0 - std::exp(-1.0 / (0.15 * sampleRate)); // speed changes glide like the drum motor
+    spacing_.prepare(sampleRate, 0.15f); // speed changes glide like the drum motor
     fb_.prepare(sampleRate, 0.03f);
     mix_.prepare(sampleRate, 0.02f);
     width_.prepare(sampleRate, 0.02f);
@@ -80,7 +80,7 @@ void EchoFx::reset() {
     loopLp_.reset();
     wow_.setPhase(0.0f);
     flutter_.setPhase(0.37f);
-    spacing_ = spacingTarget_ = spacingSamples(lastTempo_.load(std::memory_order_relaxed));
+    spacing_.snap(spacingSamples(lastTempo_.load(std::memory_order_relaxed)));
     fb_.snap(params().get(Feedback));
     mix_.snap(params().get(Mix));
     width_.snap(params().get(Width));
@@ -115,7 +115,7 @@ void EchoFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx) {
         loopLp_.set(dsp::TptSvf::Type::LowPass, 1200.0f * std::exp2(tone * 3.32f), 0.6f, 0.0f, sr);
         lastTone_ = tone;
     }
-    spacingTarget_ = spacingSamples(ctx.transport.tempo);
+    spacing_.setTarget(spacingSamples(ctx.transport.tempo));
     fb_.setTarget(p.get(Feedback));
     mix_.setTarget(p.get(Mix));
     width_.setTarget(p.get(Width));
@@ -132,11 +132,13 @@ void EchoFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx) {
     const float loopNorm = kSwellMax / static_cast<float>(std::max(nSel, 1));
     const float outNorm = 0.85f / std::sqrt(static_cast<float>(std::max(nSel, 1)));
     const float maxD = drum_.maxDelay() - 2.0f;
+    // Wow/flutter excursion of head k: speedErr x k x min(spacing, 100 ms). A drum's delay error grows with the
+    // head distance; capped at Echorec-like spacings so long synced spacings do not wobble by semitones.
+    const float modRef = std::min(spacing_.target(), 0.1f * sr);
 
     for (int i = 0; i < io.numSamples; ++i) {
         const float xl = io.left[i], xr = io.right[i];
-        spacing_ += (spacingTarget_ - spacing_) * spacingCoef_;
-        const float sp = static_cast<float>(spacing_);
+        const float sp = spacing_.next();
         const float fb = fb_.next(), mx = mix_.next(), w = width_.next();
         const float wa = wowAmt_.next(), fa = flutAmt_.next(), drv = drive_.next();
         // Relative drum speed error: wow +-0.35 %, flutter +-0.06 % at 1.
@@ -150,7 +152,8 @@ void EchoFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx) {
             const float g = headGain_[static_cast<size_t>(k)].next();
             if (g <= 0.0f) continue;
             // Read before writing this sample: a delay of T samples == read(T - 1).
-            const float d = std::clamp(sp * static_cast<float>(k + 1) * (1.0f + speedErr) - 1.0f, 1.0f, maxD);
+            const float kk = static_cast<float>(k + 1);
+            const float d = std::clamp(sp * kk + modRef * kk * speedErr - 1.0f, 1.0f, maxD);
             const float h = drum_.readHermite(d) * kHeadLevel[k] * g;
             sumAll += h;
             const float pan = (k % 2 == 0 ? -0.7f : 0.7f) * w;

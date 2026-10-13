@@ -43,9 +43,7 @@ private:
     dsp::TptOnePole loopHp_;
     dsp::TptSvf loopLp_;
     dsp::Lfo wow_, flutter_;
-    // Head spacing glide (drum motor) in double precision: a float one-pole stalls a few samples short of a
-    // target of thousands of samples and then snaps, which would jump every head (click).
-    double spacing_ = 4800.0, spacingTarget_ = 4800.0, spacingCoef_ = 1.0;
+    dsp::OnePoleSmoother spacing_; // head spacing in samples; glides like the drum motor
     dsp::OnePoleSmoother fb_, mix_, width_, wowAmt_, flutAmt_, drive_;
     std::array<dsp::OnePoleSmoother, 4> headGain_; // selector changes fade (no clicks)
     float lastTone_ = -1.0f;

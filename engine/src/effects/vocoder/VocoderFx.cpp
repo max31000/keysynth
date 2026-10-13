@@ -112,6 +112,18 @@ void VocoderFx::configureBands(int n, float formantSemis) noexcept {
     bandGain_ = kBandGain * std::sqrt(static_cast<float>(n)) / 4.0f;
 }
 
+void VocoderFx::retuneCarrier(float formantSemis) noexcept {
+    const float sr = static_cast<float>(sr_);
+    const float shift = std::exp2(formantSemis / 12.0f);
+    for (int b = 0; b < nBands_; ++b) {
+        const size_t bi = static_cast<size_t>(b);
+        const float fc = std::fmin(centreHz_[bi] * shift, 0.45f * sr);
+        const float g = dsp::tptG(fc, sr);
+        for (auto& ch : car_) ch[bi].set(g, ch[bi].k);
+    }
+    configuredFormant_ = formantSemis;
+}
+
 void VocoderFx::reset() {
     const float formant = std::clamp(params().get(Formant), -12.0f, 12.0f);
     nBands_ = 0;
@@ -208,7 +220,7 @@ void VocoderFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx
         const int i1 = std::min(io.numSamples, i0 + kSub);
         float fsh = formantSm_.value();
         for (int j = i0; j < i1; ++j) fsh = formantSm_.next();
-        if (std::fabs(fsh - configuredFormant_) > 0.005f) configureBands(nBands_, fsh);
+        if (std::fabs(fsh - configuredFormant_) > 0.005f) retuneCarrier(fsh);
 
         for (int i = i0; i < i1; ++i) {
             const float xl = io.left[i], xr = io.right[i];
@@ -217,6 +229,7 @@ void VocoderFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx
             else if (src == ModVowels) m = vowelSample();
             else m = 0.3f * modNoise_.next();
             m *= modGain_.next();
+            if (!(std::fabs(m) < 16.0f)) m = 0.0f; // a bad driver sample (NaN/Inf/garbage) must not poison the bank
 
             const float ge = gateEnv_.process(m);
             gate_ += ((ge > gateThr ? 1.0f : 0.0f) - gate_) * gateCoef_;
@@ -239,8 +252,9 @@ void VocoderFx::process(AudioBlock& io, MidiEventSpan, const ProcessContext& ctx
             // carrier present: 0 below ~ -52 dBFS (so the noise ends with the synth), 1 above ~ -18 dBFS
             const float cg = std::clamp(carEnv_.process(0.5f * (xl + xr)) * 8.0f - 0.02f, 0.0f, 1.0f);
             const float sb = sib_.next() * cg;
-            wl += sb * (6.0f * he * noiseHp_[0].tick(noise_.next()).hp + 0.5f * hf);
-            wr += sb * (6.0f * he * noiseHp_[1].tick(noise_.next()).hp + 0.5f * hf);
+            const float hfPass = 0.5f * hf * gate_;
+            wl += sb * (6.0f * he * noiseHp_[0].tick(noise_.next()).hp + hfPass);
+            wr += sb * (6.0f * he * noiseHp_[1].tick(noise_.next()).hp + hfPass);
 
             const float cm = carMix_.next(), lv = level_.next(), mx = mix_.next();
             // output stage: soft ceiling at +12 dBFS (extreme gains stay bounded, normal levels untouched)
