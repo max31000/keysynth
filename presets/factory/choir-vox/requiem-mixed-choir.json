@@ -1,0 +1,84 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Requiem Mixed Choir (VPO)",
+    "category": "Choir & Vox",
+    "tags": [
+      "choir",
+      "mixed",
+      "classical",
+      "requiem",
+      "sampled"
+    ],
+    "description": "VPO mixed choir, sustain, in a cathedral-like hall for slow requiem chords. Reference: Mozart - Lacrimosa.",
+    "author": "factory"
+  },
+  "tempo": 60,
+  "layers": [
+    {
+      "name": "Mixed Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Vocals/choir-MIXED-sustain.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "p1_hz": 350,
+            "p1_db": -1,
+            "p1_q": 0.8
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.28,
+            "decay": 2.3,
+            "size": 0.8,
+            "predelay_ms": 30,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.4,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

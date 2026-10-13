@@ -1,0 +1,86 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Gimme Some Lovin' B3",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "60s",
+      "rock",
+      "soul"
+    ],
+    "description": "Bright 888800000 with a bit of grit, strong click and a slow Leslie for punchy rhythm stabs (mod wheel = fast). Reference: The Spencer Davis Group - Gimme Some Lovin' (Steve Winwood).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 8,
+          "db_8": 8,
+          "db_4": 8,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "perc_harmonic": 0,
+          "perc_decay": 0,
+          "perc_volume": 0,
+          "vibrato": 0,
+          "click": 0.75,
+          "leakage": 0.35,
+          "drive": 0.4,
+          "volume_db": 0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.35,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -7.2,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

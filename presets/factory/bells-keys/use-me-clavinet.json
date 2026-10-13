@@ -1,0 +1,96 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Use Me Clavinet",
+    "category": "Bells & Keys",
+    "tags": [
+      "clavinet",
+      "funk",
+      "70s",
+      "phaser",
+      "sampled"
+    ],
+    "description": "Hohner Clavinet samples, compressed and brightened, through a slow 4-stage phaser for funky muted rhythm parts. Reference: Bill Withers - Use Me.",
+    "author": "factory"
+  },
+  "tempo": 100,
+  "layers": [
+    {
+      "name": "Clavinet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 12
+        },
+        "state": {
+          "sfz": "assets/samples/clavinet/Clavinet/Clavinet.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -18,
+            "ratio": 4,
+            "attack_ms": 4,
+            "release_ms": 90,
+            "makeup_db": 3
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 90,
+            "p1_hz": 1800,
+            "p1_db": 2.5,
+            "p1_q": 0.9
+          }
+        },
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 0,
+            "rate": 0.6,
+            "sync": 0,
+            "depth": 0.7,
+            "centre_hz": 900,
+            "feedback": 0.3,
+            "spread": 0.2,
+            "mix": 0.4
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.5,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

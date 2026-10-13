@@ -1,0 +1,123 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Vox Humana Synth Choir",
+    "category": "Choir & Vox",
+    "tags": [
+      "synth choir",
+      "80s",
+      "new wave",
+      "va",
+      "formant"
+    ],
+    "description": "Synthetic 'aah' choir: saw + pulse string-synth voice shaped by three vowel-formant peaks (700 Hz, 1.15 kHz, 2.6 kHz), delayed vibrato, string ensemble and hall. Reference: Roland VP-330 'Human Voice'-style choirs of 80s new wave.",
+    "author": "factory"
+  },
+  "tempo": 100,
+  "layers": [
+    {
+      "name": "Synth Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc1_level": 0.8,
+          "osc2_level": 0.6,
+          "osc3_level": 0,
+          "volume_db": -8,
+          "osc2_wave": 1,
+          "osc2_pw": 0.4,
+          "osc2_fine": 7,
+          "filter_model": 1,
+          "cutoff": 3200,
+          "resonance": 0.05,
+          "key_track": 0.4,
+          "hpf_cutoff": 140,
+          "amp_attack": 0.45,
+          "amp_decay": 1,
+          "amp_sustain": 1,
+          "amp_release": 1.0,
+          "amp_vel": 0.3,
+          "lfo1_wave": 0,
+          "lfo1_rate": 5.3,
+          "lfo1_delay": 0.6,
+          "lfo1_pitch": 0.12,
+          "drift": 0.3,
+          "polyphony": 16
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 150,
+            "lp_on": 1,
+            "lp_hz": 6500,
+            "p1_hz": 700,
+            "p1_db": 8,
+            "p1_q": 2.2,
+            "p2_hz": 1150,
+            "p2_db": 6,
+            "p2_q": 2.5,
+            "p3_hz": 2600,
+            "p3_db": 4,
+            "p3_q": 3.0,
+            "level_db": -6
+          }
+        },
+        {
+          "type": "ensemble",
+          "bypass": false,
+          "params": {
+            "rate": 0.6,
+            "depth": 0.5,
+            "mix": 0.6
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.24,
+            "decay": 2.0,
+            "size": 0.7,
+            "predelay_ms": 25,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.8,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

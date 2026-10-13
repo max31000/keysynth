@@ -1,0 +1,123 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Lo-Fi Tape Rhodes",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "lofi",
+      "hip hop",
+      "tape",
+      "chill"
+    ],
+    "description": "Dark Rhodes Mk I as if bounced to a worn cassette: tape saturation, wow and flutter on a short tape echo, low-pass at 4 kHz. Reference: lo-fi hip-hop / J Dilla-style chords.",
+    "author": "factory"
+  },
+  "tempo": 85,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "polyphony": 32,
+          "volume_db": -3,
+          "model": 0,
+          "tone": 0.35,
+          "bark": 0.25,
+          "hammer_hardness": 0.4,
+          "velocity_curve": 0.2,
+          "dynamics": 24,
+          "decay": 1.2,
+          "tine_mix": 0.4,
+          "pickup_distance": 0.6,
+          "drive": 0.15,
+          "noise": 0.35
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "drive_db": 8,
+            "asymmetry": 0.15,
+            "tone": 0.35,
+            "level_db": -4,
+            "mix": 0.6,
+            "oversample": 1
+          }
+        },
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "rate": 0.6,
+            "depth": 0.35,
+            "mix": 0.5,
+            "width": 0.6,
+            "hiss": 0.3
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "lp_on": 1,
+            "lp_hz": 4000,
+            "cut_slope": 1,
+            "ls_hz": 200,
+            "ls_db": 2
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 330,
+            "sync": 0,
+            "feedback": 0.15,
+            "mix": 0.1,
+            "low_cut_hz": 200,
+            "high_cut_hz": 2500,
+            "wow": 0.6,
+            "flutter": 0.4,
+            "drive": 0.3
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.4,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Eleanor Rigby Octet",
+    "category": "Strings",
+    "tags": [
+      "strings",
+      "beatles",
+      "60s",
+      "chamber",
+      "dry"
+    ],
+    "description": "Close-miked chamber strings: VPO solo-string ensemble with accented bowing, dry and present (George Martin's octet was miked inches away). Reference: The Beatles - Eleanor Rigby.",
+    "author": "factory"
+  },
+  "tempo": 136,
+  "layers": [
+    {
+      "name": "Octet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SOLO-accent.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -18,
+            "ratio": 2.5,
+            "attack_ms": 10,
+            "release_ms": 140,
+            "makeup_db": 2
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "p2_hz": 2500,
+            "p2_db": 2.5,
+            "p2_q": 0.8
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.08,
+            "decay": 0.6,
+            "size": 0.3,
+            "predelay_ms": 5,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.1,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

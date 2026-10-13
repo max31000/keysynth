@@ -1,0 +1,120 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Film Staccato Ostinato",
+    "category": "Strings",
+    "tags": [
+      "strings",
+      "film",
+      "epic",
+      "staccato",
+      "sampled"
+    ],
+    "description": "Driving film-score ostinato: VPO staccato string section with the cellos/basses doubled an octave down on the lower keys, tight compression, short hall. Reference: Hans Zimmer - The Dark Knight / Inception ostinatos.",
+    "author": "factory"
+  },
+  "tempo": 130,
+  "layers": [
+    {
+      "name": "Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SEC-staccato.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Low Double",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 59,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": -12,
+        "channel": 0,
+        "volume_db": 0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/cello-SEC-staccato.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": 7.4,
+    "fx": [
+      {
+        "type": "compressor",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "threshold_db": -20,
+          "ratio": 3,
+          "attack_ms": 8,
+          "release_ms": 120,
+          "makeup_db": 2
+        }
+      },
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "hp_on": 1,
+          "hp_hz": 40,
+          "p1_hz": 300,
+          "p1_db": -1.5
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.16,
+          "decay": 1.5,
+          "size": 0.55,
+          "predelay_ms": 15,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

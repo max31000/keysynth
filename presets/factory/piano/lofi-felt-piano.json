@@ -1,0 +1,121 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Lo-Fi Felt Piano",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "lofi",
+      "felt",
+      "chill",
+      "sampled",
+      "tape"
+    ],
+    "description": "Soft, muffled piano: hard velocity curve, low-pass at 3.5 kHz, warm lows, a little wobbly tape echo and room. Reference: lo-fi hip-hop beats, Nils Frahm-style felt piano.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Felt Piano",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 10,
+          "velocity_curve": 0.45,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 45,
+            "lp_on": 1,
+            "lp_hz": 3500,
+            "cut_slope": 1,
+            "ls_hz": 200,
+            "ls_db": 2,
+            "p1_hz": 900,
+            "p1_db": -1.5,
+            "p1_q": 0.8
+          }
+        },
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "drive_db": 6,
+            "asymmetry": 0.1,
+            "tone": 0.35,
+            "level_db": -3,
+            "mix": 0.5,
+            "oversample": 1
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 420,
+            "sync": 0,
+            "feedback": 0.18,
+            "mix": 0.12,
+            "low_cut_hz": 200,
+            "high_cut_hz": 2500,
+            "wow": 0.45,
+            "flutter": 0.3,
+            "drive": 0.2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.18,
+            "decay": 1.2,
+            "size": 0.45,
+            "predelay_ms": 8,
+            "damp_hf": 0.6,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

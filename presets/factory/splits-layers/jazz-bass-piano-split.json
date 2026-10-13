@@ -1,0 +1,130 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Upright Bass / Jazz Piano Split",
+    "category": "Splits & Layers",
+    "tags": [
+      "split",
+      "jazz",
+      "upright bass",
+      "piano",
+      "sampled",
+      "trio"
+    ],
+    "description": "Split at E3. Left hand: VPO double bass pizzicato (sounds an octave down) for walking lines. Right hand: warm Salamander jazz grand. Reference: jazz piano trio played solo.",
+    "author": "factory"
+  },
+  "tempo": 140,
+  "layers": [
+    {
+      "name": "Upright Bass",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 52,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": -12,
+        "channel": 0,
+        "volume_db": -4,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/bass-SOLO-pizzicato.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.08,
+            "decay": 0.6,
+            "size": 0.3,
+            "predelay_ms": 5,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    },
+    {
+      "name": "Piano",
+      "zone": {
+        "key_lo": 53,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4,
+          "velocity_curve": 0.25,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "ls_hz": 180,
+            "ls_db": 1,
+            "p1_hz": 3200,
+            "p1_db": -2,
+            "p1_q": 0.8,
+            "hs_hz": 9000,
+            "hs_db": -3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.15,
+            "decay": 1.1,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 12,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

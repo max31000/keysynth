@@ -1,0 +1,110 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Musette Accordion",
+    "category": "Organ",
+    "tags": [
+      "accordion",
+      "musette",
+      "french",
+      "va",
+      "chanson"
+    ],
+    "description": "Synthesized musette accordion: three narrow pulse 'reeds' tuned flat / centre / sharp (+-13 cents, the wet musette beating), reedy ladder filter, quick bellows attack, small room. Reference: Paris cafe musette, Yann Tiersen - Amelie.",
+    "author": "factory"
+  },
+  "tempo": 160,
+  "layers": [
+    {
+      "name": "Musette",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 1,
+          "osc1_level": 0.7,
+          "osc2_level": 0.6,
+          "osc3_level": 0.6,
+          "volume_db": -8,
+          "osc1_pw": 0.3,
+          "osc2_wave": 1,
+          "osc2_pw": 0.3,
+          "osc2_fine": 13,
+          "osc3_wave": 1,
+          "osc3_pw": 0.3,
+          "osc3_fine": -13,
+          "filter_model": 0,
+          "cutoff": 2600,
+          "resonance": 0.1,
+          "key_track": 0.6,
+          "hpf_cutoff": 180,
+          "amp_attack": 0.035,
+          "amp_decay": 0.3,
+          "amp_sustain": 1,
+          "amp_release": 0.12,
+          "amp_vel": 0.35,
+          "drift": 0.1,
+          "lfo1_wave": 0,
+          "lfo1_rate": 5.2,
+          "lfo1_amp": 0.0,
+          "mw_vibrato": 0.0,
+          "polyphony": 16
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "p1_hz": 1200,
+            "p1_db": 2,
+            "p1_q": 1.0,
+            "p2_hz": 3000,
+            "p2_db": -2,
+            "p2_q": 1.0
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.14,
+            "decay": 0.9,
+            "size": 0.35,
+            "predelay_ms": 8,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -6.2,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Rock Lobster Farfisa",
+    "category": "Organ",
+    "tags": [
+      "farfisa",
+      "combo",
+      "new wave",
+      "surf",
+      "70s"
+    ],
+    "description": "Thin, buzzy Farfisa Compact: trumpet 8' + strings 4' with a little flute 8', fast shallow vibrato, bright, short slapback. Reference: The B-52's - Rock Lobster (Kate Pierson).",
+    "author": "factory"
+  },
+  "tempo": 180,
+  "layers": [
+    {
+      "name": "Farfisa",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 1,
+          "far_flute_16": 0,
+          "far_flute_8": 0.3,
+          "far_flute_4": 0,
+          "far_oboe_8": 0,
+          "far_trumpet_8": 1.0,
+          "far_strings_8": 0,
+          "far_strings_4": 0.7,
+          "vibrato": 1,
+          "vibrato_rate": 6.8,
+          "vibrato_depth": 0.25,
+          "bright": 1,
+          "leakage": 0.15,
+          "click": 0.15,
+          "volume_db": -3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "time": 95,
+            "sync": 0,
+            "feedback": 0.1,
+            "mix": 0.12,
+            "low_cut_hz": 200,
+            "high_cut_hz": 5000,
+            "wow": 0.1,
+            "flutter": 0.1,
+            "drive": 0.2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.1,
+            "decay": 0.8,
+            "size": 0.35,
+            "predelay_ms": 6,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

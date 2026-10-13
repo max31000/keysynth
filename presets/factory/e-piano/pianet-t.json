@@ -1,0 +1,84 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Hohner Pianet T",
+    "category": "E.Piano",
+    "tags": [
+      "pianet",
+      "60s",
+      "sampled",
+      "british invasion"
+    ],
+    "description": "Greg Sullivan Hohner Pianet T samples: reedy, short, woody plucks with a small room. Reference: 60s British beat (The Zombies - She's Not There and The Beatles - I Am the Walrus used a Hohner Pianet).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Pianet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6,
+          "velocity_curve": -0.1
+        },
+        "state": {
+          "sfz": "assets/samples/gregsullivan-epianos/GregSullivan.E-Pianos-master/Pianet T/Pianet T.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "p1_hz": 2500,
+            "p1_db": 1.5,
+            "p1_q": 0.8
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.12,
+            "decay": 0.8,
+            "size": 0.35,
+            "predelay_ms": 6,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.1,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

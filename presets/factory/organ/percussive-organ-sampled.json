@@ -1,0 +1,70 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Percussive Organ (sampled)",
+    "category": "Organ",
+    "tags": [
+      "drawbar",
+      "percussion",
+      "sampled",
+      "jazz"
+    ],
+    "description": "FreePats Percussive Organ samples through a slow-spinning rotary speaker (mod wheel = fast). Jazz / soul comping organ.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/freepats-percussive-organ/PercussiveOrganEmulation-SFZ-20190715/PercussiveOrganEmulation-20190715.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.15,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -4.1,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

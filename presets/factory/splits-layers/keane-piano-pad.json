@@ -1,0 +1,141 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Piano + Warm Pad",
+    "category": "Splits & Layers",
+    "tags": [
+      "piano",
+      "pad",
+      "layer",
+      "pop",
+      "ballad",
+      "sampled"
+    ],
+    "description": "Bright pop grand layered with a slow-swelling, high-passed analog pad (two detuned saws, IR3109 low-pass, Juno chorus) behind it, plate. Reference: Keane - Somewhere Only We Know, Coldplay - The Scientist.",
+    "author": "factory"
+  },
+  "tempo": 86,
+  "layers": [
+    {
+      "name": "Piano",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4,
+          "velocity_curve": -0.3,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 50,
+            "p1_hz": 350,
+            "p1_db": -2,
+            "p1_q": 0.9,
+            "p2_hz": 3000,
+            "p2_db": 1.5,
+            "p2_q": 0.8
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pad",
+      "zone": {
+        "key_lo": 48,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -9,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc1_level": 0.8,
+          "osc2_level": 0.7,
+          "osc3_level": 0,
+          "volume_db": -10,
+          "osc2_wave": 0,
+          "osc2_fine": 9,
+          "filter_model": 1,
+          "cutoff": 1400,
+          "resonance": 0.1,
+          "key_track": 0.4,
+          "hpf_cutoff": 180,
+          "amp_attack": 0.9,
+          "amp_decay": 1,
+          "amp_sustain": 1,
+          "amp_release": 1.2,
+          "amp_vel": 0.2,
+          "drift": 0.3,
+          "polyphony": 16
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.5
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 9,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 1,
+          "mix": 0.18,
+          "decay": 1.8,
+          "size": 0.55,
+          "predelay_ms": 20,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

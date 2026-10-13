@@ -1,0 +1,74 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Chamber Grand (SSO)",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "grand",
+      "classical",
+      "sampled",
+      "orchestral"
+    ],
+    "description": "Sonatina Symphonic Orchestra grand piano: a mellower, distant concert-stage grand that sits inside an orchestra; small hall. Reference: piano in orchestral scores.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "SSO Grand",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Keys - Grand Piano.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.18,
+            "decay": 1.8,
+            "size": 0.6,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 6.7,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

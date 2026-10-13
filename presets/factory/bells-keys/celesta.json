@@ -1,0 +1,73 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Celesta (VPO)",
+    "category": "Bells & Keys",
+    "tags": [
+      "celesta",
+      "orchestral",
+      "christmas",
+      "sampled",
+      "bell"
+    ],
+    "description": "Virtual Playing Orchestra celesta in a concert hall. Reference: Tchaikovsky - Dance of the Sugar Plum Fairy.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Celesta",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Keys/celesta.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.22,
+            "decay": 2.0,
+            "size": 0.65,
+            "predelay_ms": 25,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 3.7,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

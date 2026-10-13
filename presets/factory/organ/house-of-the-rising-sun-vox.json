@@ -1,0 +1,96 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "House of the Rising Sun Vox",
+    "category": "Organ",
+    "tags": [
+      "vox",
+      "combo",
+      "60s",
+      "british invasion"
+    ],
+    "description": "Vox Continental 16' + 8' + 4' with reed, no vibrato, a little valve-amp grit and a springy room for the arpeggio solo. Reference: The Animals - The House of the Rising Sun (Alan Price).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Vox",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "combo",
+        "params": {
+          "voicing": 0,
+          "vox_16": 4,
+          "vox_8": 8,
+          "vox_4": 6,
+          "vox_2": 2,
+          "vox_iv": 0,
+          "vox_flute": 2,
+          "vox_reed": 7,
+          "vibrato": 0,
+          "bright": 0.8,
+          "leakage": 0.2,
+          "click": 0.15,
+          "velocity": 0,
+          "volume_db": -3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 8,
+            "asymmetry": 0.2,
+            "tone": 0.45,
+            "level_db": -3,
+            "mix": 0.5,
+            "oversample": 2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.18,
+            "decay": 1.2,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.8,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

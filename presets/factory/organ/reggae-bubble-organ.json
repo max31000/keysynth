@@ -1,0 +1,97 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Reggae Bubble Organ",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "reggae",
+      "bubble",
+      "skank"
+    ],
+    "description": "Hollow 8' + 4' registration (008800000) with strong key click and fast 2nd-harmonic percussion for short off-beat 'bubble' chops, Leslie slow. Reference: Bob Marley & the Wailers (Tyrone Downie / Earl Lindo).",
+    "author": "factory"
+  },
+  "tempo": 76,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 0,
+          "db_5_1_3": 0,
+          "db_8": 8,
+          "db_4": 8,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 1,
+          "perc_harmonic": 0,
+          "perc_decay": 0,
+          "perc_volume": 1,
+          "vibrato": 0,
+          "click": 0.8,
+          "leakage": 0.25,
+          "drive": 0.1,
+          "volume_db": 0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.15,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 120,
+            "p1_hz": 1500,
+            "p1_db": 1.5,
+            "p1_q": 0.8
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -4.2,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

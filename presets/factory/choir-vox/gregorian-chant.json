@@ -1,0 +1,84 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Gregorian Chant",
+    "category": "Choir & Vox",
+    "tags": [
+      "choir",
+      "male",
+      "chant",
+      "church",
+      "sampled"
+    ],
+    "description": "VPO male choir, sustain, in a long stone-church hall with softened highs: plainchant and drones. Reference: Gregorian chant, Enigma - Sadeness.",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Male Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Vocals/choir-MALE-sustain.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "lp_on": 1,
+            "lp_hz": 8000,
+            "p1_hz": 300,
+            "p1_db": -1,
+            "p1_q": 0.8
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.32,
+            "decay": 2.3,
+            "size": 0.85,
+            "predelay_ms": 40,
+            "damp_hf": 0.55,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 9.8,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

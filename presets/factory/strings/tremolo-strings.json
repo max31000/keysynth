@@ -1,0 +1,81 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Suspense Tremolo Strings",
+    "category": "Strings",
+    "tags": [
+      "strings",
+      "tremolo",
+      "film",
+      "suspense",
+      "sampled"
+    ],
+    "description": "VPO string section bowing tremolo, in a dark hall: suspense and horror underscore. Reference: Bernard Herrmann-style thriller scores.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Tremolo",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SEC-tremolo.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hs_hz": 8000,
+            "hs_db": -2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.24,
+            "decay": 2.1,
+            "size": 0.7,
+            "predelay_ms": 25,
+            "damp_hf": 0.55,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -6.2,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Just the Way You Are Rhodes",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "phaser",
+      "70s",
+      "ballad",
+      "soft rock"
+    ],
+    "description": "Mellow Rhodes Mk I through a slow, deep 4-stage phaser and light chorus, the classic 70s soft-rock ballad sound. Reference: Billy Joel - Just the Way You Are (Richard Tee's phased Rhodes).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "polyphony": 32,
+          "volume_db": 3,
+          "model": 0,
+          "tone": 0.45,
+          "bark": 0.3,
+          "hammer_hardness": 0.45,
+          "velocity_curve": 0.1,
+          "dynamics": 30,
+          "decay": 1.2,
+          "tine_mix": 0.45,
+          "pickup_distance": 0.55,
+          "drive": 0.1,
+          "noise": 0.2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60
+          }
+        },
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 0,
+            "rate": 0.35,
+            "sync": 0,
+            "depth": 0.85,
+            "centre_hz": 650,
+            "feedback": 0.45,
+            "spread": 0.3,
+            "mix": 0.5
+          }
+        },
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.14,
+            "decay": 1.4,
+            "size": 0.45,
+            "predelay_ms": 12,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 9.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

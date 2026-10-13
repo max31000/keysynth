@@ -1,0 +1,108 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Neo-Soul Rhodes",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "neo soul",
+      "rnb",
+      "sampled",
+      "autopan"
+    ],
+    "description": "jRhodes3c stereo Rhodes, warm and round: slow autopan, gentle chorus, low-passed top, short plate. Reference: D'Angelo - Brown Sugar, Erykah Badu.",
+    "author": "factory"
+  },
+  "tempo": 90,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6,
+          "velocity_curve": 0.15
+        },
+        "state": {
+          "sfz": "assets/samples/jrhodes3c/jlearman.jRhodes3c-master/jRhodes3c-looped-flac-sfz/_jRhodes-stereo-looped.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "ls_hz": 150,
+            "ls_db": 1.5,
+            "p1_hz": 2500,
+            "p1_db": -1.5,
+            "p1_q": 0.8,
+            "lp_on": 1,
+            "lp_hz": 9000
+          }
+        },
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "rate": 1.6,
+            "sync": 0,
+            "depth": 0.35,
+            "shape": 0,
+            "smoothing": 0.5,
+            "stereo_phase": 180
+          }
+        },
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.12,
+            "decay": 1.2,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.4,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

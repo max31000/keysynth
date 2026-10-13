@@ -1,0 +1,82 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Solo Violin (VPO)",
+    "category": "Strings",
+    "tags": [
+      "violin",
+      "solo",
+      "film",
+      "romantic",
+      "sampled"
+    ],
+    "description": "Virtual Playing Orchestra solo violin, sustain, in a warm hall: lyrical melodies. Play monophonic lines. Reference: Ennio Morricone / John Williams (Schindler's List) solo-violin themes.",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Violin",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/1st-violin-SOLO-sustain.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "p3_hz": 3500,
+            "p3_db": -1.5,
+            "p3_q": 1.0
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.25,
+            "decay": 2.1,
+            "size": 0.7,
+            "predelay_ms": 25,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -1.5,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

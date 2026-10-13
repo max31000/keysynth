@@ -1,0 +1,104 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Piano Man Rock Grand",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "grand",
+      "rock",
+      "70s",
+      "sampled",
+      "bright"
+    ],
+    "description": "Bright, compressed rock grand that cuts through a band: easy velocity curve, presence boost, low-end trimmed, short plate. Reference: Billy Joel - Piano Man, Elton John - Bennie and the Jets.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Grand",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4,
+          "velocity_curve": -0.45,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "p1_hz": 300,
+            "p1_db": -2.5,
+            "p1_q": 1.0,
+            "p2_hz": 2800,
+            "p2_db": 3,
+            "p2_q": 0.9,
+            "hs_hz": 9000,
+            "hs_db": 2
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -20,
+            "ratio": 3,
+            "attack_ms": 8,
+            "release_ms": 120,
+            "makeup_db": 3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.13,
+            "decay": 1.2,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 7.7,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
