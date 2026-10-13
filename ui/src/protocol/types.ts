@@ -173,6 +173,10 @@ export interface AudioStatus {
   hasControlPanel?: boolean;
   /** the driver's control panel is open right now (open_audio_panel / set_audio_device answer `busy`) */
   panelOpen?: boolean;
+  /** audio input (PROTOCOL.md "Audio input"): open input device ("" = none), its channel names, active indices */
+  inputName?: string;
+  inputChannelNames?: string[];
+  inputChannels?: number[];
 }
 
 /** Transport state, same keys as the `transport` request (+ `pattern_edited`). */
@@ -343,6 +347,7 @@ export interface SetAudioDeviceMsg { type: 'set_audio_device'; id?: number; devi
 export interface OpenAudioPanelMsg { type: 'open_audio_panel'; id?: number }
 /** Closes + reopens the audio device with the driver's current buffer/rate → `devices`, then `state` to all. */
 export interface RestartAudioMsg { type: 'restart_audio'; id?: number }
+export interface SetAudioInputMsg { type: 'set_audio_input'; id?: number; channels: number[]; name?: string }
 
 // ── Cloud & samples (PROTOCOL.md "Cloud & samples") ──
 
@@ -363,7 +368,7 @@ export type ClientMsg =
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
   | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
-  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg
+  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg | SetAudioInputMsg
   | CloudLinkMsg | CloudUnlinkMsg | SyncNowMsg | SamplesListMsg | SamplesFetchMsg | SamplesCancelMsg
   | SamplesDeleteMsg | ChordLearnMsg
   | SongListMsg | SongGetMsg | SongSaveMsg | SongDeleteMsg | SongSelectMsg | SongSectionMsg | SongNextMsg
@@ -394,7 +399,7 @@ export interface TelemetryEvent {
   cpu: number;
   xruns: number;
   voices: number;
-  meters: { master: StereoPeak; layers: Record<string, StereoPeak> };
+  meters: { master: StereoPeak; input?: StereoPeak; layers: Record<string, StereoPeak> };
   readouts: Record<string, Record<string, number>>;
   /** step = last played pattern step (-1 stopped / count-in), bar = its bar */
   transport?: { ppq: number; playing: boolean; step: number; bar: number };
@@ -407,7 +412,8 @@ export interface DevicesEvent {
   types: string[];
   current: AudioStatus;
   /** sampleRates / bufferSizes: supported values of the open device when of this type, else empty */
-  available: { type: string; names: string[]; sampleRates?: number[]; bufferSizes?: number[] }[];
+  /** inputNames: input devices of types with separate inputs (empty for ASIO) */
+  available: { type: string; names: string[]; inputNames?: string[]; sampleRates?: number[]; bufferSizes?: number[] }[];
   midiInputs: string[];
 }
 export interface LogEvent {

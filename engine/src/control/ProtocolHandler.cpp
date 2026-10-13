@@ -466,6 +466,33 @@ const std::map<std::string, Handler>& handlers() {
              // state.audio changed too; the host's own async re-report of this restart is suppressed (no duplicates).
              c.broadcast(c.s.stateJson());
          }},
+        {"set_audio_input",
+         [](Ctx& c) {
+             if (!c.s.audio()) throw PatchError("not_available", "no audio host");
+             if (c.s.audio()->status().panelOpen) throw PatchError("busy", "close the driver's control panel first");
+             const json& ch = field(c.msg, "channels");
+             if (!ch.is_array() || ch.size() > 2)
+                 throw PatchError("bad_request", "'channels' must be an array of at most 2 input channel indices");
+             std::vector<int> channels;
+             for (const json& v : ch) {
+                 if (!v.is_number_integer() && !v.is_number_unsigned())
+                     throw PatchError("bad_request", "input channel indices must be integers");
+                 const long long i = v.get<long long>();
+                 if (i < 0 || i > 255) throw PatchError("bad_request", "input channel index out of range");
+                 channels.push_back(static_cast<int>(i));
+             }
+             std::sort(channels.begin(), channels.end());
+             if (channels.size() == 2 && channels[0] == channels[1])
+                 throw PatchError("bad_request", "duplicate input channel index");
+             std::string name;
+             if (auto it = c.msg.find("name"); it != c.msg.end() && !it->is_null()) name = strField(c.msg, "name");
+             const std::string err = c.s.audio()->setInput(name, channels);
+             if (!err.empty()) throw PatchError("device_error", err);
+             json d = c.s.devicesJson();
+             c.others(d);
+             c.reply(std::move(d));
+             c.broadcast(c.s.stateJson());
+         }},
         {"open_audio_panel",
          [](Ctx& c) {
              if (!c.s.audio()) throw PatchError("not_available", "no audio host");

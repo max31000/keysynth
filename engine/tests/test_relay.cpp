@@ -103,6 +103,7 @@ TEST_CASE("relay trust: remote allow/deny for every PROTOCOL request", "[relay][
         {"save_pattern", {{{"name", "x"}}, true}},
         {"list_devices", {{}, true}},
         {"set_audio_device", {{{"device_type", "ASIO"}, {"name", "x"}}, false}},
+        {"set_audio_input", {{{"channels", json::array({0})}}, false}},
         {"open_audio_panel", {{}, false}},
         {"restart_audio", {{}, true}},
         {"panic", {{}, true}},

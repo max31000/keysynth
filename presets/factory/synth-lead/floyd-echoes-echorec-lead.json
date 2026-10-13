@@ -1,0 +1,101 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Echoes Echorec Lead",
+    "category": "Synth Lead",
+    "tags": [
+      "pink floyd",
+      "echorec",
+      "binson",
+      "lead",
+      "70s"
+    ],
+    "description": "Singing saw/triangle lead into a Binson Echorec with all four heads and the swell high: the repeats pile up into the drum's characteristic rhythmic wash. Reference: Pink Floyd - Echoes (1971).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Echoes Echorec Lead",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 2,
+          "osc2_level": 0.6,
+          "osc2_fine": 4,
+          "filter_model": 0,
+          "cutoff": 3200,
+          "resonance": 0.2,
+          "key_track": 0.5,
+          "filter_env_amt": 0.15,
+          "fenv_decay": 0.6,
+          "fenv_sustain": 0.6,
+          "amp_attack": 0.01,
+          "amp_sustain": 1.0,
+          "amp_release": 0.4,
+          "voice_mode": 2,
+          "glide": 0.03,
+          "glide_mode": 1,
+          "mw_vibrato": 0.4,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "echo",
+          "bypass": false,
+          "params": {
+            "heads": 11,
+            "time": 95,
+            "feedback": 0.45,
+            "tone": 0.4,
+            "drive": 0.35,
+            "wow": 0.35,
+            "flutter": 0.3,
+            "width": 0.75,
+            "mix": 0.42
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.2,
+            "size": 0.7,
+            "decay": 2.5,
+            "predelay_ms": 30
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

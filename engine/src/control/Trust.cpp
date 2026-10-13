@@ -126,7 +126,8 @@ std::string webRestriction(const json& msg, const char* sessionKind) {
         "hello",      "get_catalog",   "set_param",     "get_patch",     "list_presets",   "add_layer",
         "remove_layer", "set_zone",    "set_instrument", "add_fx",       "remove_fx",      "move_fx",
         "set_fx_bypass", "note",       "cc",            "panic",         "list_patterns",  "set_pattern",
-        "rescan_midi", "list_devices", "set_audio_device", "open_audio_panel", "restart_audio", "list_plugins",
+        "rescan_midi", "list_devices", "set_audio_device", "set_audio_input", "open_audio_panel", "restart_audio",
+        "list_plugins",
         "save_preset", "save_pattern", "cloud_link",    "cloud_unlink",  "sync_now",       "samples_list",
         "samples_fetch", "samples_cancel", "samples_delete",
         // MIDI tools + songs (ARCHITECTURE §17, §18); song_save paths are validated by the handler for every session
@@ -166,8 +167,9 @@ std::string webRestriction(const json& msg, const char* sessionKind) {
 }
 
 std::string remoteRestriction(const json& msg) {
-    static const std::set<std::string> denied = {"cloud_link",       "cloud_unlink",   "set_audio_device",
-                                                 "open_audio_panel", "samples_delete", "reload_plugin"};
+    static const std::set<std::string> denied = {"cloud_link",       "cloud_unlink",     "set_audio_device",
+                                                 "set_audio_input",  "open_audio_panel", "samples_delete",
+                                                 "reload_plugin"};
     const std::string type = msg.value("type", std::string());
     if (denied.count(type)) return "'" + type + "' is not available to remote sessions";
     return webRestriction(msg, "remote");

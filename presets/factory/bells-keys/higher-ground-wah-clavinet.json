@@ -1,0 +1,85 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Higher Ground Wah Clavinet",
+    "category": "Bells & Keys",
+    "tags": [
+      "clavinet",
+      "wah",
+      "funk",
+      "stevie wonder",
+      "70s",
+      "sampled"
+    ],
+    "description": "Hohner Clavinet samples through an envelope-driven Cry Baby wah: harder playing opens the pedal. Reference: Stevie Wonder - Higher Ground (1973).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Higher Ground Wah Clavinet",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 12
+        },
+        "state": {
+          "sfz": "assets/samples/clavinet/Clavinet/Clavinet.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "wah",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "pedal": 0.08,
+            "model": 0,
+            "q": 7,
+            "sens": 0.8,
+            "attack_ms": 3,
+            "release_ms": 110,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "threshold_db": -16,
+            "ratio": 3,
+            "attack_ms": 5,
+            "release_ms": 100,
+            "makeup_db": 2
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.6,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

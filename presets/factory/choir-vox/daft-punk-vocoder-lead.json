@@ -1,0 +1,121 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Vocoder Lead (Daft Punk)",
+    "category": "Choir & Vox",
+    "tags": [
+      "daft punk",
+      "vocoder",
+      "french house",
+      "lead",
+      "90s"
+    ],
+    "description": "Mono legato saw lead with glide into a 32-band vocoder, fast envelopes and strong sibilance, slapback dotted-eighth delay. Sing or speak into the audio interface input chosen in Audio settings (Input); without an open input the vocoder uses its internal vowel test signal. Reference: Daft Punk - Around the World / Harder, Better, Faster, Stronger.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Vocoder Lead",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_fine": 9,
+          "osc2_level": 0.9,
+          "sub_level": 0.35,
+          "cutoff": 7000,
+          "resonance": 0.1,
+          "key_track": 0.4,
+          "amp_attack": 0.002,
+          "amp_decay": 0.2,
+          "amp_sustain": 1.0,
+          "amp_release": 0.08,
+          "voice_mode": 2,
+          "glide": 0.045,
+          "glide_mode": 1,
+          "hpf_cutoff": 120,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "vocoder",
+          "bypass": false,
+          "params": {
+            "bands": 3,
+            "modulator": 0,
+            "mod_gain_db": 6,
+            "gate_db": -50,
+            "attack_ms": 1.5,
+            "release_ms": 25,
+            "formant": 1.5,
+            "sibilance": 0.6,
+            "carrier_mix": 0.03,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "threshold_db": -18,
+            "ratio": 4,
+            "attack_ms": 5,
+            "release_ms": 120,
+            "makeup_db": 3
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "sync": 11,
+            "feedback": 0.25,
+            "mix": 0.16,
+            "high_cut_hz": 6000
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.1,
+            "size": 0.35,
+            "decay": 0.8
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -1.9,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

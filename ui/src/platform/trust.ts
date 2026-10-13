@@ -11,6 +11,7 @@ const REMOTE_DENIED = new Set([
   'cloud_link',
   'cloud_unlink',
   'set_audio_device',
+  'set_audio_input',
   'open_audio_panel',
   'samples_delete',
 ]);

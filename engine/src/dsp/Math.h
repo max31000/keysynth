@@ -23,6 +23,12 @@ inline void panGains(float pan, float& l, float& r) noexcept {
 }
 
 // One-pole coefficient for a time constant (time to reach ~63%).
+// Same in double precision (smoothers that keep double state).
+inline double onePoleCoefD(double timeSeconds, double sampleRate) noexcept {
+    if (timeSeconds <= 0.0) return 1.0;
+    return 1.0 - std::exp(-1.0 / (timeSeconds * sampleRate));
+}
+
 inline float onePoleCoef(float timeSeconds, double sampleRate) noexcept {
     if (timeSeconds <= 0.0f) return 1.0f;
     return 1.0f - std::exp(-1.0f / (timeSeconds * static_cast<float>(sampleRate)));

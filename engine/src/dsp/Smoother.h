@@ -13,23 +13,24 @@ public:
         sampleRate_ = sampleRate;
         setTime(timeSeconds);
     }
-    void setTime(float timeSeconds) noexcept { coef_ = onePoleCoef(timeSeconds, sampleRate_); }
+    void setTime(float timeSeconds) noexcept { coef_ = onePoleCoefD(timeSeconds, sampleRate_); }
     void setTarget(float t) noexcept { target_ = t; }
     void snap(float v) noexcept { value_ = target_ = v; }
+    // State in double: a float approach stalls short of large targets (delay times of thousands of samples: the
+    // step falls below one ulp several samples away) and the snap then jumps (click). Double keeps converging.
     float next() noexcept {
-        const float nv = value_ + (target_ - value_) * coef_;
-        // Snap when close or when float precision stalls the approach.
-        value_ = (nv == value_ || std::fabs(target_ - nv) < 1e-6f) ? target_ : nv;
-        return value_;
+        const double nv = value_ + (static_cast<double>(target_) - value_) * coef_;
+        value_ = (nv == value_ || std::fabs(static_cast<double>(target_) - nv) < 1e-6) ? static_cast<double>(target_) : nv;
+        return static_cast<float>(value_);
     }
-    float value() const noexcept { return value_; }
+    float value() const noexcept { return static_cast<float>(value_); }
     float target() const noexcept { return target_; }
-    bool isSmoothing() const noexcept { return value_ != target_; }
+    bool isSmoothing() const noexcept { return value_ != static_cast<double>(target_); }
 
 private:
     double sampleRate_ = 48000.0;
-    float coef_ = 1.0f;
-    float value_ = 0.0f;
+    double coef_ = 1.0;
+    double value_ = 0.0;
     float target_ = 0.0f;
 };
 

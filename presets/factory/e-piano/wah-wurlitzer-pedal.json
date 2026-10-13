@@ -1,0 +1,91 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Wah Wurlitzer",
+    "category": "E.Piano",
+    "tags": [
+      "wurlitzer",
+      "wah",
+      "funk",
+      "70s"
+    ],
+    "description": "Wurlitzer 200A with a Cry Baby wah on the expression pedal (CC11; toe = open without a pedal) for Stevie Wonder style funk comping. Reference: Stevie Wonder - Superstition era clav/wah playing.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Wah Wurlitzer",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "model": 3,
+          "drive": 0.35,
+          "bark": 0.4
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "wah",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "pedal_source": 2,
+            "model": 0,
+            "q": 5,
+            "level_db": 6,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "threshold_db": -22,
+            "ratio": 4,
+            "attack_ms": 1,
+            "release_ms": 120,
+            "makeup_db": 2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.1,
+            "size": 0.3,
+            "decay": 0.6
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 12,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

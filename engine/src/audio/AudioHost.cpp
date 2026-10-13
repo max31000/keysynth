@@ -19,7 +19,10 @@ nlohmann::json toJson(const AudioStatus& s) {
             {"outputLatencyMs", s.outputLatencyMs},
             {"running", s.running},
             {"hasControlPanel", s.hasControlPanel},
-            {"panelOpen", s.panelOpen}};
+            {"panelOpen", s.panelOpen},
+            {"inputName", s.inputName},
+            {"inputChannelNames", s.inputChannelNames},
+            {"inputChannels", s.inputChannels}};
 }
 
 namespace {
@@ -33,6 +36,32 @@ bool preferredAsioName(const juce::String& n) {
 // ASIO drivers own their buffer size (control panel) and may change it (and the rate) at any time: reopen with
 // the driver's current values instead of re-requesting ours (ARCHITECTURE §6).
 bool followsDriver(const std::string& type) { return type == "ASIO"; }
+
+// ASIO (and any type without separate inputs): the inputs belong to the output device.
+bool inputsOnOutputDevice(const std::string& type) { return type == "ASIO"; }
+
+juce::BigInteger channelBits(const std::vector<int>& channels) {
+    juce::BigInteger b;
+    for (int c : channels) b.setBit(c);
+    return b;
+}
+
+std::vector<int> bitsToChannels(const juce::BigInteger& b) {
+    std::vector<int> v;
+    for (int i = 0; i <= b.getHighestBit(); ++i)
+        if (b[i]) v.push_back(i);
+    return v;
+}
+
+std::vector<int> channelsFromJson(const nlohmann::json& j) {
+    std::vector<int> v;
+    if (!j.is_array()) return v;
+    for (const auto& x : j)
+        if (x.is_number_integer() && x.get<int>() >= 0 && x.get<int>() < 256 && v.size() < 2) v.push_back(x.get<int>());
+    std::sort(v.begin(), v.end());
+    v.erase(std::unique(v.begin(), v.end()), v.end());
+    return v;
+}
 
 constexpr std::uintmax_t kMaxLogBytes = 1u << 20;
 
@@ -83,7 +112,10 @@ void AudioHost::saveSettings() const {
                   {"sampleRate", s.sampleRate},
                   {"bufferSize", s.bufferSize},
                   // ASIO: re-request bufferSize at startup only when the user chose it (else: the driver's size).
-                  {"bufferExplicit", explicitBuffer_ > 0 && explicitBuffer_ == s.bufferSize}};
+                  {"bufferExplicit", explicitBuffer_ > 0 && explicitBuffer_ == s.bufferSize},
+                  // ARCHITECTURE §6 "Audio input": the selection, re-applied on every reopen of this device.
+                  {"inputName", inputName_},
+                  {"inputChannels", inputChannels_}};
     std::error_code ec;
     std::filesystem::create_directories(paths_.settingsFile.parent_path(), ec);
     std::ofstream f(paths_.settingsFile, std::ios::binary | std::ios::trunc);
@@ -146,6 +178,17 @@ void AudioHost::flushNotes() {
     }
 }
 
+void AudioHost::applyInputs(juce::AudioDeviceManager::AudioDeviceSetup& setup, const std::string& type) const {
+    setup.useDefaultInputChannels = false;
+    if (inputChannels_.empty()) {
+        setup.inputDeviceName = {};
+        setup.inputChannels.clear();
+        return;
+    }
+    setup.inputDeviceName = inputsOnOutputDevice(type) ? setup.outputDeviceName : jstr(inputName_);
+    setup.inputChannels = channelBits(inputChannels_);
+}
+
 void AudioHost::rememberTarget() {
     if (auto* dev = dm_.getCurrentAudioDevice()) {
         target_.type = str(dev->getTypeName());
@@ -169,6 +212,12 @@ std::string AudioHost::start(const Options& opt, bool startTimerNow) {
         sr = a->value("sampleRate", 0.0);
         buffer = a->value("bufferSize", 0);
         savedExplicit = a->value("bufferExplicit", false);
+        if (auto in = a->find("inputName"); in != a->end() && in->is_string()) inputName_ = in->get<std::string>();
+        if (auto ic = a->find("inputChannels"); ic != a->end()) inputChannels_ = channelsFromJson(*ic);
+    }
+    if (type.empty()) { // no saved device: no saved input selection either
+        inputName_.clear();
+        inputChannels_.clear();
     }
     // A saved ASIO size the user did not choose is the driver's old panel value: never force it (the panel may
     // have changed since). 0 = the driver's preferred size.
@@ -197,11 +246,15 @@ std::string AudioHost::start(const Options& opt, bool startTimerNow) {
             juce::XmlElement xml("DEVICESETUP");
             xml.setAttribute("deviceType", jstr(type));
             xml.setAttribute("audioOutputDeviceName", jstr(name));
-            xml.setAttribute("audioInputDeviceName", "");
+            juce::AudioDeviceManager::AudioDeviceSetup in;
+            in.outputDeviceName = jstr(name);
+            applyInputs(in, type);
+            xml.setAttribute("audioInputDeviceName", in.inputDeviceName);
             if (sr > 0) xml.setAttribute("audioDeviceRate", sr);
             if (buffer > 0) xml.setAttribute("audioDeviceBufferSize", buffer);
             xml.setAttribute("audioDeviceOutChans", "11");
-            xml.setAttribute("audioDeviceInChans", "0");
+            xml.setAttribute("audioDeviceInChans",
+                             in.inputChannels.isZero() ? juce::String("0") : in.inputChannels.toString(2));
             err = dm_.initialise(0, 2, &xml, true);
         } else {
             err = dm_.initialise(0, 2, nullptr, true);
@@ -223,6 +276,20 @@ std::string AudioHost::start(const Options& opt, bool startTimerNow) {
     }
     if (dev != nullptr) {
         rememberTarget();
+        // Fell back to another device than the saved one: the saved input selection belongs to the saved device.
+        if (!inputChannels_.empty() && (target_.type != type || target_.name != name)) {
+            inputName_.clear();
+            inputChannels_.clear();
+            if (!dev->getActiveInputChannels().isZero()) {
+                SelfOp op(selfOps_, selfReason_, "startup (fallback device, no input)");
+                auto setup = dm_.getAudioDeviceSetup();
+                applyInputs(setup, target_.type);
+                dm_.setAudioDeviceSetup(setup, true);
+                dev = dm_.getCurrentAudioDevice();
+            }
+        }
+    }
+    if (dev != nullptr) {
         // Explicit = re-requested later. ASIO: only when the driver offers a choice and accepted ours.
         const bool choice = !followsDriver(target_.type) || dev->getAvailableBufferSizes().size() > 1;
         explicitBuffer_ = buffer > 0 && choice && dev->getCurrentBufferSizeSamples() == buffer ? buffer : 0;
@@ -264,6 +331,13 @@ AudioStatus AudioHost::status() const {
     s.running = running_.load() && dev->isPlaying();
     s.hasControlPanel = dev->hasControlPanel();
     s.panelOpen = panelOpen_.load();
+    const juce::BigInteger active = dev->getActiveInputChannels();
+    if (!active.isZero()) {
+        const auto setup = dm_.getAudioDeviceSetup();
+        s.inputName = str(setup.inputDeviceName.isNotEmpty() ? setup.inputDeviceName : dev->getName());
+        s.inputChannels = bitsToChannels(active);
+    }
+    for (const auto& n : dev->getInputChannelNames()) s.inputChannelNames.push_back(str(n));
     return s;
 }
 
@@ -406,7 +480,7 @@ std::string AudioHost::reopen(const std::string& reason) {
     if (str(dm_.getCurrentAudioDeviceType()) != target_.type) dm_.setCurrentAudioDeviceType(jstr(target_.type), true);
     auto setup = dm_.getAudioDeviceSetup();
     setup.outputDeviceName = jstr(target_.name);
-    setup.inputDeviceName = {};
+    applyInputs(setup, target_.type);
     // The user's explicit size if any (JUCE falls back to the driver's preferred size when it is not offered),
     // else 0 = the driver's preferred (ASIO: its control panel value), never a stale one.
     setup.bufferSize = explicitBuffer_;
@@ -463,6 +537,8 @@ AudioDeviceList AudioHost::listDevices() {
         AudioDeviceList::TypeDevices td;
         td.type = str(t->getTypeName());
         for (const auto& n : t->getDeviceNames(false)) td.names.push_back(str(n));
+        if (t->hasSeparateInputsAndOutputs())
+            for (const auto& n : t->getDeviceNames(true)) td.inputNames.push_back(str(n));
         if (auto* dev = dm_.getCurrentAudioDevice(); dev != nullptr && dev->getTypeName() == t->getTypeName()) {
             for (double r : dev->getAvailableSampleRates()) td.sampleRates.push_back(r);
             for (int b : dev->getAvailableBufferSizes()) td.bufferSizes.push_back(b);
@@ -478,18 +554,24 @@ std::string AudioHost::setDevice(const std::string& type, const std::string& nam
     for (auto* t : dm_.getAvailableDeviceTypes()) typeOk = typeOk || str(t->getTypeName()) == type;
     if (!typeOk) return "unknown device type '" + type + "'";
     juce::String err;
+    const std::string keptInputName = inputName_;
+    const std::vector<int> keptInputs = inputChannels_;
     {
         SelfOp op(selfOps_, selfReason_, "set_audio_device");
         if (auto* dev = dm_.getCurrentAudioDevice()) {
             const int x = dev->getXRunCount();
             if (x > 0) xrunBase_.fetch_add(static_cast<uint64_t>(x));
         }
+        // The input selection belongs to a device: keep it only when the device stays the same (restored below
+        // when the switch fails, so the current device keeps its inputs).
+        if (type != target_.type || name != target_.name) {
+            inputName_.clear();
+            inputChannels_.clear();
+        }
         if (str(dm_.getCurrentAudioDeviceType()) != type) dm_.setCurrentAudioDeviceType(jstr(type), true);
         auto setup = dm_.getAudioDeviceSetup();
         setup.outputDeviceName = jstr(name);
-        setup.inputDeviceName = {};
-        setup.useDefaultInputChannels = false;
-        setup.inputChannels.clear();
+        applyInputs(setup, type);
         setup.useDefaultOutputChannels = true;
         if (sampleRate > 0) setup.sampleRate = sampleRate;
         if (bufferSize > 0) setup.bufferSize = bufferSize;
@@ -509,11 +591,71 @@ std::string AudioHost::setDevice(const std::string& type, const std::string& nam
     } else {
         // The user sees the error in the reply; no automatic retries of a device they just asked for.
         expectRunning_ = false;
+        inputName_ = keptInputName; // target_ still names the previous device
+        inputChannels_ = keptInputs;
         logEvent("error", "set_device_failed", "set_audio_device " + type + " / " + name + ": " + str(err), false);
     }
     // The synchronous restart flagged an async re-report; set_audio_device reports the change itself (`devices`
     // to all + `state`), so drop it instead of sending everything twice.
     changed_.store(false);
+    flushNotes();
+    return str(err);
+}
+
+std::string AudioHost::setInput(const std::string& inputName, const std::vector<int>& channels) {
+    if (panelOpen_.load()) return "close the driver's control panel first";
+    auto* dev = dm_.getCurrentAudioDevice();
+    if (dev == nullptr || target_.type.empty()) return "no audio device is open";
+    if (channels.size() > 2) return "at most 2 input channels";
+    const bool onOutput = inputsOnOutputDevice(target_.type);
+    const std::string inName = onOutput ? std::string() : inputName;
+    if (!channels.empty()) {
+        if (!onOutput && inName.empty()) return "choose an input device";
+        if (onOutput) {
+            const int have = dev->getInputChannelNames().size();
+            for (int c : channels)
+                if (c >= have)
+                    return "the device has " + std::to_string(have) + " input channel(s); input " +
+                           std::to_string(c + 1) + " does not exist";
+        }
+    }
+    const std::string oldName = inputName_;
+    const std::vector<int> oldChannels = inputChannels_;
+    inputName_ = channels.empty() ? std::string() : inName;
+    inputChannels_ = channels;
+    juce::String err;
+    {
+        SelfOp op(selfOps_, selfReason_, "set_audio_input");
+        if (const int x = dev->getXRunCount(); x > 0) xrunBase_.fetch_add(static_cast<uint64_t>(x));
+        auto setup = dm_.getAudioDeviceSetup();
+        setup.outputDeviceName = jstr(target_.name);
+        applyInputs(setup, target_.type);
+        err = dm_.setAudioDeviceSetup(setup, true);
+        auto* now = dm_.getCurrentAudioDevice();
+        if (err.isEmpty() && now == nullptr) err = "the device did not reopen";
+        if (err.isEmpty() &&
+            static_cast<size_t>(now->getActiveInputChannels().countNumberOfSetBits()) != channels.size())
+            err = "the device did not open the requested input channel(s)";
+        if (err.isNotEmpty()) { // back to the previous selection (best effort; the watchdog covers a dead device)
+            inputName_ = oldName;
+            inputChannels_ = oldChannels;
+            auto back = dm_.getAudioDeviceSetup();
+            back.outputDeviceName = jstr(target_.name);
+            applyInputs(back, target_.type);
+            if (const juce::String e2 = dm_.setAudioDeviceSetup(back, true); e2.isNotEmpty())
+                logEvent("error", "set_input_restore_failed", str(e2), false); // the watchdog takes over
+        }
+    }
+    if (err.isEmpty()) {
+        expectRunning_ = true;
+        saveSettings();
+        std::string sel;
+        for (int c : channels) sel += (sel.empty() ? "" : "+") + std::to_string(c + 1);
+        logEvent("info", "set_input", channels.empty() ? "input off" : "input channels " + sel, false);
+    } else {
+        logEvent("error", "set_input_failed", str(err), false);
+    }
+    changed_.store(false); // the handler reports `devices` + `state` itself
     flushNotes();
     return str(err);
 }
@@ -603,7 +745,7 @@ void AudioHost::audioDeviceError(const juce::String& message) {
     }
 }
 
-void AudioHost::audioDeviceIOCallbackWithContext(const float* const*, int, float* const* out, int numOut,
+void AudioHost::audioDeviceIOCallbackWithContext(const float* const* in, int numIn, float* const* out, int numOut,
                                                  int numSamples, const juce::AudioIODeviceCallbackContext&) {
     if (!promoted_.load(std::memory_order_relaxed)) {
         const auto info = platform::promoteCurrentThreadForAudio(); // one-shot, before entering the RT scope
@@ -612,7 +754,7 @@ void AudioHost::audioDeviceIOCallbackWithContext(const float* const*, int, float
         powerOff_.store(info.powerThrottlingOff);
         promoted_.store(true, std::memory_order_relaxed);
     }
-    engine_.process(out, numOut, numSamples);
+    engine_.process(in, numIn, out, numOut, numSamples); // active inputs = the selected ones (ascending)
     callbacks_.fetch_add(1, std::memory_order_relaxed);
 }
 

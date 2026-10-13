@@ -55,14 +55,14 @@ const WEB_ORIGIN = 'https://mvv42.ru';
 const WEB_ALLOWED = new Set([
   'hello', 'get_catalog', 'set_param', 'get_patch', 'list_presets', 'add_layer', 'remove_layer', 'set_zone',
   'set_instrument', 'add_fx', 'remove_fx', 'move_fx', 'set_fx_bypass', 'note', 'cc', 'panic', 'list_patterns',
-  'set_pattern', 'rescan_midi', 'list_devices', 'set_audio_device', 'open_audio_panel', 'restart_audio', 'list_plugins',
+  'set_pattern', 'rescan_midi', 'list_devices', 'set_audio_device', 'set_audio_input', 'open_audio_panel', 'restart_audio', 'list_plugins',
   'save_preset', 'save_pattern', 'load_preset', 'get_pattern', 'transport', 'set_patch', 'cloud_link', 'cloud_unlink',
   'sync_now', 'samples_list', 'samples_fetch', 'samples_cancel', 'samples_delete', 'chord_learn', 'song_list',
   'song_get', 'song_save', 'song_delete', 'song_select', 'song_section', 'song_next', 'song_prev', 'song_close',
   'song_control_keys',
 ]);
 /** Remote (relay) sessions: web + these denied (docs/specs/2026-10-12-remote.md §10.3). */
-const REMOTE_DENIED = new Set(['cloud_link', 'cloud_unlink', 'set_audio_device', 'open_audio_panel', 'samples_delete', 'reload_plugin']);
+const REMOTE_DENIED = new Set(['cloud_link', 'cloud_unlink', 'set_audio_device', 'set_audio_input', 'open_audio_panel', 'samples_delete', 'reload_plugin']);
 /** Set by mock/relay-mock.ts on its per-controller connections: the session gets trust `remote`. */
 export const RELAY_HEADER = 'x-keysynth-relay';
 const MOCK_VERSION = '0.1.0';
@@ -123,6 +123,9 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     outputLatencyMs: 2.2,
     running: true,
     hasControlPanel: true,
+    inputName: '',
+    inputChannelNames: ['Input 1', 'Input 2'],
+    inputChannels: [],
   };
   let midiInputs = ['Arturia KeyStep 37', 'loopMIDI Port'];
   // Plugin host simulation: `reload_plugin` goes compiling -> ok (or -> error for `broken_fx`).
@@ -866,6 +869,9 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
           outputLatencyMs: +((bs / sr) * 1000 + (isAsio ? 0.9 : 10)).toFixed(2),
           running: true,
           hasControlPanel: isAsio,
+          inputName: '',
+          inputChannelNames: isAsio ? ['Input 1', 'Input 2'] : [],
+          inputChannels: [],
         };
         for (const c of wss.clients) send(c, c === ws ? devicesMsg(id) : devicesMsg());
         if (rejected && requested !== undefined) {
@@ -899,6 +905,25 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
             message: `audio: ${audio.name}, ${audio.sampleRate} Hz, buffer ${bs} samples, output latency ${audio.outputLatencyMs.toFixed(1)} ms`,
           });
         }, 300);
+        return;
+      }
+      case 'set_audio_input': {
+        const ch = Array.isArray(m.channels) ? (m.channels as unknown[]) : null;
+        if (!ch || ch.length > 2 || !ch.every((c) => Number.isInteger(c) && (c as number) >= 0))
+          return err(ws, id, 'bad_request', "'channels' must be an array of at most 2 input channel indices");
+        const sorted = [...(ch as number[])].sort((a, b) => a - b);
+        if (sorted.length === 2 && sorted[0] === sorted[1]) return err(ws, id, 'bad_request', 'duplicate input channel index');
+        if (sorted.some((c) => c >= 2)) return err(ws, id, 'device_error', 'the device has 2 input channel(s)');
+        const asio = audio.type === 'ASIO';
+        const inName = asio ? audio.name : typeof m.name === 'string' ? m.name : '';
+        audio = {
+          ...audio,
+          inputChannels: sorted,
+          inputName: sorted.length ? inName : '',
+          inputChannelNames: asio || sorted.length ? ['Input 1', 'Input 2'] : [],
+        };
+        for (const c of wss.clients) send(c, c === ws ? devicesMsg(id) : devicesMsg());
+        broadcastState();
         return;
       }
       case 'restart_audio': {
@@ -1147,7 +1172,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       cpu: Math.min(1, 0.04 + voices * 0.012 + Math.random() * 0.02),
       xruns,
       voices,
-      meters: { master: [toDb(masterLin * 0.98), toDb(masterLin)], layers },
+      meters: { master: [toDb(masterLin * 0.98), toDb(masterLin)], input: audio.inputChannels?.length ? [toDb(0.1), toDb(0.1)] : [-120, -120], layers },
       readouts,
       transport: { ppq, playing: transport.playing, step, bar },
     } satisfies EngineMsg);

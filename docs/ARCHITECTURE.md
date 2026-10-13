@@ -8,8 +8,9 @@ Revision 2 (after review #1: graph swap semantics, stable node ids, per-device M
 Goal: MIDI keyboard (USB) → low-latency software synth → ASIO audio interface. Many built-in engines and presets,
 user-extensible DSP (hot-reloaded plugins), web UI.
 
-Non-goals (for now): hosting third-party VST3, DAW timeline, MIDI controller mapping, sidechain, MPE (API is ready
-for it: `noteId`), plugin builds of keysynth itself.
+Non-goals (for now): hosting third-party VST3, DAW timeline, MIDI controller mapping, sidechain between layers (the
+only external audio is the device input bus, §6 *Audio input*), MPE (API is ready for it: `noteId`), plugin builds of
+keysynth itself.
 
 Platform: Windows 11 + ASIO first. Code stays portable: no Win32 calls outside `engine/src/platform/`.
 
@@ -199,6 +200,9 @@ class Module {
   maintained by the core (engines don't parse CCs, but still receive raw events). The Engine keeps 17 global
   states (0 = omni merge, 1..16); each layer gets a copy for its zone channel with sustain/sostenuto masked when
   `zone.sustain` is false.
+  `input` (`ExternalInput {left, right, channels}`): the current block's device input (§6 *Audio input*), read-only,
+  `numSamples` valid samples; `channels` 0 = no input (null pointers), 1 = mono (`right == left`), 2 = stereo. The
+  same view is passed to every module of the block (layers, master, both graphs of a transition).
 - Module helpers beyond the sketch above: the base constructor takes the module's static `ModuleInfo` (so the
   ParamSet can be built), `info()` is virtual-with-default, `activeVoices()` feeds telemetry, and
   `Module::liveInstances()` counts instances for leak tests.
@@ -317,6 +321,18 @@ Patch (data)                              RackGraph (live, audio thread)
     (`AudioControl::onLog`). `restart_audio` (protocol) runs the same recovery on demand.
 - On the first callback `platform/` registers the audio thread with MMCSS (`AvSetMmThreadCharacteristicsW
   "Pro Audio"`) and disables power throttling for it (Intel hybrid P/E cores).
+- **Audio input** (external input bus; consumer: `vocoder`). Up to 2 input channels of the device are opened
+  (`set_audio_input`, PROTOCOL.md *Audio input*); none by default, so the driver opens outputs only. Persisted as
+  `audio.inputName` / `audio.inputChannels` (device channel indices, ascending) in `userdata/settings.json`. ASIO:
+  the input device is the output device (`inputName` ignored); other device types name their input device. The
+  selection is re-applied on every (re)open of the same device (startup, recovery, `restart_audio`, panel reopen);
+  `set_audio_device` to a different device clears it. JUCE delivers the active input channels in ascending order;
+  the callback passes them to `Engine::process(inputs, numIn, outputs, …)`, which hands each ≤ maxBlock chunk to
+  the graph *without copying* as `ProcessContext::input` (channel 1 → left, channel 2 → right; one channel → both).
+  Input and output of a callback are the same block, so the bus adds no latency beyond the device's own input
+  latency. Offline renders and tests pass an optional `ExternalInput` to `Engine::processBlock` (default none). The
+  Engine raises an input peak per block (`Telemetry::inputL/R` → `telemetry.meters.input`, dBFS) for the audio
+  dialog's level meter.
 - `MidiHub` opens all MIDI inputs, one SPSC per device; rescan on demand (protocol `rescan_midi`) and at startup.
   Events get sampleOffset 0 at the next block (lowest latency; jitter ≤ 1 block).
 - UI virtual keyboard / computer keyboard notes enter through ControlInbox → same MIDI path.
@@ -341,6 +357,17 @@ Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string
 (Leslie 122/147 horn+drum, Doppler/AM, ramped slow/fast/brake, mod-wheel speed, ReadOnly `horn_rpm`/`drum_rpm`),
 `tremolo` (amp trem with L/R phase / equal-power autopan; sine/tri/smoothed square; free or tempo-synced),
 `compressor` (VCA/opto, `gr_db` meter), `eq` (HP/LS/3 bells/HS/LP), `limiter` (master safety, fixed).
+Effects v2: `vocoder` (channel vocoder, 8/16/20/32 bands: modulator = the device input bus (§6) or an internal
+vowel/noise source; carrier = the layer's audio; 4th-order band-pass pairs (two `dsp/Svf` stages), envelope
+followers with attack/release, formant shift of the carrier bands, sibilance noise for unvoiced consonants, carrier
+mix, input gain + gate, input L/R/mono), `wah` (inductor wah, Cry Baby / Vox curves: resonant band-pass + low-pass
+body, pedal from the param, mod wheel or CC11 expression; auto-wah envelope; LFO with `sync`), `echo` (Binson
+Echorec magnetic drum: one record head, 4 equally spaced playback heads, `heads` switch over 12 combinations, swell =
+regeneration from the selected heads, tone, wow/flutter of the drum speed, valve saturation, `time` = head spacing or
+`sync`), `tapestop` (tape stop / start: varispeed read of a circular buffer, speed 1 → 0 → 1 with a curve; triggered
+by the `stop` param, a MIDI note or a CC; a start from standstill restarts the read head at the write head and
+spins it up, the delay accumulated while slower than 1 is removed by a 10 ms crossfade to the dry path once the
+speed is back at 1 — while running the output is the dry input, zero latency).
 Effects are in-place stereo, zero latency, smoothed.
 Shared effect param ids: `mix` (0..1 dry→wet crossfade; 0 = dry, bit-exact except `drive`, whose dry runs
 through the matching all-pass oversampling filters), `rate` (Hz), `depth` (0..1), `feedback`, `time` (ms),
@@ -532,7 +559,7 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
     `{t:"msg",from,msg}` (an unknown `from` joins implicitly), `{t:"pause"|"resume",cid}`, `{t:"controllers",count}`
     (0 → all leave); a disconnect removes every remote client.
   - **Virtual clients** `r:<cid>` live in `ControlServer::clients_` (no socket) with `Trust::Remote` =
-    `webRestriction` + deny `cloud_link`, `cloud_unlink`, `set_audio_device`, `open_audio_panel`, `samples_delete`,
+    `webRestriction` + deny `cloud_link`, `cloud_unlink`, `set_audio_device`, `set_audio_input`, `open_audio_panel`, `samples_delete`,
     `reload_plugin` (`control/Trust`, default-deny; `hello` replies `trust:"remote"`). Their requests run through
     the same ProtocolHandler.
   - Outbound (`control/RemoteRouter`, message thread, owned by ControlServer): `Reply` → `{t:"msg",to:cid}`;

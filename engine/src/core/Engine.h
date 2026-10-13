@@ -81,10 +81,17 @@ public:
 
     // --- audio thread ---
     // Device callback: splits into <= maxBlock chunks. Writes channels 0/1 (mono: sum), zeroes the rest.
-    void process(float* const* outputs, int numOutputs, int numSamples) noexcept;
+    // `inputs` (may be null / 0): the device's active input channels; the first two become the external input bus
+    // of each chunk (ProcessContext::input, no copy; one channel feeds both sides).
+    void process(const float* const* inputs, int numInputs, float* const* outputs, int numOutputs,
+                 int numSamples) noexcept;
+    void process(float* const* outputs, int numOutputs, int numSamples) noexcept {
+        process(nullptr, 0, outputs, numOutputs, numSamples);
+    }
     // One block (numSamples <= maxBlock). `extra` are sample-accurate events (offline render), sorted, offsets
-    // < numSamples; queued inbox/device events are merged in at offset 0.
-    void processBlock(const AudioBlock& out, MidiEventSpan extra = {}) noexcept;
+    // < numSamples; queued inbox/device events are merged in at offset 0. `input`: external input bus of this
+    // block (>= numSamples valid samples), none by default.
+    void processBlock(const AudioBlock& out, MidiEventSpan extra = {}, const ExternalInput& input = {}) noexcept;
 
 private:
     void gatherEvents(MidiEventSpan extra) noexcept;

@@ -67,6 +67,7 @@ public:
     uint64_t xruns() const override;
     std::string openControlPanel() override;
     std::string restart() override;
+    std::string setInput(const std::string& inputName, const std::vector<int>& channels) override;
 
     // Message thread: watchdog + deferred reports. Called by the internal timer; public for tests (nowMs: any
     // monotonic clock in ms).
@@ -96,6 +97,8 @@ private:
     // Close + reopen the target device with the driver's current settings (ASIO) / the last explicit ones.
     std::string reopen(const std::string& reason);
     void rememberTarget();
+    // The input selection (ARCHITECTURE §6 "Audio input") applied to a setup for the output device `setup` names.
+    void applyInputs(juce::AudioDeviceManager::AudioDeviceSetup& setup, const std::string& type) const;
     // Device event -> audio.log (+ onLog when notify). Message thread only (file IO).
     void logEvent(const std::string& level, const std::string& event, const std::string& detail, bool notify,
                   juce::AudioIODevice* dev = nullptr);
@@ -125,6 +128,8 @@ private:
         std::string type, name;
     } target_;
     int explicitBuffer_ = 0;      // > 0: the user chose this size and the driver accepted it
+    std::string inputName_;       // input device for types with separate inputs (ASIO: unused)
+    std::vector<int> inputChannels_; // selected input channels (ascending, <= 2); empty = no input
     bool expectRunning_ = false;  // a device should be delivering callbacks
     int selfOps_ = 0;             // > 0 while we restart the device ourselves (not a driver restart)
     std::string selfReason_;

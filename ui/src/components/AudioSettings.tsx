@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { actions, useCloud, useEngine } from '../store';
 import { canSend } from '../platform/trust';
 import { LATENCY_WARN_MS, bufferMs, latencyHint, latencyTooHigh } from '../lib/latency';
+import { StereoMeter, inputSource } from './Meter';
 
 const SAMPLE_RATES = [44100, 48000, 88200, 96000];
 const BUFFER_SIZES = [16, 32, 48, 64, 96, 128, 192, 256, 512, 1024];
@@ -18,6 +19,7 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
   // remote (relay) sessions may not change the device or open the driver panel
   const canDevice = useCloud((s) => canSend(s.trust, 'set_audio_device'));
   const canPanel = useCloud((s) => canSend(s.trust, 'open_audio_panel'));
+  const canInput = useCloud((s) => canSend(s.trust, 'set_audio_input'));
 
   useEffect(() => {
     const d = ref.current;
@@ -51,6 +53,21 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
   const types = devices?.types ?? (audio ? [audio.type] : []);
   const latencyMs = (bs / sr) * 1000;
   const changed = !!audio && (audio.type !== type || audio.name !== name || audio.sampleRate !== sr || audio.bufferSize !== bs);
+
+  // Audio input (PROTOCOL.md "Audio input"): up to 2 channels; ASIO inputs belong to the output device.
+  const inputNames = devices?.available.find((a) => a.type === audio?.type)?.inputNames ?? [];
+  const separateInputs = !!audio && audio.type !== 'ASIO';
+  const inChannels = audio?.inputChannels ?? [];
+  const inNames = audio?.inputChannelNames ?? [];
+  const [inBusy, setInBusy] = useState(false);
+  const setInput = async (channels: number[], inputName?: string) => {
+    setInBusy(true);
+    const uniq = [...new Set(channels.filter((c) => c >= 0))].sort((a, b) => a - b);
+    await actions().setAudioInput(uniq, inputName);
+    setInBusy(false);
+  };
+  const first = inChannels[0] ?? -1;
+  const second = inChannels[1] ?? -1;
 
   const apply = async () => {
     setBusy(true);
@@ -175,6 +192,68 @@ export function AudioSettings({ open, onClose }: { open: boolean; onClose: () =>
               </button>
             )}
           </div>
+        </section>
+        <section>
+          <div className="panel-label">Audio input</div>
+          {separateInputs && (
+            <label className="field">
+              <span>Input device</span>
+              <select
+                className="select"
+                disabled={!canInput || inBusy || panelOpen}
+                value={audio?.inputName ?? ''}
+                onChange={(e) => void setInput(e.target.value ? [0] : [], e.target.value)}
+              >
+                <option value="">None</option>
+                {inputNames.map((n) => (
+                  <option key={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="field-row">
+            <label className="field">
+              <span>Channel 1 (mono)</span>
+              <select
+                className="select"
+                aria-label="Input channel 1"
+                disabled={!canInput || inBusy || panelOpen || inNames.length === 0}
+                value={first}
+                onChange={(e) => {
+                  const c = Number(e.target.value);
+                  void setInput(c < 0 ? [] : [c, second], audio?.inputName); // channel 1 off = input off
+                }}
+              >
+                <option value={-1}>Off</option>
+                {inNames.map((n, i) => (
+                  <option key={i} value={i}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Channel 2</span>
+              <select
+                className="select"
+                aria-label="Input channel 2"
+                disabled={!canInput || inBusy || panelOpen || inNames.length === 0 || first < 0}
+                value={second}
+                onChange={(e) => void setInput([first, Number(e.target.value)], audio?.inputName)}
+              >
+                <option value={-1}>Off</option>
+                {inNames.map((n, i) => (
+                  <option key={i} value={i} disabled={i === first}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="row gap" aria-label="Input level">
+            <StereoMeter source={inputSource} orientation="horizontal" />
+          </div>
+          <p className="hint">Used by the vocoder as its modulator. One channel feeds both sides.</p>
         </section>
         <section>
           <div className="panel-label">MIDI inputs</div>
