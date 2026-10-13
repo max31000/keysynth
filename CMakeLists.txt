@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(keysynth VERSION 0.2.0 LANGUAGES C CXX)
+project(keysynth VERSION 0.3.0 LANGUAGES C CXX)
 
 option(KS_BUILD_TESTS "Build Catch2 tests (ks-tests)" ON)
 option(KS_WITH_SFIZZ "Build the sfizz-based SFZ sampler module (`sampler`)" ON)
