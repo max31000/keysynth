@@ -1,0 +1,106 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Mr. Blue Sky Vocoder",
+    "category": "Choir & Vox",
+    "tags": [
+      "elo",
+      "vocoder",
+      "ems",
+      "70s",
+      "pad"
+    ],
+    "description": "Warm string-machine style carrier (slow attack, ensemble after the vocoder) through a 16-band vocoder, formants a touch darker, longer release for sung phrases. Sing or speak into the audio interface input chosen in Audio settings (Input); without an open input the vocoder uses its internal vowel test signal. Reference: Electric Light Orchestra - Mr. Blue Sky (1977, EMS Vocoder 2000).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Mr. Blue Sky Vocoder",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_octave": 1,
+          "osc2_level": 0.5,
+          "osc2_fine": -6,
+          "cutoff": 6500,
+          "resonance": 0.0,
+          "key_track": 0.3,
+          "amp_attack": 0.06,
+          "amp_decay": 0.4,
+          "amp_sustain": 1.0,
+          "amp_release": 0.35,
+          "polyphony": 8,
+          "hpf_cutoff": 100,
+          "drift": 0.2,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "vocoder",
+          "bypass": false,
+          "params": {
+            "bands": 1,
+            "modulator": 0,
+            "mod_gain_db": 6,
+            "gate_db": -60,
+            "attack_ms": 5,
+            "release_ms": 70,
+            "formant": -1.0,
+            "sibilance": 0.3,
+            "carrier_mix": 0.04,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "ensemble",
+          "bypass": false,
+          "params": {
+            "mix": 0.5
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.2,
+            "size": 0.6,
+            "decay": 1.8,
+            "predelay_ms": 25
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -12.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

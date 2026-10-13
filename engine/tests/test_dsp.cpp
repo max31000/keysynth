@@ -93,6 +93,21 @@ TEST_CASE("Smoothers converge", "[dsp]") {
     for (int i = 0; i < 480; ++i) l.next();
     REQUIRE(l.value() == 2.0f);
     REQUIRE_FALSE(l.isSmoothing());
+
+    // Large targets (delay times in samples): the approach keeps shrinking to the end, no final snap jump.
+    OnePoleSmoother d;
+    d.prepare(48000.0, 0.12f);
+    d.snap(18000.0f);
+    d.setTarget(16800.0f);
+    float prev = d.value(), lastStep = 1e9f;
+    for (int i = 0; i < 5 * 48000; ++i) {
+        const float v = d.next();
+        const float step = std::fabs(v - prev);
+        REQUIRE(step <= lastStep * 1.001f + 5e-3f); // shrinking steps (+- a few float ulps at 16800)
+        if (step > 0.0f) lastStep = step;
+        prev = v;
+    }
+    REQUIRE(d.value() == 16800.0f);
 }
 
 TEST_CASE("Soft clip and safety limiter bound the output", "[dsp]") {

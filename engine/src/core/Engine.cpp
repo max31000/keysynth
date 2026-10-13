@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 
 namespace ks {
@@ -81,7 +82,7 @@ void Engine::gatherEvents(MidiEventSpan extra) noexcept {
     }
 }
 
-void Engine::processBlock(const AudioBlock& out, MidiEventSpan extra) noexcept {
+void Engine::processBlock(const AudioBlock& out, MidiEventSpan extra, const ExternalInput& input) noexcept {
     rt::RtScope rtScope;
     dsp::ScopedNoDenormals noDenormals;
     const int n = std::min(out.numSamples, maxBlock_);
@@ -113,6 +114,16 @@ void Engine::processBlock(const AudioBlock& out, MidiEventSpan extra) noexcept {
     args.ctx.numSamples = n;
     args.ctx.sampleTime = sampleTime_;
     args.ctx.transport = t;
+    args.ctx.input = input.present() ? input : ExternalInput{};
+    if (args.ctx.input.present()) {
+        float il = 0.0f, ir = 0.0f;
+        for (int i = 0; i < n; ++i) {
+            il = std::max(il, std::fabs(input.left[i]));
+            ir = std::max(ir, std::fabs(input.right[i]));
+        }
+        Telemetry::raise(telemetry_.inputL, il);
+        Telemetry::raise(telemetry_.inputR, ir);
+    }
     args.channels = channels_.data();
     args.rhythmEvents = MidiEventSpan(rhythmEvents_.data(), static_cast<size_t>(nRhythm));
     args.rhythmGain = rhythm_.drumsVolume.load(std::memory_order_relaxed);
@@ -153,14 +164,20 @@ void Engine::processBlock(const AudioBlock& out, MidiEventSpan extra) noexcept {
     sampleTimeShared_.store(sampleTime_, std::memory_order_relaxed);
 }
 
-void Engine::process(float* const* outputs, int numOutputs, int numSamples) noexcept {
+void Engine::process(const float* const* inputs, int numInputs, float* const* outputs, int numOutputs,
+                     int numSamples) noexcept {
     rt::RtScope rtScope;
     const auto t0 = std::chrono::steady_clock::now();
+    ExternalInput in;
+    if (inputs != nullptr && numInputs >= 1 && inputs[0] != nullptr) {
+        const bool stereo = numInputs >= 2 && inputs[1] != nullptr;
+        in = {inputs[0], stereo ? inputs[1] : inputs[0], stereo ? 2 : 1};
+    }
     int done = 0;
     while (done < numSamples) {
         const int n = std::min(maxBlock_, numSamples - done);
         AudioBlock b{scratchL_.data(), scratchR_.data(), n};
-        processBlock(b);
+        processBlock(b, {}, in.offset(done));
         if (numOutputs >= 2) {
             if (outputs[0]) std::memcpy(outputs[0] + done, b.left, sizeof(float) * static_cast<size_t>(n));
             if (outputs[1]) std::memcpy(outputs[1] + done, b.right, sizeof(float) * static_cast<size_t>(n));

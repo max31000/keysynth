@@ -45,6 +45,13 @@ struct FakeAudio final : AudioControl {
         if (restartError.empty()) st.bufferSize = 128; // the driver's (new) preferred size
         return restartError;
     }
+    std::vector<int> lastInput;
+    std::string setInput(const std::string&, const std::vector<int>& channels) override {
+        if (!channels.empty() && channels.back() >= 2) return "the device has 2 input channel(s)";
+        lastInput = channels;
+        st.inputChannels = channels;
+        return {};
+    }
     int panelOpens = 0;
     std::string openControlPanel() override {
         if (!st.hasControlPanel) return "no panel";
@@ -376,6 +383,38 @@ TEST_CASE("protocol: restart_audio", "[protocol][audio]") {
     REQUIRE(e["message"] == "driver gone");
 }
 
+TEST_CASE("protocol: set_audio_input", "[protocol][audio]") {
+    Fixture f;
+    auto out = f.send({{"type", "set_audio_input"}, {"id", 31}, {"channels", {1, 0}}});
+    REQUIRE(f.audio.lastInput == std::vector<int>{0, 1}); // sorted
+    json reply;
+    int states = 0, others = 0;
+    for (auto& o : out) {
+        if (o.message["type"] == "devices" && o.target == Outgoing::Target::Reply) reply = o.message;
+        if (o.message["type"] == "devices" && o.target == Outgoing::Target::Others) ++others;
+        if (o.message["type"] == "state" && o.target == Outgoing::Target::Broadcast) ++states;
+    }
+    REQUIRE(reply["id"] == 31);
+    REQUIRE(reply["current"]["inputChannels"] == json::array({0, 1}));
+    REQUIRE(reply["available"][0].contains("inputNames"));
+    REQUIRE(others == 1);
+    REQUIRE(states == 1);
+    for (const json& bad : {json{{"type", "set_audio_input"}}, json{{"type", "set_audio_input"}, {"channels", 1}},
+                            json{{"type", "set_audio_input"}, {"channels", {0, 1, 2}}},
+                            json{{"type", "set_audio_input"}, {"channels", {-1}}},
+                            json{{"type", "set_audio_input"}, {"channels", {1, 1}}},
+                            json{{"type", "set_audio_input"}, {"channels", {"a"}}}})
+        REQUIRE(f.reply(bad)["code"] == "bad_request");
+    REQUIRE(f.reply({{"type", "set_audio_input"}, {"channels", {5}}})["code"] == "device_error");
+    f.audio.st.panelOpen = true;
+    REQUIRE(f.reply({{"type", "set_audio_input"}, {"channels", json::array()}})["code"] == "busy");
+    f.audio.st.panelOpen = false;
+    REQUIRE(f.reply({{"type", "set_audio_input"}, {"id", 3}, {"channels", json::array()}})["type"] == "devices");
+    REQUIRE(f.audio.lastInput.empty());
+    // telemetry carries the input meter
+    REQUIRE(f.session->pollTelemetry()["meters"].contains("input"));
+}
+
 TEST_CASE("protocol: rhythm (transport fields, patterns, kit node)", "[protocol][sequencer]") {
     Fixture f;
     // list_patterns
@@ -483,7 +522,7 @@ TEST_CASE("protocol: garbage input never crashes", "[protocol]") {
     REQUIRE(f.handler->handleText(R"({"id":3})")[0].message["id"] == 3);
     for (const char* t : {"set_param", "load_preset", "save_preset", "set_patch", "add_layer", "remove_layer", "set_zone",
                           "set_instrument", "add_fx", "remove_fx", "move_fx", "set_fx_bypass", "note", "cc", "transport",
-                          "set_audio_device", "open_audio_panel", "list_patterns", "get_pattern", "set_pattern",
+                          "set_audio_device", "set_audio_input", "open_audio_panel", "list_patterns", "get_pattern", "set_pattern",
                           "save_pattern"}) {
         for (const json& payload : {json::object(), json{{"node", -1}, {"layer", "x"}, {"zone", 5}, {"patch", 1},
                                                          {"value", nullptr}, {"note", 1e9}, {"to", "a"},

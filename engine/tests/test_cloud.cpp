@@ -242,7 +242,8 @@ TEST_CASE("trust: Host header (DNS rebinding)", "[cloud][protocol]") {
 TEST_CASE("trust: web session allow-list per message", "[cloud][protocol]") {
     auto ok = [](const json& m) { return webRestriction(m).empty(); };
     for (const char* t : {"hello", "get_catalog", "set_param", "note", "cc", "panic", "save_preset", "save_pattern",
-                          "cloud_link", "samples_fetch", "set_audio_device", "open_audio_panel", "list_plugins"})
+                          "cloud_link", "samples_fetch", "set_audio_device", "set_audio_input", "open_audio_panel",
+                          "list_plugins"})
         CHECK(ok({{"type", t}}));
     for (const char* t : {"reload_plugin", "future_message", "", "set_root"}) CHECK_FALSE(ok({{"type", t}}));
     CHECK(ok({{"type", "load_preset"}, {"path", "presets/factory/piano/x.json"}}));

@@ -1,0 +1,102 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Tape Stop Lead",
+    "category": "Synth Lead",
+    "tags": [
+      "tape stop",
+      "fx",
+      "lead",
+      "edm"
+    ],
+    "description": "Supersaw lead with a tape-stop effect on the mod wheel: push it past half and the tape slows to a halt (0.7 s), pull it back and it spins up again (0.35 s).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Tape Stop Lead",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 4,
+          "osc1_detune": 0.4,
+          "osc2_wave": 0,
+          "osc2_octave": -1,
+          "osc2_level": 0.5,
+          "cutoff": 6000,
+          "resonance": 0.1,
+          "amp_attack": 0.003,
+          "amp_sustain": 1.0,
+          "amp_release": 0.3,
+          "voice_mode": 2,
+          "glide": 0.02,
+          "glide_mode": 1,
+          "mw_vibrato": 0.0,
+          "volume_db": 0.0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "tapestop",
+          "bypass": false,
+          "params": {
+            "trigger": 2,
+            "trigger_cc": 1,
+            "stop_ms": 700,
+            "start_ms": 350,
+            "curve": 0.3,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "sync": 11,
+            "feedback": 0.3,
+            "mix": 0.18
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.15,
+            "size": 0.6,
+            "decay": 1.6
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -1.1,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

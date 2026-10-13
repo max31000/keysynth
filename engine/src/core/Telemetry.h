@@ -40,6 +40,7 @@ public:
 
     std::atomic<float> cpuLoad{0.0f}; // max callback time / buffer duration since last poll (0..1+)
     std::atomic<float> masterL{0.0f}, masterR{0.0f};
+    std::atomic<float> inputL{0.0f}, inputR{0.0f}; // device input bus peak (ARCHITECTURE §6 "Audio input")
     std::atomic<int> voices{0};
     std::atomic<int> layerCount{0};
     std::array<LayerMeter, kMaxLayers> layers{};

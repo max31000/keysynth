@@ -6,6 +6,7 @@ import type { StereoPeak } from '../protocol/types';
 export type MeterSource = () => StereoPeak | undefined;
 
 export const masterSource: MeterSource = () => live.telemetry?.meters.master;
+export const inputSource: MeterSource = () => live.telemetry?.meters.input;
 export const layerSource =
   (node: number | undefined): MeterSource =>
   () =>
