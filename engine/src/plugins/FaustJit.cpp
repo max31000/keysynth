@@ -63,10 +63,18 @@ std::vector<void*>& deferredFactories() {
     return v;
 }
 
+#if defined(__APPLE__)
+constexpr const char* kFaustLib = "libfaust.2.dylib";
+constexpr const char* kFetchScript = "scripts/fetch_faust.sh";
+#else
+constexpr const char* kFaustLib = "faust.dll";
+constexpr const char* kFetchScript = "scripts/fetch_faust.ps1";
+#endif
+
 template <typename F>
 bool resolve(Api& a, F& fn, const char* name) {
     fn = reinterpret_cast<F>(platform::findSymbol(a.lib, name));
-    if (!fn) a.error = std::string("faust.dll lacks ") + name;
+    if (!fn) a.error = std::string(kFaustLib) + " lacks " + name;
     return fn != nullptr;
 }
 
@@ -83,21 +91,28 @@ Api& api() {
     static Api a = [] {
         Api r;
         std::string err;
-        // 1) $KS_FAUST_DIR/lib/faust.dll, 2) the installer's bundle: faust.dll + share/faust next to the exe,
-        // 3) <compile-time KS_FAUST_DIR>/lib/faust.dll, 4) faust.dll next to the exe (post-build copy) with the
-        // compile-time dir's share/faust.
+        // 1) $KS_FAUST_DIR/lib/<lib>, 2) the installed app's copy (Windows: faust.dll + share/faust next to the
+        // exe; macOS: keysynth.app/Contents/Resources/{lib/libfaust.2.dylib, share/faust}), 3) <compile-time
+        // KS_FAUST_DIR>/lib/<lib>, 4) <lib> next to the exe (post-build copy) with the compile-time dir's share/faust.
         const fs::path exeDir = platform::executableDir();
+#if defined(__APPLE__)
+        const fs::path bundledRoot = exeDir.parent_path() / "Resources";
+        const fs::path bundledLib = bundledRoot / "lib" / kFaustLib;
+#else
+        const fs::path bundledRoot = exeDir;
+        const fs::path bundledLib = exeDir / kFaustLib;
+#endif
         std::error_code bec;
-        const bool bundled = fs::is_regular_file(exeDir / "faust.dll", bec) &&
-                             fs::is_regular_file(exeDir / "share" / "faust" / "stdfaust.lib", bec);
+        const bool bundled = fs::is_regular_file(bundledLib, bec) &&
+                             fs::is_regular_file(bundledRoot / "share" / "faust" / "stdfaust.lib", bec);
         if (bundled && std::getenv("KS_FAUST_DIR") == nullptr) {
-            r.lib = platform::openLibrary(exeDir / "faust.dll", err);
-            if (r.lib) r.root = exeDir;
+            r.lib = platform::openLibrary(bundledLib, err);
+            if (r.lib) r.root = bundledRoot;
         }
         for (const fs::path& root : faustRootCandidates()) {
             if (r.lib) break;
             std::error_code ec;
-            const fs::path dll = root / "lib" / "faust.dll";
+            const fs::path dll = root / "lib" / kFaustLib;
             if (!fs::is_regular_file(dll, ec)) continue;
             r.lib = platform::openLibrary(dll, err);
             if (r.lib) {
@@ -107,11 +122,11 @@ Api& api() {
         }
         if (!r.lib) {
             // Next to the executable only (never the CWD / PATH search order).
-            r.lib = platform::openLibrary(platform::executableDir() / "faust.dll", err);
+            r.lib = platform::openLibrary(platform::executableDir() / kFaustLib, err);
             if (r.lib && !faustRootCandidates().empty()) r.root = faustRootCandidates().front();
         }
         if (!r.lib) {
-            r.error = "libfaust (faust.dll) not found; run scripts/fetch_faust.ps1 or set KS_FAUST_DIR";
+            r.error = std::string("libfaust (") + kFaustLib + ") not found; run " + kFetchScript + " or set KS_FAUST_DIR";
             return r;
         }
         bool ok = resolve(r, r.getCLibFaustVersion, "getCLibFaustVersion") &&

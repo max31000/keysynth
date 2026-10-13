@@ -1,5 +1,6 @@
 #include "core/RtCheck.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <new>
@@ -77,9 +78,10 @@ void* allocAlignedOrThrow(std::size_t n, std::align_val_t a) {
 #if defined(_MSC_VER)
     if (void* p = _aligned_malloc(n, static_cast<std::size_t>(a))) return p;
 #else
-    if (void* p = std::aligned_alloc(static_cast<std::size_t>(a), (n + static_cast<std::size_t>(a) - 1) &
-                                                                     ~(static_cast<std::size_t>(a) - 1)))
-        return p;
+    // aligned_alloc (Darwin: posix_memalign) rejects alignments below sizeof(void*); callers such as LLVM (libfaust)
+    // ask for 1..4. Any multiple of the requested power of two is a valid, stricter alignment.
+    const std::size_t al = std::max(static_cast<std::size_t>(a), sizeof(void*));
+    if (void* p = std::aligned_alloc(al, (n + al - 1) & ~(al - 1))) return p;
 #endif
     throw std::bad_alloc();
 }

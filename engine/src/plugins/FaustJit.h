@@ -1,8 +1,9 @@
 #pragma once
 // libfaust (LLVM backend) JIT wrapper (ARCHITECTURE §10, docs/PLUGINS.md).
 //
-// faust.dll is loaded at runtime and only its *C* API is used (llvm-dsp-c.h): the DLL uses the dynamic MSVC
-// runtime while keysynth links the static one, so no C++ objects (std::string, ...) may cross the boundary.
+// faust.dll (macOS: libfaust.2.dylib) is loaded at runtime and only its *C* API is used (llvm-dsp-c.h): the DLL
+// uses the dynamic MSVC runtime while keysynth links the static one, so no C++ objects (std::string, ...) may cross
+// the boundary (on macOS both use the system libc++, but the rule stays the same).
 // Factory create/read/write/delete are serialized by one mutex (libfaust's compiler is not reentrant; it is
 // also put in multi-thread mode via startMTDSPFactories). A factory released while a compile runs is deleted
 // later (never blocks the control thread). Instance create/delete run on the control thread concurrently with a
@@ -56,7 +57,7 @@ struct FaustCompileResult {
 
 namespace faust {
 
-// Loads faust.dll on first use (search: $KS_FAUST_DIR/lib, the executable's dir, compile-time KS_FAUST_DIR).
+// Loads faust.dll / libfaust.2.dylib on first use (search: $KS_FAUST_DIR/lib, the executable's dir, compile-time KS_FAUST_DIR).
 bool available();
 std::string unavailableReason();
 std::string version();

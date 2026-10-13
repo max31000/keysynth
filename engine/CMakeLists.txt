@@ -97,22 +97,29 @@ endif()
 # Plugin SDK (C ABI header).
 target_include_directories(ks_core PUBLIC ${CMAKE_SOURCE_DIR}/sdk/include)
 
-# Faust JIT (ARCHITECTURE §10): headers at build time, faust.dll loaded at runtime (no link dependency).
+# Faust JIT (ARCHITECTURE §10): headers at build time, faust.dll / libfaust.2.dylib loaded at runtime (no link
+# dependency).
+if(APPLE)
+    set(KS_FAUST_LIB "libfaust.2.dylib")
+else()
+    set(KS_FAUST_LIB "faust.dll")
+endif()
 set(KS_HAS_FAUST OFF)
 if(KS_WITH_FAUST)
-    if(EXISTS "${KS_FAUST_DIR}/include/faust/gui/CInterface.h" AND EXISTS "${KS_FAUST_DIR}/lib/faust.dll")
+    if(EXISTS "${KS_FAUST_DIR}/include/faust/gui/CInterface.h" AND EXISTS "${KS_FAUST_DIR}/lib/${KS_FAUST_LIB}")
         set(KS_HAS_FAUST ON)
         target_include_directories(ks_core SYSTEM PRIVATE "${KS_FAUST_DIR}/include")
         target_compile_definitions(ks_core PRIVATE KS_HAS_FAUST=1 KS_FAUST_DIR="${KS_FAUST_DIR}")
         message(STATUS "keysynth: Faust JIT plugins ON (${KS_FAUST_DIR})")
     else()
-        message(WARNING "keysynth: Faust not found at KS_FAUST_DIR=${KS_FAUST_DIR} (run scripts/fetch_faust.ps1); "
+        message(WARNING "keysynth: Faust not found at KS_FAUST_DIR=${KS_FAUST_DIR} (run scripts/fetch_faust.ps1 / .sh); "
                         "Faust plugins disabled")
     endif()
 endif()
-# Copy faust.dll next to an executable (fallback search location when KS_FAUST_DIR moved).
+# Copy faust.dll next to an executable (fallback search location when KS_FAUST_DIR moved). Not on macOS: the
+# 120 MB dylib is found through KS_FAUST_DIR (compile time) and bundled into keysynth.app by the packaging script.
 function(ks_copy_faust_runtime target)
-    if(KS_HAS_FAUST)
+    if(KS_HAS_FAUST AND NOT APPLE)
         add_custom_command(TARGET ${target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${KS_FAUST_DIR}/lib/faust.dll" "$<TARGET_FILE_DIR:${target}>"
             VERBATIM)
