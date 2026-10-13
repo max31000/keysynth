@@ -16,7 +16,8 @@
 
 namespace ks {
 
-enum class ModuleKind { Instrument, Effect };
+// Midi = MIDI processor (arp, chord, hold; ARCHITECTURE §17): processMidi() instead of process().
+enum class ModuleKind { Instrument, Effect, Midi };
 
 struct ModuleInfo {
     std::string typeId;      // lowercase, stable (preset format)
@@ -53,6 +54,12 @@ public:
     // Audio thread. Instrument: buffer cleared on entry. Effect: in-place stereo. numSamples <= maxBlock.
     // Events are sorted by sampleOffset and lie within [0, numSamples).
     virtual void process(AudioBlock& stereo, MidiEventSpan events, const ProcessContext& ctx) = 0;
+    // Audio thread, kind Midi only (ARCHITECTURE §17): transform the layer's events of this block (sorted, offsets in
+    // [0, numSamples)) into `out` (any order: the core sorts it; offsets must stay < numSamples). Default: pass-through.
+    virtual void processMidi(MidiEventSpan in, MidiEventBuffer& out, const ProcessContext& ctx) {
+        (void)ctx;
+        for (const MidiEvent& e : in) out.push(e);
+    }
 
     virtual int tailSamples() const { return 0; }
     virtual int latencySamples() const { return 0; }

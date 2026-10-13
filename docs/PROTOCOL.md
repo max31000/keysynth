@@ -25,8 +25,10 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `add_layer` / `remove_layer` | `{ index? }` / `{ layer }` (layer node id) | `state` |
 | `set_zone` | `{ layer, zone: partial Zone }` | none (param-like, no rebuild) |
 | `set_instrument` | `{ layer, module }` (module typeId) | `state` |
-| `add_fx` / `remove_fx` / `move_fx` | `{ layer, module, index? }` / `{ node }` / `{ node, to }` (`layer: 0` = master chain) | `state` |
-| `set_fx_bypass` | `{ node, bypass }` | none |
+| `add_fx` / `remove_fx` / `move_fx` | `{ layer, module, index? }` / `{ node }` / `{ node, to }` (`layer: 0` = master chain). A module of kind `midi` goes into the layer's MIDI chain (`layer.midi`, before the instrument; `error bad_request` for `layer: 0`); `move_fx` moves within the node's own chain | `state` |
+| `set_fx_bypass` | `{ node, bypass }` (effects and MIDI processors) | none |
+| `chord_learn` | `{ node }` (a `chord` MIDI processor) — copies the notes currently held on its input (≥ 2) into its chord memory | `chord_learn_ok { node, intervals: number[] }`; `param` events (`mem_*`, `type`) to **all** clients; `error` `no_notes` / `not_found` / `bad_request` |
+| `song_list` / `song_get` / `song_save` / `song_delete` / `song_select` / `song_section` / `song_next` / `song_prev` / `song_close` / `song_control_keys` | see *Songs* | |
 | `rescan_midi` | — | `devices` |
 | `note` | `{ on: bool, note, velocity, channel? }` (virtual keyboard) | none |
 | `cc` | `{ cc, value, channel? }` | none |
@@ -58,6 +60,7 @@ Security: engine binds 127.0.0.1 and rejects foreign `Origin`s; paths must be in
 | `log` | `{ level, message, notify? }` — `notify: true` marks a problem the player must see (see *Wire details*) |
 | `plugin_status` | `{ plugin: PluginStatus }` — every plugin state change (see below) |
 | `cloud_status`, `sync_status`, `samples_progress`, `samples_done`, `samples_error` | see *Cloud & samples* |
+| `song_state`, `songs_changed` | see *Songs* |
 
 `AudioStatus = { type, name, sampleRate, bufferSize, inputLatencyMs, outputLatencyMs, running, hasControlPanel, panelOpen }`
 (latencies are device-reported and include the buffer; `hasControlPanel`: `open_audio_panel` is available;
@@ -102,7 +105,9 @@ message, kind: "instrument"|"effect"|"", version, compileMs, cached }` (docs/PLU
   `device_type`.
 - Replies whose type is an event (`state` for `hello`/`get_patch`/`set_patch`/structural ops, `devices`) carry the
   request `id` when the request had one; unsolicited broadcasts have no `id`.
-- `ModuleInfo = { typeId, name, kind: "instrument"|"effect", category, params: ParamSpec[], uiHints? }`.
+- `ModuleInfo = { typeId, name, kind: "instrument"|"effect"|"midi", category, params: ParamSpec[], uiHints? }`.
+  `midi` = MIDI processor (`arp`, `chord`, `hold`; ARCHITECTURE §17), placed in `layer.midi`. Its ReadOnly readouts
+  (`chord`: `held_count`, `held_1`…) arrive in `telemetry.readouts` like any other.
   `ParamSpec = { id, name, group, unit, min, max, def, scale: "linear"|"log"|"int"|"enum"|"bool", skewCentre,
   flags (bitmask: 1 ReadOnly, 2 Hidden, 4 NonAutomatable), choices: string[] }`.
   `uiHints = { groupOrder?: string[], front?: string[], controls?: { <param>: "knob"|"slider"|"drawbar" },
@@ -152,6 +157,39 @@ otherwise to the others only. The drum kit of the sequencer is the `drums` modul
 kit?, tracks: { name, note, mute, steps: number[] /* 0 = off, 1..127 velocity */ }[], accent: number[] /* 0|1 */ }`.
 `set_pattern` validates and clamps (≤ 16 tracks, steps = bars × num × steps_per_beat ≤ 256; shorter arrays are padded).
 
+## Songs
+
+Setlists (ARCHITECTURE §18, file format PRESETS.md *Songs*). Song paths are logical: `presets/songs/<slug>.json`
+(factory, read-only) or `userdata/songs/<slug>.json` (active profile, synced).
+
+| type | payload | reply |
+|---|---|---|
+| `song_list` | — | `song_list_ok { songs: SongInfo[] }` (factory first, then user; sorted by title) |
+| `song_get` | `{ path }` | `song_get_ok { path, song: Song }` |
+| `song_save` | `{ song: Song, overwrite? }` → `userdata/songs/<id>.json` (`id` = `song.id` if it is a valid slug, else the slugified title) | `song_save_ok { path, warnings }`; `songs_changed` to others; `song_state` to all when it is the active song. `error` `exists` (file exists, `overwrite` not true), `bad_request` (validation, message names the field) |
+| `song_delete` | `{ path }` (user songs only) | `song_delete_ok { path }`; `songs_changed` to others; deleting the active song closes it (`song_state` to all). `error` `read_only` (factory), `not_found` |
+| `song_select` | `{ path, section? }` (default 0) | `song_select_ok { warnings }`, then `song_state` and `state` to all |
+| `song_section` | `{ index }` | `song_section_ok { warnings }`, then `song_state` + `state` to all; `error` `no_song`, `bad_request` (index out of range) |
+| `song_next` / `song_prev` | — | `song_section_ok { warnings }` + broadcasts as above; at the first/last section nothing changes (no wrap, no broadcast); `error` `no_song` |
+| `song_close` | — | `song_close_ok`, `song_state` to all |
+| `song_control_keys` | `{ enabled?, prev?, next? }` (global setting, `settings.json`; `prev`/`next` 0..127 or `null`) | `song_control_keys_ok`, `song_state` to all |
+
+| event | payload |
+|---|---|
+| `song_state` | `{ path: string\|null, song: Song\|null, section: number /* -1 without song */, controlKeys: { enabled, prev, next, source: "song"\|"global" } /* effective */, globalControlKeys: { enabled, prev, next } }` — right after the `hello` reply (after `sync_status`), and to all on every change (select, section, close, save of the active song, control keys, profile switch) |
+| `songs_changed` | `{}` — user song files changed (save, delete); clients re-request `song_list` (also after a `sync_status` that finished a sync) |
+
+`SongInfo = { path, id, title, artist, sections: number, factory: bool }`. `Song` = the file object (PRESETS.md
+*Songs*) with `id` set; the engine normalizes it (unknown keys kept).
+- Selecting a section applies preset → song `time_sig` → section `pattern` → tempo → `drums` (ARCHITECTURE §18).
+  A step that fails (missing preset or pattern) is reported in `warnings` and as `log { level: "error", notify: true }`;
+  the other steps still apply. The preset load itself broadcasts nothing extra: the `state` after the switch covers it.
+- Control keys: while a song is selected and the effective `controlKeys.enabled` is true, note-ons of `prev` /
+  `next` (any channel) are not played; they switch sections (≤ 33 ms later) and produce the same broadcasts as
+  `song_prev` / `song_next`. Defaults: global `{ enabled: false, prev: 21, next: 22 }` (A0, A♯0 — the two lowest
+  keys of an 88-key board).
+- A profile switch (link/unlink) closes a song from `userdata/songs/` (`song_state` to all).
+
 
 ## Cloud & samples
 
@@ -186,6 +224,9 @@ builds ignore it.
 |---|---|
 | `hello`, `get_catalog`, `set_param`, `get_patch`, `list_presets`, `add_layer`, `remove_layer`, `set_zone`, `set_instrument`, `add_fx`, `remove_fx`, `move_fx`, `set_fx_bypass`, `note`, `cc`, `panic`, `list_patterns`, `set_pattern`, `rescan_midi`, `list_devices`, `set_audio_device`, `open_audio_panel`, `restart_audio`, `list_plugins` | none (module typeIds incl. already registered `plugin:<name>` are fine) |
 | `save_preset`, `save_pattern` | none (they take a name; the engine slugifies) |
+| `chord_learn`, `song_list`, `song_section`, `song_next`, `song_prev`, `song_close`, `song_control_keys` | none |
+| `song_save` | none (the handler validates every section `preset` / `pattern` as a logical path or slug for all sessions) |
+| `song_get`, `song_select`, `song_delete` | `path` is a logical path under `presets/songs/` or `userdata/songs/` (`song_delete`: user songs only, else `read_only`) |
 | `load_preset` | `path` is a logical path under `presets/factory/` or `userdata/presets/` |
 | `get_pattern`, `transport` | `path` / `pattern` is a logical path under `presets/patterns/` or `userdata/patterns/` (or `""`) |
 | `set_patch` | every path inside the patch is logical: sampler `state.sfz` under `assets/samples/`, `rhythm.pattern` as above |
@@ -199,12 +240,14 @@ no `\`, `:`, leading `/` or control chars, starting with one of the prefixes abo
 **`remote` sessions** (relayed controllers) = the `web` table above, minus `cloud_link`, `cloud_unlink`,
 `set_audio_device`, `open_audio_panel`, `samples_delete` (and `reload_plugin`, already forbidden) → `error`
 `forbidden`; default-deny for anything new. Their `hello` reply carries `trust: "remote"`; the UI hides denied features.
+Songs and `chord_learn` are allowed for `remote` exactly as for `web` (the iPad runs the setlist).
 
 ### Profiles
-Unlinked: the local profile (`userdata/presets`, `userdata/patterns`). Linked to account `<accountId>`:
-`userdata/accounts/<accountId>/{presets,patterns}`, addressed on the wire still as `userdata/presets/…` /
-`userdata/patterns/…`. Switching profile (link, unlink, relink) broadcasts `state` (`presetPath` cleared if it pointed
-into the old profile); clients re-request `list_presets` / `list_patterns`.
+Unlinked: the local profile (`userdata/presets`, `userdata/patterns`, `userdata/songs`). Linked to account
+`<accountId>`: `userdata/accounts/<accountId>/{presets,patterns,songs}`, addressed on the wire still as
+`userdata/presets/…` / `userdata/patterns/…` / `userdata/songs/…`. Switching profile (link, unlink, relink) broadcasts
+`state` (`presetPath` cleared if it pointed into the old profile) and `song_state` (a user song is closed); clients
+re-request `list_presets` / `list_patterns` / `song_list`.
 
 ### Hello additions
 The `state` reply to `hello` (and only that reply) carries four extra fields:
@@ -216,7 +259,8 @@ The `state` reply to `hello` (and only that reply) carries four extra fields:
   "cloud": { "linked": true, "accountId": "17", "accountName": "Max", "deviceId": "3f0c7e9a-5b1d-4c2e-9a77-0e5d2c1b8f40",
              "expiresAt": "2027-04-10T12:00:00Z", "online": true, "error": null } }
 ```
-`version` = engine semver (no `v`). Right after that `state` the engine sends a `sync_status` (no `id`).
+`version` = engine semver (no `v`). Right after that `state` the engine sends a `sync_status` and a `song_state`
+(no `id`).
 
 `engine` = identity of the server: `EngineIdentity = { product: "keysynth", kind: "engine" | "mock", version: string,
 pid: number }`. The real engine sends `kind: "engine"`, the dev mock (`ui/mock/mock-engine.ts`, default port 7441)
@@ -259,8 +303,8 @@ e.g. "offline", "token_expired" */ }`. Unlinked: `accountId`, `accountName`, `ex
 3. Already linked to a *different* account and `replace` is not `true` → `error` `account_mismatch` (message names the
    current account; nothing changes). The UI asks the user, then resends with `replace: true`.
 4. Token (DPAPI) + account go to `cloud.json`, the profile switches. On the account's first link on this PC (no
-   `userdata/accounts/<id>/` yet) the local profile's presets and patterns are copied into it and the reply carries
-   `"merged": { "presets": 12, "patterns": 3 }`. Sync starts. Re-linking the same account (re-minted token) is silent.
+   `userdata/accounts/<id>/` yet) the local profile's presets, patterns and songs are copied into it and the reply
+   carries `"merged": { "presets": 12, "patterns": 3, "songs": 2 }`. Sync starts. Re-linking the same account (re-minted token) is silent.
 
 `cloud_unlink`: `DELETE /api/devices/me` (best effort; offline ignored), token deleted, local profile active.
 When any API call answers 401 (`token_expired`, `token_invalid`, `reauth_required`) the engine drops the token itself
@@ -275,9 +319,10 @@ and broadcasts `cloud_status { linked: false, error: "<code>" }`; a logged-in pa
   "error": null }
 ```
 `state`: `disabled` (not linked) | `idle` | `syncing` | `offline` | `error` (`error` holds the code). `lastSyncAt`:
-last successful full sync or `null`. `pending`: local preset changes not yet pushed. `conflicts`: conflict files
-present in the profile (ordinary local presets: listed by `list_presets`, never synced; the user deletes or renames
-them). Triggers: link, every 60 s, any local preset change, `sync_now`. Only presets sync in v1.
+last successful full sync or `null`. `pending`: local preset + song changes not yet pushed. `conflicts`: conflict
+files present in the profile (`file` under `userdata/presets/` or `userdata/songs/`; ordinary local presets / songs:
+listed by `list_presets` / `song_list`, never synced; the user deletes or renames them). Triggers: link, every 60 s,
+any local preset or song change, `sync_now`. Presets and songs sync (patterns do not).
 
 #### `samples_list_ok`
 ```json

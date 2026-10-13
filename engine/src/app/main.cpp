@@ -130,6 +130,10 @@ public:
         if (plugins_) plugins_->poll(); // finished compiles -> registry; file watch every 500 ms; faults
         s_.pollModuleErrors();          // failed sample loads etc. -> `log` error events
         if (cloud_) srv_.dispatchAsync(cloud_->poll()); // cloud replies, sync/sample events
+        if (s_.pollSongKeys()) { // song control keys -> section switch (ARCHITECTURE §18)
+            srv_.broadcast(s_.songStateJson());
+            srv_.broadcast(s_.stateJson());
+        }
         const auto midi = s_.pollMidi();
         const auto tele = s_.pollTelemetry();
         srv_.tickRemote(); // coalesced params / midi batch of relayed controllers

@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "id": "light-my-fire",
+  "title": "Light My Fire",
+  "artist": "The Doors",
+  "tempo": 128,
+  "time_sig": [
+    4,
+    4
+  ],
+  "key": "A minor",
+  "sections": [
+    {
+      "name": "Intro",
+      "preset": "presets/factory/organ/doors-light-my-fire-intro.json",
+      "pattern": "presets/patterns/basic-rock.json",
+      "drums": true
+    },
+    {
+      "name": "Verse",
+      "preset": "presets/factory/organ/vox-light-my-fire.json",
+      "pattern": "presets/patterns/basic-rock.json",
+      "drums": true
+    },
+    {
+      "name": "Solo",
+      "preset": "presets/factory/splits-layers/doors-light-my-fire-solo.json",
+      "drums": true
+    },
+    {
+      "name": "Intro reprise",
+      "preset": "presets/factory/organ/doors-light-my-fire-intro.json",
+      "drums": true
+    }
+  ]
+}

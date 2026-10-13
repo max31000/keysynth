@@ -10,6 +10,7 @@ import '@fontsource/jetbrains-mono/500.css';
 import './styles.css';
 import './cloud.css';
 import './remote.css';
+import './songs.css';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(

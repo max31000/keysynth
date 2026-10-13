@@ -24,6 +24,7 @@ struct AppPaths {
     std::filesystem::path root;           // app dir (read-only content): repo root (dev) / install dir (installed)
     std::filesystem::path factoryPresets; // root/presets/factory
     std::filesystem::path factoryPatterns; // root/presets/patterns
+    std::filesystem::path factorySongs;   // root/presets/songs (ARCHITECTURE §18)
     std::filesystem::path uiDist;         // root/ui/dist
 
     std::filesystem::path dataRoot;       // D: <repo>/userdata (dev), %LOCALAPPDATA%/keysynth (installed)
@@ -38,6 +39,7 @@ struct AppPaths {
     std::filesystem::path userdata;       // active profile: localProfile or localProfile/accounts/<id>
     std::filesystem::path userPresets;    // userdata/presets
     std::filesystem::path userPatterns;   // userdata/patterns
+    std::filesystem::path userSongs;      // userdata/songs
     std::filesystem::path recordingsDir;  // localProfile/recordings
     std::string accountId;                // active profile's account ("" = local)
 

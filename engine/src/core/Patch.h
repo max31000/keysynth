@@ -36,6 +36,7 @@ struct Layer {
     NodeId node = 0;
     std::string name;
     Zone zone;
+    std::vector<ModuleSlot> midi; // MIDI processors before the instrument (ARCHITECTURE §17)
     ModuleSlot instrument;
     std::vector<ModuleSlot> fx;
 };

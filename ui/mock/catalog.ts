@@ -34,6 +34,8 @@ function p(id: string, name: string, group: string, o: Opt = {}): ParamSpec {
 const bool = (id: string, name: string, group: string, def = 0) => p(id, name, group, { scale: 'bool', def });
 const ms = (id: string, name: string, group: string, def: number, max = 10000, skew = 500) =>
   p(id, name, group, { min: 1, max, def, scale: 'log', unit: 'ms', skew });
+/** The shared NoteDivision enum of `sync` params (ARCHITECTURE §7). */
+const NOTE_DIVISIONS = ['Off', '4/1', '2/1', '1/1', '1/2', '1/2.', '1/2T', '1/4', '1/4.', '1/4T', '1/8', '1/8.', '1/8T', '1/16', '1/16.', '1/16T', '1/32', '1/32.', '1/32T'];
 const WAVES = ['Saw', 'Pulse', 'Triangle', 'Sine', 'Supersaw', 'Noise'];
 
 const va: ModuleInfo = {
@@ -186,7 +188,7 @@ const effects: ModuleInfo[] = [
   ]),
   fx('delay', 'Delay', 'Time', [
     p('mode', 'Mode', 'Main', { choices: ['Stereo', 'Ping-Pong', 'Tape'] }),
-    p('sync', 'Sync', 'Main', { choices: ['Off', '4/1', '2/1', '1/1', '1/2', '1/2.', '1/2T', '1/4', '1/4.', '1/4T', '1/8', '1/8.', '1/8T', '1/16', '1/16.', '1/16T', '1/32', '1/32.', '1/32T'] }),
+    p('sync', 'Sync', 'Main', { choices: NOTE_DIVISIONS }),
     ms('time', 'Time', 'Main', 375, 2000, 300),
     p('feedback', 'Feedback', 'Main', { def: 0.35, max: 0.98 }),
     p('tone', 'Tone', 'Main', { min: 500, max: 16000, def: 6000, scale: 'log', unit: 'Hz' }),
@@ -264,7 +266,48 @@ const drums: ModuleInfo = {
   ],
 };
 
-export const CATALOG: ModuleInfo[] = [va, organ, combo, epiano, sampler, drums, ...effects];
+// MIDI processors (ARCHITECTURE §17): kind `midi`, placed in `layer.midi`.
+const midi = (typeId: string, name: string, params: ParamSpec[], uiHints?: ModuleInfo['uiHints']): ModuleInfo => ({
+  typeId,
+  name,
+  kind: 'midi',
+  category: 'MIDI',
+  params,
+  ...(uiHints ? { uiHints } : {}),
+});
+const HIDDEN = 2;
+const RO_HIDDEN = 1 | 2;
+const midiModules: ModuleInfo[] = [
+  midi('arp', 'Arpeggiator', [
+    p('mode', 'Mode', 'Pattern', { choices: ['Up', 'Down', 'Up-Down', 'As played', 'Random', 'Chord'] }),
+    p('octaves', 'Octaves', 'Pattern', { min: 1, max: 4, def: 1, scale: 'int' }),
+    p('sync', 'Sync', 'Timing', { choices: NOTE_DIVISIONS, def: 13 }),
+    p('rate', 'Rate', 'Timing', { min: 0.5, max: 50, def: 8, scale: 'log', unit: 'Hz' }),
+    p('gate', 'Gate', 'Timing', { min: 0.05, max: 1, def: 0.5 }),
+    p('swing', 'Swing', 'Timing', { def: 0 }),
+    bool('latch', 'Latch', 'Pattern'),
+    bool('retrigger', 'Retrigger', 'Pattern', 1),
+    p('vel_mode', 'Velocity', 'Velocity', { choices: ['As played', 'Fixed', 'Accent'] }),
+    p('velocity', 'Level', 'Velocity', { min: 1, max: 127, def: 100, scale: 'int' }),
+    p('accent_every', 'Accent every', 'Velocity', { min: 2, max: 16, def: 4, scale: 'int' }),
+  ]),
+  midi('chord', 'Chord', [
+    p('type', 'Type', 'Chord', { choices: ['Major', 'Minor', '7', 'Maj7', 'Min7', 'Sus2', 'Sus4', 'Power', 'Dim', 'Aug', 'Add9', 'Min9', 'Memory'] }),
+    p('voicing', 'Voicing', 'Chord', { choices: ['Close', 'Open', 'Wide'] }),
+    p('inversion', 'Inversion', 'Chord', { min: 0, max: 3, scale: 'int' }),
+    p('mem_count', 'Memory size', 'Memory', { min: 0, max: 8, scale: 'int', flags: HIDDEN }),
+    ...Array.from({ length: 8 }, (_, i) => p(`mem_${i + 1}`, `Memory ${i + 1}`, 'Memory', { min: 0, max: 48, scale: 'int', flags: HIDDEN })),
+    p('held_count', 'Held', 'Input', { min: 0, max: 16, scale: 'int', flags: RO_HIDDEN }),
+    ...Array.from({ length: 8 }, (_, i) => p(`held_${i + 1}`, `Held ${i + 1}`, 'Input', { min: -1, max: 127, def: -1, scale: 'int', flags: RO_HIDDEN })),
+  ]),
+  midi('hold', 'Hold', [
+    bool('hold', 'Hold', 'Main', 1),
+    p('mode', 'Mode', 'Main', { choices: ['Sustain', 'Latch'] }),
+    bool('pedal', 'Pedal', 'Main'),
+  ]),
+];
+
+export const CATALOG: ModuleInfo[] = [va, organ, combo, epiano, sampler, drums, ...effects, ...midiModules];
 export const catalogMap: Record<string, ModuleInfo> = Object.fromEntries(CATALOG.map((m) => [m.typeId, m]));
 
 export function defaultParams(typeId: string): Record<string, number> {

@@ -67,6 +67,21 @@ void Engine::gatherEvents(MidiEventSpan extra) noexcept {
         if (events_.size() >= cap) break;
         events_.push_back(x);
     }
+    // Song control keys: their note-ons switch sections instead of sounding (note-offs pass, harmless).
+    const int kPrev = controlKeys_[0].load(std::memory_order_relaxed);
+    const int kNext = controlKeys_[1].load(std::memory_order_relaxed);
+    if (kPrev >= 0 || kNext >= 0) {
+        size_t w = 0;
+        for (size_t i = 0; i < events_.size(); ++i) {
+            const MidiEvent& x = events_[i];
+            if (x.type == MidiEventType::NoteOn && (x.data1 == kPrev || x.data1 == kNext)) {
+                controlPresses_[x.data1 == kPrev ? 0u : 1u].fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
+            events_[w++] = x;
+        }
+        events_.resize(w); // shrink only: no allocation
+    }
     for (const MidiEvent& x : events_) {
         if (x.channel >= 1 && x.channel <= 16) channels_[x.channel].apply(x);
         channels_[0].apply(x);

@@ -54,6 +54,12 @@ Field rules:
   (ARCHITECTURE §11). `sampler` also finds `assets/...` paths in `$KS_ASSETS_DIR` and in the main checkout's `assets/`
   (docs/TESTING.md). Changing `state` rebuilds (reloads) the module; params never do.
 - Splits: multiple layers with disjoint key ranges. Layers: overlapping ranges.
+- `layers[].midi` (optional): ordered MIDI processors in front of the instrument (ARCHITECTURE §17), same slot shape
+  as `fx` (`node`, `type`, `bypass`, `params`, `state`), ≤ 8. Types `arp`, `chord`, `hold`. Absent = none; the
+  engine writes the key only when the chain is not empty (no format bump).
+  ```json
+  "midi": [ { "type": "arp", "params": { "mode": 0, "octaves": 2, "sync": 13, "gate": 0.5, "latch": true } } ]
+  ```
 
 Files: `presets/factory/<category-slug>/<preset-slug>.json` (read-only), `userdata/presets/<slug>.json`.
 Every factory preset must pass the render test suite (`docs/TESTING.md`).
@@ -94,3 +100,49 @@ Drum-sequencer patterns (ARCHITECTURE §8). Same leniency rules as patches.
 - `swing` 0..1: every second step is delayed by `swing × ½ step` (0.33 ≈ triplet shuffle, 1 = dotted).
 - Optional `tempo` (BPM), `kit` (`"808"`, `"909"`, `"linn"`, `"industrial"` or index 0..3) are applied when the pattern
   is loaded; the engine writes back steps as arrays.
+
+## Songs (`presets/songs/*.json`, `userdata/songs/*.json`)
+
+Setlist entries (ARCHITECTURE §18). Factory songs are read-only; user songs live in the active profile and sync to
+the account (`/api/songs`, cloud-api spec). Same leniency as patches: unknown keys are kept verbatim (written back
+unchanged, so newer fields survive older engines), wrong-typed known fields are ignored with a warning.
+
+```json
+{
+  "format": 1,
+  "id": "riders-on-the-storm",
+  "title": "Riders on the Storm",
+  "artist": "The Doors",
+  "tempo": 104,
+  "time_sig": [4, 4],
+  "key": "E minor",
+  "notes": "Rhodes intro, drums from bar 5.",
+  "control_keys": { "enabled": true, "prev": 21, "next": 22 },
+  "sections": [
+    { "name": "Intro", "preset": "presets/factory/e-piano/riders-on-the-storm-rhodes.json", "drums": false },
+    { "name": "Verse", "preset": "presets/factory/e-piano/riders-on-the-storm-rhodes.json",
+      "pattern": "presets/patterns/jazz-swing.json", "drums": true, "notes": "Em7 - A" },
+    { "name": "Solo", "preset": "warm-rhodes", "tempo": 106 }
+  ]
+}
+```
+
+| field | rules |
+|---|---|
+| `format` | 1. Bumped only for breaking changes. |
+| `id` | slug of the file name (`^[a-z0-9]+(-[a-z0-9]+)*$`, ≤ 64). The file name wins; the engine writes it back. |
+| `title` (required), `artist`, `key`, `notes` | strings; `title` 1..200 chars, `notes` ≤ 2000. `key` is free text ("E minor"). |
+| `tempo` | BPM 20..400 (optional; default: keep the current tempo). |
+| `time_sig` | `[num, den]` as in patterns (optional). |
+| `control_keys` | optional per-song override of the global control keys: `{ enabled, prev, next }`, `prev`/`next` MIDI note 0..127 or `null`. Absent = the global setting. |
+| `sections` | 1..64 entries, played in order. |
+| `sections[].name` | 1..60 chars (required). |
+| `sections[].preset` | logical path under `presets/factory/` or `userdata/presets/`, or a bare user preset slug (= `userdata/presets/<slug>.json`, follows the account's synced presets). Absent = keep the current sound. |
+| `sections[].pattern` | logical path under `presets/patterns/` or `userdata/patterns/`; `""` = empty pattern; absent = keep. |
+| `sections[].drums` | `true` = drums on + transport playing; `false` = transport stopped; absent = unchanged. |
+| `sections[].tempo` | BPM override for this section (else the song `tempo`). |
+| `sections[].notes` | free text ≤ 2000 chars (shown on the remote view). |
+
+Reserved (documented for later, not implemented; kept verbatim): song `notation` `{ "musicxml": "<logical path>" }`,
+song `backing` `{ "audio": "<logical path>", "offset_ms": 0 }`, section `bars` (length for auto-advance), section
+`start_bar` (score position), section `notation_part`. Engines ignore them today.

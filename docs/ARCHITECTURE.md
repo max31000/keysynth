@@ -65,6 +65,8 @@ engine/
                   BBD, IIR oversampler, noise, saturators, tables). No allocation in process.
   src/instruments/<engine>/   One dir per instrument engine.
   src/effects/<effect>/       One dir per effect.
+  src/midi/<tool>/            One dir per MIDI processor (arp, chord, hold; §17).
+  src/song/       Song model + JSON, SongStore (factory + user setlists, §18).
   src/transport/  Transport clock, Metronome, DrumSequencer, (later) Looper.
   src/preset/     Patch data model <-> JSON, Migrations, PresetStore.
   src/control/    ControlServer (WS + static HTTP via ix::HttpServer), protocol handlers, snapshots.
@@ -146,7 +148,7 @@ struct ParamSpec {
 ### 5.2 Modules
 
 ```cpp
-enum class ModuleKind { Instrument, Effect };
+enum class ModuleKind { Instrument, Effect, Midi };
 class Module {
  public:
   virtual ~Module() = default;
@@ -156,6 +158,8 @@ class Module {
   virtual void reset() = 0;                          // kill voices/tails
   // Audio thread. Instrument: buffer cleared on entry. Effect: in-place stereo.
   virtual void process(AudioBlock& stereo, MidiEventSpan events, const ProcessContext& ctx) = 0;
+  // Audio thread, kind Midi only (§17): events in -> events out, once per block before the layer's instrument.
+  virtual void processMidi(MidiEventSpan in, MidiEventBuffer& out, const ProcessContext& ctx);
   virtual int tailSamples() const { return 0; }
   virtual int latencySamples() const { return 0; }
   virtual nlohmann::json saveState() const { return {}; } // non-param state (sample path, syx bank…)
@@ -208,8 +212,9 @@ class Module {
 
 ```
 Patch (data)                              RackGraph (live, audio thread)
- ├─ layers[] {nodeId, zone, instrument{nodeId,type,params,state}, fx[]{nodeId,type,params,state,bypass}}
- ├─ master {volume_db, fx[]}               ├─ LayerNode[] (zone filter, instrument, fx chain, gain/pan, meters)
+ ├─ layers[] {nodeId, zone, midi[]{nodeId,type,params,state,bypass}, instrument{nodeId,type,params,state},
+ │            fx[]{nodeId,type,params,state,bypass}}
+ ├─ master {volume_db, fx[]}               ├─ LayerNode[] (zone filter, MIDI chain, instrument, fx, gain/pan, meters)
  ├─ rhythm {drums kit params, pattern}     ├─ RhythmNode (drums instance for the sequencer + metronome voice)
  └─ meta                                   └─ master fx → (+ metronome) → safety limiter
 ```
@@ -220,8 +225,9 @@ Patch (data)                              RackGraph (live, audio thread)
   A param write updates PatchModel and then the atomic in the latest *published* graph (lookup table
   nodeId → ParamSet*, rebuilt on publish). GraphBuilder reads params from PatchModel at publish time, so writes
   made during a build are never lost.
-- Signal flow: MIDI (all inboxes merged per block) → ChannelState update → Transport/DrumSequencer → each LayerNode
-  zone filter (key/vel range on physical key, then transpose, channel) → instrument → layer FX → sum → master FX →
+- Signal flow: MIDI (all inboxes merged per block) → song control keys removed (§18) → ChannelState update →
+  Transport/DrumSequencer → each LayerNode zone filter (key/vel range on physical key, then transpose, channel) →
+  layer MIDI chain (§17) → instrument → layer FX → sum → master FX →
   master `volume_db` → trailing master `limiter` slot(s), if any → + metronome → safety limiter → device. The master
   volume goes *before* the limiters, so a preset's own limiter (and always the safety limiter) stays last; the
   range is −96..+12 dB, out-of-range values are clamped with a load warning (protocol `log`).
@@ -257,6 +263,9 @@ Patch (data)                              RackGraph (live, audio thread)
   rendered once, so a shared instrument is not doubled); unshared transitions tail out for
   `clamp(maxTail, 50 ms, 1 s)` or until 2048 silent samples, then fade 10 ms. Preset loads build with no reuse
   (node ids of unrelated patches must not share modules); edits of the current patch reuse.
+  MIDI processors (§17) are shared like effects but produce no audio: a shared one is processed by the new graph
+  only (the old graph passes its events through unchanged); they use no render-cache slot and do not affect whether
+  downstream caches are valid. An unshared old one receives the AllNotesOff and stops.
 - **Retire.** Old graph pointer → retire SPSC (capacity 8). If push fails, the audio thread keeps it and retries next
   block; it never frees. Control thread drains on a 50 ms timer and deletes.
 - Device/sample-rate/buffer change: stop device → rebuild graph with new prepare args (no reuse) → restart
@@ -323,6 +332,7 @@ Patch (data)                              RackGraph (live, audio thread)
 | `combo` | Transistor combo organ: divide-down (12 masters + dividers), Vox Continental / Farfisa voicings, footages/tabs, formant filters, vibrato, bass section | Doors: Light My Fire; early Floyd |
 | `epiano` | Modal EP, no samples (8 modes/voice, `dsp/ModalBank` + `dsp/BeamModes`): alpha-pulse hammer → coupled tine/tonebar normal modes + clamped-free overtones (strike position) → magnetic pickup d/dt 1/(1+u²) (alignment/distance → bark, tine buzz) or Wurlitzer electrostatic pickup + preamp; felt dampers, continuous CC64 half-damper, re-strike, ghost-faded stealing, 32 voices. Models: Rhodes Mk I / Mk II / Suitcase (stereo vibrato) / Wurlitzer 200A / Piano Bass (timbre of E1–B3) | Riders on the Storm, Money/Breathe, Supertramp |
 | `sampler` | SFZ via sfizz 1.2.3 (isolated static target, `KS_WITH_SFIZZ`). State `{"sfz": path}`; per-instance loader thread (loads serialized across instances; also does non-RT voice reallocation via a lock-free pause handshake), silence + `loading`=1 until ready; sample pool per instance (no cross-instance cache yet); params volume/pan/transpose/tune/polyphony (non-automatable: cuts notes)/velocity curve; the `.sfz` path must resolve inside the §11 roots, or below `$KS_ASSETS_DIR` / the main checkout's `assets/` (`instruments/sampler/SamplePaths.h`); paths *inside* the SFZ (`sample=`, `#include`, `default_path`) are followed by sfizz unchecked | Salamander grand, Rhodes/Wurli/CP80, Mellotron, SSO/VPO choir, strings, brass, harpsichord, organ, clavinet, drum kits |
+| `arp`, `chord`, `hold` | MIDI processors (kind `midi`, §17): arpeggiator, one-finger chords / chord memory, hold/latch | live performance helpers |
 | `drums` | Synth kit, 13 voices (kick, snare, clap, closed/open hat w/ choke, crash, ride, 3 toms, rim, cowbell, tambourine), each with model 808/909/Linn/Industrial (`kit` default or per-voice `<v>_model`) + level/tune/decay/tone/pan; GM key map, other octaves fold onto 36–47; keys-playable; used by the RhythmNode | 80s beats, Rammstein stomp |
 
 Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string-machine 3-phase), `phaser`
@@ -500,7 +510,8 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   The sampler's path resolution (`instruments/sampler/SamplePaths`) also searches the cache root; a missing
   `assets/samples/<entry>` asks the registered fetch hook (SampleService) and waits with `loading` = 1; job end →
   `Session::notifyResourcesChanged()` → `Module::resourcesChanged()`.
-- **SyncService** (`cloud/`): presets only, engine is the only writer; algorithm of the REST contract §3.4 on its
+- **SyncService** (`cloud/`): presets and songs (§18: same algorithm per collection, `/api/presets` then
+  `/api/songs` in one pass, one `sync.json` with a section per collection), engine is the only writer; algorithm of the REST contract §3.4 on its
   own worker (link, 60 s, local change, `sync_now`); local file steps under `Session::profileMutex()` (also held
   by preset saves on the message thread), never across network calls.
 - **CloudServices** (`cloud/`) owns the three, implements the cloud protocol messages (async replies through
@@ -590,3 +601,91 @@ installer*. The engine stays one process; desktop mode only adds a tray icon and
   is set in `PrepareToInstall` / `usUninstall`; silent setup stops it at start and restarts it with `--tray`
   afterwards. Keeps `%LOCALAPPDATA%\keysynth` unless the user agrees (silent: `/DELETEDATA`). English +
   Russian (chosen from the Windows UI language).
+
+## 17. MIDI processors (per-layer MIDI tools)
+
+Live-performance helpers that transform a layer's MIDI before its instrument: arpeggiator, one-finger chords /
+chord memory, hold/latch. They are ordinary modules (`ModuleKind::Midi`, catalog kind `"midi"`, category `MIDI`,
+dirs `engine/src/midi/<tool>/`, one line each in `BuiltinModules.cpp`), so node ids, ParamSet, `set_param`, presets,
+relay and the generic UI work unchanged.
+
+- **Patch**: `layer.midi[]` = ordered `ModuleSlot`s (with `bypass`), ≤ 8 per layer (`PatchModel::kMaxMidiPerChain`);
+  JSON key `"midi"` (PRESETS.md), optional, written only when non-empty — no format bump (older engines ignore it).
+  Protocol: `add_fx` with a `midi`-kind module adds to the layer's MIDI chain (refused on the master chain);
+  `remove_fx` / `move_fx` (within the MIDI chain) / `set_fx_bypass` work by node id (PROTOCOL.md).
+- **Processing** (audio thread, `RackGraph::render`): zone filter → for each non-bypassed MIDI slot in order
+  `processMidi(in, out, ctx)` (ping-pong between two preallocated `kMaxEventsPerBlock` buffers of the LayerNode;
+  `MidiEventBuffer::push` drops events when full) → the core sorts the output stably by `sampleOffset` (insertion
+  sort, no allocation; a processor may append in any order) → instrument and layer FX get the final events. `ctx`
+  carries the layer's ChannelState, `sampleTime` (absolute block start) and the transport (tempo, ppq at block
+  start, playing). Output offsets stay inside `[0, numSamples)`. A processor releases every note it started when it
+  receives `AllNotesOff`/`AllSoundOff` (transitions, panic) and passes that event on; a note-off for a note it never
+  took (played before it was inserted) is passed on unchanged. All state lives in fixed arrays (§4; ≤ 16 held
+  input notes per tool).
+- **Releasing notes on edits**: bypassing a processor (`set_fx_bypass`, no rebuild) runs it once with an
+  AllNotesOff input; its note-offs go to the instrument, the AllNotesOff itself is dropped (other notes keep
+  sounding). A rebuild that changes a layer's MIDI chain (processor added, removed or recreated: module pointers
+  differ from the outgoing graph's, `GraphSwapper::begin` → `LayerNode::flushNotes`) sends one AllNotesOff to that
+  layer in the new graph, since a removed processor can no longer release what it started.
+- **`arp`** — `mode` Up / Down / Up-Down / As played / Random / Chord, `octaves` 1–4, `sync` (the shared
+  NoteDivision enum, §7; Off → free `rate` in Hz), `gate` (0.05–1 of a step; ≥ 0.999 = legato: the off lands on
+  the next step's sample, before its note-on), `swing` (every 2nd step later by `swing × ½ step`, as in the drum
+  sequencer), `latch`, `vel_mode` As played / Fixed (`velocity`) / Accent (every `accent_every`-th step from the
+  pattern start at 127, the others at `velocity`), `retrigger` (a new chord restarts the pattern and the own clock).
+  - Clock: **transport playing and `sync` ≠ Off** → steps on the transport grid: step k at ppq `k × d` (+ swing on
+    odd k), fired at the first sample ≥ its exact position (ε = 1e-4 samples, the DrumSequencer rule), computed from
+    the block-start ppq and tempo; after a key press the first step is the next grid point at or after it.
+    **Otherwise own clock**: step 0 at the key press that starts the arp, then every `L` samples (`L` = division at
+    the transport tempo, or `sampleRate / rate` when sync is Off) in absolute samples (`ctx.sampleTime`), so timing
+    is identical for any block size; a change of `L` (tempo, rate, sync) re-anchors at the last fired step. A switch
+    between the clocks (transport start/stop) re-anchors at the next step.
+  - Input notes at the same sample as a step are part of that step. Held notes (≤ 16) are ordered by pitch
+    (Up/Down/Up-Down, repeated per octave) or by press order (As played); Up-Down does not repeat the turning notes;
+    Random never repeats the previous index when there is a choice (xorshift seeded at prepare → deterministic);
+    Chord plays all held notes on every step (octave = step mod `octaves`).
+  - Latch: releasing keys keeps the arp running; the next key press after all keys were up replaces the chord;
+    turning latch off with no key down stops it. When the arp stops, the sounding step note ends at its gate time.
+  - CC, pitch bend and pressure pass through; the sustain pedal reaches the instrument (arp notes ring like played
+    ones).
+- **`chord`** — every input note plays a chord: `type` Major … Min9 (fixed interval tables) or Memory (learned
+  intervals in hidden params `mem_count`, `mem_1`…`mem_8`, semitones above the lowest learned note), `voicing`
+  Close / Open (every 2nd tone +12) / Wide (Open + root −12), `inversion` 0–3 (the lowest k tones +12). Output tones
+  are reference-counted (two keys sharing a tone: one note-on; the off when the last of them is released).
+  ReadOnly hidden readouts `held_count`, `held_1`…`held_8` (current input notes, lowest first) let the control
+  thread learn: protocol `chord_learn { node }` writes the held notes (≥ 2) into `mem_*` and `type` = Memory through
+  `Session::setParam` (patch, dirty flag, `param` events). Only `Session::learnChord` knows these param ids.
+- **`hold`** — `hold` on: note-offs are deferred (sustain-like for any instrument; in front of an `arp` it acts as
+  its latch); off releases everything held. `mode` Sustain (a re-struck held key sends off + on) or Latch (the first
+  key after all keys were up releases the previously held notes: chord replace). `pedal`: CC64 drives `hold` and is
+  consumed (not passed on).
+- Tests `[midi]` (engine/tests/test_midi.cpp): arp step times identical for block sizes 32/64/333 (own clock and
+  transport grid), modes, octaves, gate/legato, swing, latch, retrigger, velocity modes; chord tables, voicings,
+  memory learn; hold modes; AllNotesOff; `rt::violationCount() == 0` while rendering through the Engine.
+
+## 18. Songs (setlists)
+
+A song = metadata + ordered sections; selecting a section loads its preset and sets tempo / drums. Files:
+`presets/songs/<slug>.json` (factory, read-only, shipped by the installer) and `userdata/songs/<slug>.json` (active
+profile, synced to the account like presets). Schema PRESETS.md *Songs*; wire messages PROTOCOL.md *Songs*.
+
+- `song/Song` (data + lenient JSON + validation; unknown/reserved keys are kept verbatim and written back),
+  `song/SongStore` (list / read / save / delete on the control thread; writes hold `Session::profileMutex()` and
+  then call `onUserPresetsChanged` → sync).
+- **Session** owns the active song (logical path, parsed song, section index) and the global control keys
+  (`settings.json` key `songs.control_keys`, read-modify-write like AudioHost). `selectSection(i)` applies, in order:
+  `preset` (`loadPreset`; a bare slug = `userdata/presets/<slug>.json`) → song `time_sig` → section `pattern` (with
+  its own meta) → tempo (section, else song) → `drums` (true: drums on + transport playing, the position keeps
+  running when already playing; false: transport stops; absent: unchanged). A failing step is reported (`log` error,
+  `notify`) and the remaining steps still apply.
+- **Control keys** (section switching from the keyboard): effective = the song's `control_keys` if present, else
+  the global ones; active only while a song is selected. The Engine holds the two note numbers as atomics (−1 =
+  none); `gatherEvents` drops NoteOn events of those keys (any channel; their NoteOffs pass, harmless) before
+  ChannelState, telemetry and layers, and bumps a press counter per key (atomics, never lost). The 30 Hz pump
+  (`Session::pollSongKeys`) turns counter changes into next / prev and broadcasts `song_state` + `state`. The sustain
+  pedal and all other keys are untouched.
+- **Sync**: SyncService runs the cloud-api §3.4 algorithm for `userdata/songs/` against `/api/songs` (body key
+  `song`) right after presets in each pass; `sync.json` keeps `songs` next to `presets`; conflicts become
+  `<slug>.conflict-<ts>.json` in `userdata/songs/`. The first link copies local songs into the account profile like
+  presets and patterns.
+- Reserved, not implemented (schema documented in PRESETS.md): notation (MusicXML) per song / section, backing
+  tracks, bar counts / auto-advance; with them a lossy `position` event (remote spec §10.16).

@@ -5,6 +5,7 @@ import { FRONT_TAB, groupParams, panelTabs, type ParamGroup } from '../lib/panel
 import type { ModuleInfo, ParamSpec } from '../protocol/types';
 import { ParamControl } from './Controls';
 import { SamplesMissing } from './SamplesMissing';
+import { ChordLearn } from './ChordLearn';
 
 // Selected tab per module type, kept for the session (switching presets keeps you on "Op 3").
 const lastTab = new Map<string, string>();
@@ -84,7 +85,9 @@ export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) 
   return (
     <section className={`module panel ${tabs ? 'tabbed' : ''}`} aria-label={`${info.name} parameters`}>
       <header className="module-head">
-        <span className={`kind-tag ${kind}`}>{kind === 'instrument' ? 'INST' : kind === 'rhythm' ? 'RHY' : 'FX'}</span>
+        <span className={`kind-tag ${kind}`}>
+          {kind === 'instrument' ? 'INST' : kind === 'rhythm' ? 'RHY' : kind === 'midi' ? 'MIDI' : 'FX'}
+        </span>
         <h2 className="module-name">{info.name}</h2>
         <span className="module-type mono">{info.typeId}</span>
         <span className="module-where">
@@ -93,6 +96,7 @@ export function ModulePanel({ node: fixedNode }: { node?: number | null } = {}) 
         <span className="module-node mono">#{node}</span>
       </header>
       {type === 'sampler' && <SamplesMissing node={node} />}
+      {type === 'chord' && <ChordLearn node={node} />}
       {tabs && current ? (
         <>
           <div className="module-tabs" role="tablist" aria-label={`${info.name} sections`}>

@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository>(sp => new MySqlUserRepository(ConnStr(sp)));
         services.AddScoped<IDeviceRepository>(sp => new MySqlDeviceRepository(ConnStr(sp)));
         services.AddScoped<IPresetRepository>(sp => new MySqlPresetRepository(ConnStr(sp)));
+        services.AddScoped<ISongRepository>(sp => new MySqlSongRepository(ConnStr(sp)));
         services.AddSingleton(sp => new MigrationRunner(ConnStr(sp), sp.GetRequiredService<ILogger<MigrationRunner>>()));
 
         services.Configure<KeysynthOptions>(configuration.GetSection("Keysynth"));

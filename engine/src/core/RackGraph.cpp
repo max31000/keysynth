@@ -135,6 +135,46 @@ void LayerNode::filterEvents(MidiEventSpan in, std::vector<MidiEvent>& out) noex
     }
 }
 
+MidiEventSpan LayerNode::runMidiChain(MidiEventSpan in, const ProcessContext& ctx, bool readCache) noexcept {
+    MidiEventSpan cur = in;
+    bool useA = true;
+    static constexpr MidiEvent kFlush{0, MidiEventType::AllNotesOff, 0, 0, 0, 0.0f, -1};
+    for (auto& mp : midi) {
+        ModuleNode& m = *mp;
+        if (!m.module || m.module->info().kind != ModuleKind::Midi) continue;
+        if (readCache && m.cacheSlot != -1) continue; // shared: processed by the new graph; pass through
+        const bool bypassed = m.bypass.load(std::memory_order_relaxed);
+        const bool flush = bypassed && !m.midiBypassed; // just bypassed: release what it started
+        m.midiBypassed = bypassed;
+        if (bypassed && !flush) continue;
+        std::vector<MidiEvent>& dst = useA ? midiA : midiB;
+        MidiEventBuffer out(dst.data(), dst.size());
+        if (flush) {
+            for (const MidiEvent& e : cur) out.push(e);
+            const size_t from = out.size();
+            m.module->processMidi(MidiEventSpan(&kFlush, 1), out, ctx);
+            // Keep the processor's note-offs, drop the AllNotesOff it passes on (other notes keep sounding).
+            size_t w = from;
+            for (size_t i = from; i < out.size(); ++i) {
+                const MidiEvent e = out.data()[i];
+                if (e.type == MidiEventType::AllNotesOff || e.type == MidiEventType::AllSoundOff) continue;
+                out.data()[w++] = e;
+            }
+            out.truncate(w);
+        } else {
+            m.module->processMidi(cur, out, ctx);
+        }
+        // Contract: offsets inside the block. Clamp defensively, then sort (processors may append in any order).
+        const uint32_t last = ctx.numSamples > 0 ? static_cast<uint32_t>(ctx.numSamples - 1) : 0u;
+        for (size_t i = 0; i < out.size(); ++i)
+            if (out.data()[i].sampleOffset > last) out.data()[i].sampleOffset = last;
+        out.sortByOffset();
+        cur = out.span();
+        useA = !useA;
+    }
+    return cur;
+}
+
 // --- RackGraph ---------------------------------------------------------------------------------------------
 
 RackGraph::RackGraph(double sampleRate, int maxBlock)
@@ -151,8 +191,11 @@ void RackGraph::finalize() {
     for (auto& l : layers) {
         layerIndex_[l->node] = l.get();
         moduleIndex_[l->instrument.node] = &l->instrument;
+        for (auto& m : l->midi) moduleIndex_[m->node] = m.get();
         for (auto& f : l->fx) moduleIndex_[f->node] = f.get();
         l->events.reserve(kMaxEventsPerBlock);
+        l->midiA.assign(l->midi.empty() ? 0 : static_cast<size_t>(kMaxEventsPerBlock), MidiEvent{});
+        l->midiB.assign(l->midi.empty() ? 0 : static_cast<size_t>(kMaxEventsPerBlock), MidiEvent{});
         l->bufL.assign(static_cast<size_t>(maxBlock_), 0.0f);
         l->bufR.assign(static_cast<size_t>(maxBlock_), 0.0f);
         l->gainL.prepare(sampleRate_, 0.01f);
@@ -188,6 +231,7 @@ LayerNode* RackGraph::findLayer(NodeId node) const {
 std::vector<ModuleNode*> RackGraph::allModuleNodes() const {
     std::vector<ModuleNode*> out;
     for (auto& l : layers) {
+        for (auto& m : l->midi) out.push_back(m.get());
         out.push_back(&l->instrument);
         for (auto& f : l->fx) out.push_back(f.get());
     }
@@ -219,6 +263,7 @@ int RackGraph::activeVoices() const noexcept {
 
 void RackGraph::clearCacheSlots() noexcept {
     for (auto& l : layers) {
+        for (auto& m : l->midi) m->cacheSlot = -1;
         l->instrument.cacheSlot = -1;
         for (auto& f : l->fx) f->cacheSlot = -1;
     }
@@ -249,6 +294,19 @@ void RackGraph::render(const AudioBlock& out, MidiEventSpan events, const Render
     for (auto& lp : layers) {
         LayerNode& l = *lp;
         l.filterEvents(events, l.events);
+        if (l.flushNotes) {
+            // MIDI chain changed (GraphSwapper::begin): release notes a removed processor started. No allocation:
+            // the vector has kMaxEventsPerBlock capacity.
+            l.flushNotes = false;
+            const MidiEvent off = MidiEvent::allNotesOff();
+            if (l.events.size() < l.events.capacity()) {
+                l.events.push_back(off);
+                for (size_t i = l.events.size() - 1; i > 0; --i) l.events[i] = l.events[i - 1];
+                l.events[0] = off;
+            } else if (!l.events.empty()) {
+                l.events[0] = off;
+            }
+        }
         AudioBlock lb{l.bufL.data(), l.bufR.data(), n};
         lb.clear();
 
@@ -259,12 +317,14 @@ void RackGraph::render(const AudioBlock& out, MidiEventSpan events, const Render
         ctx.numSamples = n;
         ctx.channel = &cs;
 
+        MidiEventSpan evs(l.events.data(), l.events.size());
+        if (!l.midi.empty()) evs = l.runMidiChain(evs, ctx, args.readCache);
         if (l.instrument.module && l.instrument.module->info().kind == ModuleKind::Instrument)
-            processNode(l.instrument, lb, MidiEventSpan(l.events.data(), l.events.size()), ctx, args);
+            processNode(l.instrument, lb, evs, ctx, args);
         for (auto& f : l.fx) {
             if (f->bypass.load(std::memory_order_relaxed)) continue;
             if (f->module && f->module->info().kind != ModuleKind::Effect) continue;
-            processNode(*f, lb, MidiEventSpan(l.events.data(), l.events.size()), ctx, args);
+            processNode(*f, lb, evs, ctx, args);
         }
 
         const bool silent = l.mute.load(std::memory_order_relaxed) ||

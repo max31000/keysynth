@@ -113,6 +113,104 @@ const std::map<std::string, Handler>& handlers() {
              json sync = c.cloud ? c.cloud->syncStatusJson() : cloud::CloudServices::disabledSyncStatusJson();
              sync["type"] = "sync_status";
              c.out.push_back({Outgoing::Target::Reply, std::move(sync)}); // event right after (no id)
+             c.out.push_back({Outgoing::Target::Reply, c.s.songStateJson()});
+         }},
+        {"chord_learn",
+         [](Ctx& c) {
+             const NodeId node = nodeField(c.msg, "node");
+             std::vector<std::pair<std::string, float>> changed;
+             const std::vector<int> iv = c.s.learnChord(node, &changed);
+             c.reply({{"type", "chord_learn_ok"}, {"node", node}, {"intervals", iv}});
+             for (const auto& [param, v] : changed) c.broadcast({{"type", "param"}, {"node", node}, {"param", param}, {"value", v}});
+         }},
+        {"song_list",
+         [](Ctx& c) {
+             json arr = json::array();
+             for (const auto& s : c.s.listSongs())
+                 arr.push_back({{"path", s.path}, {"id", s.id}, {"title", s.title}, {"artist", s.artist},
+                                {"sections", s.sections}, {"factory", s.factory}});
+             c.reply({{"type", "song_list_ok"}, {"songs", arr}});
+         }},
+        {"song_get",
+         [](Ctx& c) {
+             const std::string path = strField(c.msg, "path");
+             std::vector<std::string> w;
+             const Song s = c.s.readSong(path, &w);
+             c.reply({{"type", "song_get_ok"}, {"path", path}, {"song", songToJson(s)}, {"warnings", w}});
+         }},
+        {"song_save",
+         [](Ctx& c) {
+             const json& sj = field(c.msg, "song");
+             if (!sj.is_object()) throw PatchError("bad_request", "song must be an object");
+             bool overwrite = false;
+             if (auto it = c.msg.find("overwrite"); it != c.msg.end() && it->is_boolean()) overwrite = it->get<bool>();
+             std::vector<std::string> w;
+             Song s = songFromJson(sj, &w);
+             bool active = false;
+             const std::string path = c.s.saveSong(std::move(s), overwrite, &active);
+             c.reply({{"type", "song_save_ok"}, {"path", path}, {"warnings", w}});
+             c.others({{"type", "songs_changed"}});
+             if (active) c.broadcast(c.s.songStateJson());
+         }},
+        {"song_delete",
+         [](Ctx& c) {
+             const std::string path = strField(c.msg, "path");
+             bool active = false;
+             c.s.deleteSong(path, &active);
+             c.reply({{"type", "song_delete_ok"}, {"path", path}});
+             c.others({{"type", "songs_changed"}});
+             if (active) c.broadcast(c.s.songStateJson());
+         }},
+        {"song_select",
+         [](Ctx& c) {
+             int section = 0;
+             if (auto s = optInt(c.msg, "section")) section = *s;
+             const auto w = c.s.selectSong(strField(c.msg, "path"), section);
+             c.reply({{"type", "song_select_ok"}, {"warnings", w}});
+             c.broadcast(c.s.songStateJson());
+             c.broadcast(c.s.stateJson());
+         }},
+        {"song_section",
+         [](Ctx& c) {
+             auto idx = optInt(c.msg, "index");
+             if (!idx) throw PatchError("bad_request", "missing field 'index'");
+             const auto w = c.s.selectSection(*idx);
+             c.reply({{"type", "song_section_ok"}, {"warnings", w}});
+             c.broadcast(c.s.songStateJson());
+             c.broadcast(c.s.stateJson());
+         }},
+        {"song_next",
+         [](Ctx& c) {
+             std::vector<std::string> w;
+             const bool moved = c.s.stepSection(+1, &w);
+             c.reply({{"type", "song_section_ok"}, {"warnings", w}});
+             if (moved) {
+                 c.broadcast(c.s.songStateJson());
+                 c.broadcast(c.s.stateJson());
+             }
+         }},
+        {"song_prev",
+         [](Ctx& c) {
+             std::vector<std::string> w;
+             const bool moved = c.s.stepSection(-1, &w);
+             c.reply({{"type", "song_section_ok"}, {"warnings", w}});
+             if (moved) {
+                 c.broadcast(c.s.songStateJson());
+                 c.broadcast(c.s.stateJson());
+             }
+         }},
+        {"song_close",
+         [](Ctx& c) {
+             c.s.closeSong();
+             c.reply({{"type", "song_close_ok"}});
+             c.broadcast(c.s.songStateJson());
+         }},
+        {"song_control_keys",
+         [](Ctx& c) {
+             const ControlKeys k = controlKeysFromJson(c.msg, c.s.globalControlKeys());
+             c.s.setGlobalControlKeys(k);
+             c.reply({{"type", "song_control_keys_ok"}});
+             c.broadcast(c.s.songStateJson());
          }},
         {"get_catalog",
          [](Ctx& c) { c.reply({{"type", "catalog_ok"}, {"modules", c.s.registry().catalogJson()}}); }},

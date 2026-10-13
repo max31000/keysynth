@@ -10,6 +10,7 @@
 #include <atomic>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,11 +26,18 @@ struct FakeCloud final : cloud::HttpTransport {
         bool deleted = false;
         nlohmann::json patch;
     };
+    struct Collection {
+        std::string base, key;
+        std::map<std::string, Preset>& docs;
+    };
     std::mutex m;
     std::map<std::string, std::string> tokens = {{kFakeToken, "17"}, {kOtherToken, "42"}}; // token -> accountId
     std::map<std::string, std::string> accountNames = {{"17", "Max"}, {"42", "Other"}};
     bool offline = false;
     std::map<std::string, Preset> presets;
+    std::map<std::string, Preset> songs; // /api/songs (body key "song")
+    Collection presetsCol{"/api/presets", "patch", presets};
+    Collection songsCol{"/api/songs", "song", songs};
     std::string manifest;
     std::map<std::string, std::string> files; // "<lib>/<path>" -> bytes
     size_t dropAfterBytes = 0;                // > 0: the next file transfer stops after that many bytes (status 0)
@@ -57,6 +65,48 @@ struct FakeCloud final : cloud::HttpTransport {
     static std::string fileEtag(const std::string& bytes) { return "\"" + Sha256::hex(bytes).substr(0, 12) + "\""; }
     static nlohmann::json meta(const std::string& slug, const Preset& p) {
         return {{"slug", slug}, {"revision", p.revision}, {"updatedAt", "2026-10-12T14:00:00Z"}, {"deleted", p.deleted}};
+    }
+    std::optional<cloud::HttpResponse> collection(Collection& c, const std::string& path, const cloud::HttpRequest& req) {
+        if (path == c.base && req.method == "GET") {
+            nlohmann::json items = nlohmann::json::array();
+            for (const auto& [slug, p] : c.docs) items.push_back(meta(slug, p));
+            return json(200, {{"items", items}});
+        }
+        if (path.rfind(c.base + "/", 0) == 0) {
+            const std::string slug = path.substr(c.base.size() + 1);
+            auto it = c.docs.find(slug);
+            if (req.method == "GET") {
+                if (it == c.docs.end()) return json(404, {{"error", "not_found"}});
+                nlohmann::json j = meta(slug, it->second);
+                j[c.key] = it->second.deleted ? nlohmann::json(nullptr) : it->second.patch;
+                return json(200, j);
+            }
+            const std::string ifMatch = header(req, "If-Match"), ifNone = header(req, "If-None-Match");
+            auto mismatch = [&] {
+                return json(412, {{"error", "revision_mismatch"},
+                                  {"current", it == c.docs.end() ? nlohmann::json(nullptr) : meta(slug, it->second)}});
+            };
+            if (req.method == "PUT") {
+                const nlohmann::json body = nlohmann::json::parse(req.body, nullptr, false);
+                if (!body.is_object() || !body.contains(c.key)) return json(400, {{"error", "invalid_" + c.key}});
+                if (ifNone == "*") {
+                    if (it != c.docs.end()) return mismatch();
+                    c.docs[slug] = {1, false, body[c.key]};
+                    return json(201, meta(slug, c.docs[slug]));
+                }
+                if (ifMatch.empty()) return json(428, {{"error", "precondition_required"}});
+                if (it == c.docs.end() || ifMatch != "\"" + std::to_string(it->second.revision) + "\"") return mismatch();
+                it->second = {it->second.revision + 1, false, body[c.key]};
+                return json(200, meta(slug, it->second));
+            }
+            if (req.method == "DELETE") {
+                if (it == c.docs.end()) return json(404, {{"error", "not_found"}});
+                if (ifMatch != "\"" + std::to_string(it->second.revision) + "\"") return mismatch();
+                it->second = {it->second.revision + 1, true, nullptr};
+                return json(200, meta(slug, it->second));
+            }
+        }
+        return std::nullopt;
     }
     static cloud::HttpResponse json(int status, const nlohmann::json& j) {
         cloud::HttpResponse r;
@@ -164,44 +214,8 @@ struct FakeCloud final : cloud::HttpTransport {
             }
             return r;
         }
-        if (path == "/api/presets" && req.method == "GET") {
-            nlohmann::json items = nlohmann::json::array();
-            for (const auto& [slug, p] : presets) items.push_back(meta(slug, p));
-            return json(200, {{"items", items}});
-        }
-        if (path.rfind("/api/presets/", 0) == 0) {
-            const std::string slug = path.substr(13);
-            auto it = presets.find(slug);
-            if (req.method == "GET") {
-                if (it == presets.end()) return json(404, {{"error", "not_found"}});
-                nlohmann::json j = meta(slug, it->second);
-                j["patch"] = it->second.deleted ? nlohmann::json(nullptr) : it->second.patch;
-                return json(200, j);
-            }
-            const std::string ifMatch = header(req, "If-Match"), ifNone = header(req, "If-None-Match");
-            auto mismatch = [&] {
-                return json(412, {{"error", "revision_mismatch"},
-                                  {"current", it == presets.end() ? nlohmann::json(nullptr) : meta(slug, it->second)}});
-            };
-            if (req.method == "PUT") {
-                const nlohmann::json body = nlohmann::json::parse(req.body, nullptr, false);
-                if (!body.is_object() || !body.contains("patch")) return json(400, {{"error", "invalid_patch"}});
-                if (ifNone == "*") {
-                    if (it != presets.end()) return mismatch();
-                    presets[slug] = {1, false, body["patch"]};
-                    return json(201, meta(slug, presets[slug]));
-                }
-                if (ifMatch.empty()) return json(428, {{"error", "precondition_required"}});
-                if (it == presets.end() || ifMatch != "\"" + std::to_string(it->second.revision) + "\"") return mismatch();
-                it->second = {it->second.revision + 1, false, body["patch"]};
-                return json(200, meta(slug, it->second));
-            }
-            if (req.method == "DELETE") {
-                if (it == presets.end()) return json(404, {{"error", "not_found"}});
-                if (ifMatch != "\"" + std::to_string(it->second.revision) + "\"") return mismatch();
-                it->second = {it->second.revision + 1, true, nullptr};
-                return json(200, meta(slug, it->second));
-            }
+        for (auto* col : {&presetsCol, &songsCol}) {
+            if (auto hit = collection(*col, path, req)) return *hit;
         }
         return json(404, {{"error", "not_found"}});
     }

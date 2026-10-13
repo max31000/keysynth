@@ -14,7 +14,6 @@ public static class Errors
 
     public static IResult InvalidRequest => Of(400, "invalid_request");
     public static IResult InvalidSlug => Of(400, "invalid_slug");
-    public static IResult InvalidPatch => Of(400, "invalid_patch");
     public static IResult NotFound => Of(404, "not_found");
     public static IResult PayloadTooLarge => Of(413, "payload_too_large");
     public static IResult PreconditionRequired => Of(428, "precondition_required");
@@ -107,6 +106,7 @@ public static class ETags
 public static class RateLimits
 {
     public const string DeviceMint = "device-mint";
+    /// <summary>Preset and song writes: one per-user bucket (cloud-api.md §3.3a, §7).</summary>
     public const string PresetWrites = "preset-writes";
     public const string Manifest = "manifest";
 

@@ -1,0 +1,122 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Ich Will Pulse Arp (Rammstein)",
+    "category": "Bells & Keys",
+    "tags": [
+      "rammstein",
+      "arp",
+      "pulse",
+      "industrial"
+    ],
+    "description": "Cold pluck pulsing in 1/16 over two octaves with an accent on every beat. Hold a minor chord. Reference: Rammstein - Ich Will (2001).",
+    "author": "factory"
+  },
+  "tempo": 115,
+  "layers": [
+    {
+      "name": "Pluck",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 2.5,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 1,
+          "osc1_pw": 0.2,
+          "osc2_wave": 0,
+          "osc2_level": 0.5,
+          "osc2_fine": 5,
+          "filter_model": 0,
+          "cutoff": 650,
+          "resonance": 0.4,
+          "key_track": 0.5,
+          "filter_env_amt": 3.0,
+          "filter_vel": 0.6,
+          "fenv_attack": 0.0005,
+          "fenv_decay": 0.14,
+          "fenv_sustain": 0.0,
+          "fenv_release": 0.12,
+          "amp_attack": 0.0005,
+          "amp_decay": 0.35,
+          "amp_sustain": 0.0,
+          "amp_release": 0.18,
+          "amp_vel": 0.35,
+          "hpf_cutoff": 180,
+          "drift": 0.05,
+          "volume_db": 3.0
+        },
+        "state": {}
+      },
+      "fx": [],
+      "midi": [
+        {
+          "type": "arp",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "octaves": 2,
+            "sync": 13,
+            "gate": 0.35,
+            "latch": 0,
+            "retrigger": 1,
+            "vel_mode": 2,
+            "velocity": 84,
+            "accent_every": 4
+          },
+          "state": {}
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -1,
+    "fx": [
+      {
+        "type": "delay",
+        "bypass": false,
+        "params": {
+          "mode": 1,
+          "sync": 13,
+          "time": 375,
+          "feedback": 0.32,
+          "mix": 0.2,
+          "low_cut_hz": 200,
+          "high_cut_hz": 4000
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 2,
+          "mix": 0.14,
+          "size": 0.35,
+          "decay": 0.9,
+          "predelay_ms": 20,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

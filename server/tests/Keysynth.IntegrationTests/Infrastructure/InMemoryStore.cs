@@ -3,16 +3,15 @@ using Keysynth.Core;
 namespace Keysynth.IntegrationTests.Infrastructure;
 
 /// <summary>
-/// In-memory implementation of the three repositories with the MySQL semantics (unique keys, conditional updates,
+/// In-memory implementation of the repositories with the MySQL semantics (unique keys, conditional updates,
 /// per-user limits). Used by the WebApplicationFactory tests when no Docker is available; its behaviour is pinned to the
 /// MySQL implementation by <see cref="RepositoryContractTests"/>, which runs against both.
 /// </summary>
-public sealed class InMemoryStore : IUserRepository, IDeviceRepository, IPresetRepository
+public sealed class InMemoryStore : IUserRepository, IDeviceRepository
 {
     private readonly object _gate = new();
     private readonly List<User> _users = [];
     private readonly List<DeviceRecord> _devices = [];
-    private readonly Dictionary<(long, string), PresetRow> _presets = [];
     private long _nextUserId = 1, _nextDeviceId = 1;
 
     private sealed record DeviceRecord(Device Device, byte[] TokenHash);
@@ -117,58 +116,68 @@ public sealed class InMemoryStore : IUserRepository, IDeviceRepository, IPresetR
     /// <summary>Test hook: number of last_seen_at writes.</summary>
     public int TouchCount { get; private set; }
 
-    // ---- presets
-    Task<IReadOnlyList<PresetRow>> IPresetRepository.ListAsync(long userId, CancellationToken ct)
+    // ---- presets / songs
+    public InMemoryDocuments Presets { get; } = new();
+    public InMemoryDocuments Songs { get; } = new();
+}
+
+/// <summary>One revisioned document table (<c>presets</c> or <c>songs</c>) with the MySQL semantics.</summary>
+public sealed class InMemoryDocuments : IPresetRepository, ISongRepository
+{
+    private readonly object _gate = new();
+    private readonly Dictionary<(long, string), DocumentRow> _rows = [];
+
+    public Task<IReadOnlyList<DocumentRow>> ListAsync(long userId, CancellationToken ct = default)
     {
         lock (_gate)
-            return Task.FromResult<IReadOnlyList<PresetRow>>(_presets.Where(p => p.Key.Item1 == userId)
-                .Select(p => p.Value with { Patch = null })
+            return Task.FromResult<IReadOnlyList<DocumentRow>>(_rows.Where(p => p.Key.Item1 == userId)
+                .Select(p => p.Value with { Body = null })
                 .OrderBy(p => p.Slug, StringComparer.Ordinal).ToList());
     }
 
-    public Task<PresetRow?> GetAsync(long userId, string slug, CancellationToken ct = default)
+    public Task<DocumentRow?> GetAsync(long userId, string slug, CancellationToken ct = default)
     {
         lock (_gate)
-            return Task.FromResult(_presets.GetValueOrDefault((userId, slug)));
+            return Task.FromResult(_rows.GetValueOrDefault((userId, slug)));
     }
 
-    public Task<PresetWriteResult> CreateAsync(long userId, string slug, string patch, DateTime now, int maxPresets, CancellationToken ct = default)
+    public Task<DocumentWriteResult> CreateAsync(long userId, string slug, string body, DateTime now, int maxRows, CancellationToken ct = default)
     {
         lock (_gate)
         {
-            if (_presets.TryGetValue((userId, slug), out var existing))
-                return Task.FromResult(PresetWriteResult.Conflict(existing));
-            if (_presets.Keys.Count(k => k.Item1 == userId) >= maxPresets)
-                return Task.FromResult(PresetWriteResult.TooMany);
-            var row = new PresetRow(slug, 1, now, false, patch);
-            _presets[(userId, slug)] = row;
-            return Task.FromResult(PresetWriteResult.Ok(row));
+            if (_rows.TryGetValue((userId, slug), out var existing))
+                return Task.FromResult(DocumentWriteResult.Conflict(existing));
+            if (_rows.Keys.Count(k => k.Item1 == userId) >= maxRows)
+                return Task.FromResult(DocumentWriteResult.TooMany);
+            var row = new DocumentRow(slug, 1, now, false, body);
+            _rows[(userId, slug)] = row;
+            return Task.FromResult(DocumentWriteResult.Ok(row));
         }
     }
 
-    public Task<PresetWriteResult> UpdateAsync(long userId, string slug, uint expectedRevision, string patch, DateTime now, CancellationToken ct = default)
+    public Task<DocumentWriteResult> UpdateAsync(long userId, string slug, uint expectedRevision, string body, DateTime now, CancellationToken ct = default)
     {
         lock (_gate)
         {
-            if (!_presets.TryGetValue((userId, slug), out var cur) || cur.Revision != expectedRevision)
-                return Task.FromResult(PresetWriteResult.Conflict(cur));
-            var row = new PresetRow(slug, cur.Revision + 1, now, false, patch);
-            _presets[(userId, slug)] = row;
-            return Task.FromResult(PresetWriteResult.Ok(row));
+            if (!_rows.TryGetValue((userId, slug), out var cur) || cur.Revision != expectedRevision)
+                return Task.FromResult(DocumentWriteResult.Conflict(cur));
+            var row = new DocumentRow(slug, cur.Revision + 1, now, false, body);
+            _rows[(userId, slug)] = row;
+            return Task.FromResult(DocumentWriteResult.Ok(row));
         }
     }
 
-    public Task<PresetWriteResult> DeleteAsync(long userId, string slug, uint expectedRevision, DateTime now, CancellationToken ct = default)
+    public Task<DocumentWriteResult> DeleteAsync(long userId, string slug, uint expectedRevision, DateTime now, CancellationToken ct = default)
     {
         lock (_gate)
         {
-            if (!_presets.TryGetValue((userId, slug), out var cur))
-                return Task.FromResult(PresetWriteResult.NotFound);
+            if (!_rows.TryGetValue((userId, slug), out var cur))
+                return Task.FromResult(DocumentWriteResult.NotFound);
             if (cur.Revision != expectedRevision)
-                return Task.FromResult(PresetWriteResult.Conflict(cur));
-            var row = new PresetRow(slug, cur.Revision + 1, now, true, null);
-            _presets[(userId, slug)] = row;
-            return Task.FromResult(PresetWriteResult.Ok(row));
+                return Task.FromResult(DocumentWriteResult.Conflict(cur));
+            var row = new DocumentRow(slug, cur.Revision + 1, now, true, null);
+            _rows[(userId, slug)] = row;
+            return Task.FromResult(DocumentWriteResult.Ok(row));
         }
     }
 
@@ -177,6 +186,6 @@ public sealed class InMemoryStore : IUserRepository, IDeviceRepository, IPresetR
     {
         lock (_gate)
             for (var i = 0; i < count; i++)
-                _presets[(userId, $"seed-{i}")] = new PresetRow($"seed-{i}", 2, now, true, null);
+                _rows[(userId, $"seed-{i}")] = new DocumentRow($"seed-{i}", 2, now, true, null);
     }
 }

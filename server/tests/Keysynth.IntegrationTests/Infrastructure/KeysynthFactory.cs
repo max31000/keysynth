@@ -46,10 +46,12 @@ public class KeysynthFactory : WebApplicationFactory<Program>
             services.RemoveAll<IUserRepository>();
             services.RemoveAll<IDeviceRepository>();
             services.RemoveAll<IPresetRepository>();
+            services.RemoveAll<ISongRepository>();
             services.RemoveAll<IClock>();
             services.AddSingleton<IUserRepository>(Store);
             services.AddSingleton<IDeviceRepository>(Store);
-            services.AddSingleton<IPresetRepository>(Store);
+            services.AddSingleton<IPresetRepository>(Store.Presets);
+            services.AddSingleton<ISongRepository>(Store.Songs);
             services.AddSingleton<IClock>(Clock);
             Mvv42TestAuth.UseTestSigningKey(services);
         });

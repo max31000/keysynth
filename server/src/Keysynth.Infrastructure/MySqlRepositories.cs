@@ -4,7 +4,7 @@ using MySqlConnector;
 
 namespace Keysynth.Infrastructure;
 
-/// <summary>Dapper + MySqlConnector implementations of the Core repositories (schema: Migrations/001_initial.sql).</summary>
+/// <summary>Dapper + MySqlConnector implementations of the Core repositories (schema: Migrations/NNN_*.sql).</summary>
 public abstract class MySqlRepository(string connectionString)
 {
     // Ids are CHAR(36) mapped to string; MySqlConnector would otherwise read CHAR(36) columns as Guid.
@@ -21,7 +21,7 @@ public abstract class MySqlRepository(string connectionString)
     protected static CommandDefinition Cmd(string sql, object? args, CancellationToken ct, MySqlTransaction? tx = null) =>
         new(sql, args, tx, cancellationToken: ct);
 
-    /// <summary>Serialises writes of one user (devices / presets limits) on the users row.</summary>
+    /// <summary>Serialises writes of one user (devices / presets / songs limits) on the users row.</summary>
     protected static Task LockUserAsync(MySqlConnection conn, MySqlTransaction tx, long userId, CancellationToken ct) =>
         conn.ExecuteScalarAsync<long?>(Cmd("SELECT id FROM users WHERE id = @userId FOR UPDATE", new { userId }, ct, tx));
 }
@@ -169,27 +169,39 @@ public sealed class MySqlDeviceRepository(string connectionString) : MySqlReposi
     }
 }
 
-public sealed class MySqlPresetRepository(string connectionString) : MySqlRepository(connectionString), IPresetRepository
-{
-    private const string Columns = "slug, revision, updated_at, deleted, patch";
+public sealed class MySqlPresetRepository(string connectionString)
+    : MySqlDocumentRepository(connectionString, "presets", "patch"), IPresetRepository;
 
-    public async Task<IReadOnlyList<PresetRow>> ListAsync(long userId, CancellationToken ct = default)
+public sealed class MySqlSongRepository(string connectionString)
+    : MySqlDocumentRepository(connectionString, "songs", "song"), ISongRepository;
+
+/// <summary>
+/// A revisioned document table (<c>presets</c>, <c>songs</c>): <c>(user_id, slug)</c> key, <c>revision</c>,
+/// <c>updated_at</c>, <c>deleted</c> and a nullable body column. <paramref name="table"/> / <paramref name="column"/>
+/// are compile-time constants of the subclasses, never input.
+/// </summary>
+public abstract class MySqlDocumentRepository(string connectionString, string table, string column)
+    : MySqlRepository(connectionString), IDocumentRepository
+{
+    private readonly string _columns = $"slug, revision, updated_at, deleted, {column} AS body";
+
+    public async Task<IReadOnlyList<DocumentRow>> ListAsync(long userId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
         // Meta only; ascii_bin collation = ordinal order.
         var rows = await conn.QueryAsync<Row>(Cmd(
-            "SELECT slug, revision, updated_at, deleted, NULL AS patch FROM presets WHERE user_id = @userId ORDER BY slug",
+            $"SELECT slug, revision, updated_at, deleted, NULL AS body FROM {table} WHERE user_id = @userId ORDER BY slug",
             new { userId }, ct));
-        return rows.Select(r => r.ToPreset()).ToList();
+        return rows.Select(r => r.ToDocument()).ToList();
     }
 
-    public async Task<PresetRow?> GetAsync(long userId, string slug, CancellationToken ct = default)
+    public async Task<DocumentRow?> GetAsync(long userId, string slug, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
         return await GetAsync(conn, null, userId, slug, ct);
     }
 
-    public async Task<PresetWriteResult> CreateAsync(long userId, string slug, string patch, DateTime now, int maxPresets, CancellationToken ct = default)
+    public async Task<DocumentWriteResult> CreateAsync(long userId, string slug, string body, DateTime now, int maxRows, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
@@ -198,61 +210,61 @@ public sealed class MySqlPresetRepository(string connectionString) : MySqlReposi
         if (await GetAsync(conn, tx, userId, slug, ct) is { } existing)
         {
             await tx.RollbackAsync(ct);
-            return PresetWriteResult.Conflict(existing);
+            return DocumentWriteResult.Conflict(existing);
         }
         var count = await conn.ExecuteScalarAsync<long>(Cmd(
-            "SELECT COUNT(*) FROM presets WHERE user_id = @userId", new { userId }, ct, tx));
-        if (count >= maxPresets)
+            $"SELECT COUNT(*) FROM {table} WHERE user_id = @userId", new { userId }, ct, tx));
+        if (count >= maxRows)
         {
             await tx.RollbackAsync(ct);
-            return PresetWriteResult.TooMany;
+            return DocumentWriteResult.TooMany;
         }
         try
         {
-            await conn.ExecuteAsync(Cmd("""
-                INSERT INTO presets (user_id, slug, revision, updated_at, deleted, patch)
-                VALUES (@userId, @slug, 1, @now, 0, @patch)
-                """, new { userId, slug, now, patch }, ct, tx));
+            await conn.ExecuteAsync(Cmd($"""
+                INSERT INTO {table} (user_id, slug, revision, updated_at, deleted, {column})
+                VALUES (@userId, @slug, 1, @now, 0, @body)
+                """, new { userId, slug, now, body }, ct, tx));
         }
         catch (MySqlException ex) when (ex.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
         {
             await tx.RollbackAsync(ct);
-            return PresetWriteResult.Conflict(await GetAsync(userId, slug, ct));
+            return DocumentWriteResult.Conflict(await GetAsync(userId, slug, ct));
         }
         await tx.CommitAsync(ct);
-        return PresetWriteResult.Ok(new PresetRow(slug, 1, now, false, patch));
+        return DocumentWriteResult.Ok(new DocumentRow(slug, 1, now, false, body));
     }
 
-    public async Task<PresetWriteResult> UpdateAsync(long userId, string slug, uint expectedRevision, string patch, DateTime now, CancellationToken ct = default)
+    public async Task<DocumentWriteResult> UpdateAsync(long userId, string slug, uint expectedRevision, string body, DateTime now, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
-        var affected = await conn.ExecuteAsync(Cmd("""
-            UPDATE presets SET revision = revision + 1, updated_at = @now, deleted = 0, patch = @patch
+        var affected = await conn.ExecuteAsync(Cmd($"""
+            UPDATE {table} SET revision = revision + 1, updated_at = @now, deleted = 0, {column} = @body
             WHERE user_id = @userId AND slug = @slug AND revision = @expectedRevision
-            """, new { userId, slug, expectedRevision, now, patch }, ct));
+            """, new { userId, slug, expectedRevision, now, body }, ct));
         return affected > 0
-            ? PresetWriteResult.Ok(new PresetRow(slug, expectedRevision + 1, now, false, patch))
-            : PresetWriteResult.Conflict(await GetAsync(conn, null, userId, slug, ct));
+            ? DocumentWriteResult.Ok(new DocumentRow(slug, expectedRevision + 1, now, false, body))
+            : DocumentWriteResult.Conflict(await GetAsync(conn, null, userId, slug, ct));
     }
 
-    public async Task<PresetWriteResult> DeleteAsync(long userId, string slug, uint expectedRevision, DateTime now, CancellationToken ct = default)
+    public async Task<DocumentWriteResult> DeleteAsync(long userId, string slug, uint expectedRevision, DateTime now, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
-        var affected = await conn.ExecuteAsync(Cmd("""
-            UPDATE presets SET revision = revision + 1, updated_at = @now, deleted = 1, patch = NULL
+        var affected = await conn.ExecuteAsync(Cmd($"""
+            UPDATE {table} SET revision = revision + 1, updated_at = @now, deleted = 1, {column} = NULL
             WHERE user_id = @userId AND slug = @slug AND revision = @expectedRevision
             """, new { userId, slug, expectedRevision, now }, ct));
         if (affected > 0)
-            return PresetWriteResult.Ok(new PresetRow(slug, expectedRevision + 1, now, true, null));
+            return DocumentWriteResult.Ok(new DocumentRow(slug, expectedRevision + 1, now, true, null));
         var current = await GetAsync(conn, null, userId, slug, ct);
-        return current is null ? PresetWriteResult.NotFound : PresetWriteResult.Conflict(current);
+        return current is null ? DocumentWriteResult.NotFound : DocumentWriteResult.Conflict(current);
     }
 
-    private static async Task<PresetRow?> GetAsync(MySqlConnection conn, MySqlTransaction? tx, long userId, string slug, CancellationToken ct)
+    private async Task<DocumentRow?> GetAsync(MySqlConnection conn, MySqlTransaction? tx, long userId, string slug, CancellationToken ct)
     {
         var row = await conn.QuerySingleOrDefaultAsync<Row>(Cmd(
-            $"SELECT {Columns} FROM presets WHERE user_id = @userId AND slug = @slug", new { userId, slug }, ct, tx));
-        return row?.ToPreset();
+            $"SELECT {_columns} FROM {table} WHERE user_id = @userId AND slug = @slug", new { userId, slug }, ct, tx));
+        return row?.ToDocument();
     }
 
     private sealed class Row
@@ -261,8 +273,8 @@ public sealed class MySqlPresetRepository(string connectionString) : MySqlReposi
         public uint revision { get; set; }
         public DateTime updated_at { get; set; }
         public bool deleted { get; set; }
-        public string? patch { get; set; }
+        public string? body { get; set; }
 
-        public PresetRow ToPreset() => new(slug, revision, Time.AsUtc(updated_at), deleted, deleted ? null : patch);
+        public DocumentRow ToDocument() => new(slug, revision, Time.AsUtc(updated_at), deleted, deleted ? null : body);
     }
 }

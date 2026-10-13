@@ -47,6 +47,7 @@ std::string envVar(const char* name) {
 void setProfileDirs(AppPaths& a) {
     a.userPresets = a.userdata / "presets";
     a.userPatterns = a.userdata / "patterns";
+    a.userSongs = a.userdata / "songs";
 }
 
 void setDataDirs(AppPaths& a, const fs::path& dataRoot) {
@@ -71,6 +72,7 @@ AppPaths AppPaths::fromRoot(const fs::path& rootIn) {
     a.root = normalized(rootIn);
     a.factoryPresets = a.root / "presets" / "factory";
     a.factoryPatterns = a.root / "presets" / "patterns";
+    a.factorySongs = a.root / "presets" / "songs";
     a.uiDist = a.root / "ui" / "dist";
     setDataDirs(a, a.root / "userdata");
     a.pluginsDir = a.root / "plugins";
@@ -88,6 +90,7 @@ AppPaths AppPaths::installedLayout(const fs::path& appDir, const fs::path& dataR
     a.root = normalized(appDir);
     a.factoryPresets = a.root / "presets" / "factory";
     a.factoryPatterns = a.root / "presets" / "patterns";
+    a.factorySongs = a.root / "presets" / "songs";
     a.uiDist = a.root / "ui" / "dist";
     setDataDirs(a, dataRoot);
     a.pluginsDir = a.dataRoot / "plugins";

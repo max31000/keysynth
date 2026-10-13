@@ -108,6 +108,8 @@ std::string checkPatch(const json& p) {
                 if (auto e = checkSlot(*i); !e.empty()) return e;
             if (auto f = l.find("fx"); f != l.end())
                 if (auto e = checkFxArray(*f); !e.empty()) return e;
+            if (auto m = l.find("midi"); m != l.end())
+                if (auto e = checkFxArray(*m); !e.empty()) return e;
         }
     if (auto m = p.find("master"); m != p.end() && m->is_object())
         if (auto f = m->find("fx"); f != m->end())
@@ -126,9 +128,18 @@ std::string webRestriction(const json& msg, const char* sessionKind) {
         "set_fx_bypass", "note",       "cc",            "panic",         "list_patterns",  "set_pattern",
         "rescan_midi", "list_devices", "set_audio_device", "open_audio_panel", "restart_audio", "list_plugins",
         "save_preset", "save_pattern", "cloud_link",    "cloud_unlink",  "sync_now",       "samples_list",
-        "samples_fetch", "samples_cancel", "samples_delete"};
+        "samples_fetch", "samples_cancel", "samples_delete",
+        // MIDI tools + songs (ARCHITECTURE §17, §18); song_save paths are validated by the handler for every session
+        "chord_learn", "song_list", "song_save", "song_section", "song_next", "song_prev", "song_close",
+        "song_control_keys"};
     const std::string type = msg.value("type", std::string());
     if (open.count(type)) return {};
+    if (type == "song_get" || type == "song_select" || type == "song_delete") {
+        const auto it = msg.find("path");
+        if (it != msg.end() && it->is_string() && anyPrefix(it->get<std::string>(), {"presets/songs/", "userdata/songs/"}))
+            return {};
+        return type + ": path must be under presets/songs/ or userdata/songs/";
+    }
     if (type == "load_preset") {
         const auto it = msg.find("path");
         if (it != msg.end() && it->is_string() && anyPrefix(it->get<std::string>(), {"presets/factory/", "userdata/presets/"}))

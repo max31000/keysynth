@@ -73,6 +73,12 @@ void GraphSwapper::begin(RackGraph* next) noexcept {
         if (const LayerNode* prev = old_->findLayer(ln->node)) {
             for (size_t i = 0; i < ln->noteMap.size(); ++i)
                 ln->noteMap[i].store(prev->noteMap[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+            // A changed MIDI chain (processor added/removed/rebuilt) cannot hand over the notes the old processors
+            // started (arp steps, chord tones, held notes): release the layer once (ARCHITECTURE §17).
+            bool differs = ln->midi.size() != prev->midi.size();
+            for (size_t i = 0; !differs && i < ln->midi.size(); ++i)
+                differs = ln->midi[i]->module.get() != prev->midi[i]->module.get();
+            ln->flushNotes = differs;
         }
     }
     cache_.clear();
@@ -109,8 +115,20 @@ void GraphSwapper::begin(RackGraph* next) noexcept {
         matchIn(nn);
         if (nn.module == nullptr || nn.cacheSlot < 0) upstreamShared = false;
     };
+    // MIDI processors (ARCHITECTURE §17): no audio, no cache slot; a shared one only runs in the new graph.
+    auto matchMidi = [&](ModuleNode& nn) {
+        if (!nn.module) return;
+        for (auto& ol : old_->layers)
+            for (auto& om : ol->midi)
+                if (om->module.get() == nn.module.get()) {
+                    nn.cacheSlot = ModuleNode::kSharedNoCache;
+                    om->cacheSlot = ModuleNode::kSharedNoCache;
+                    return;
+                }
+    };
     bool allShared = current_->layers.size() == old_->layers.size();
     for (auto& nl : current_->layers) {
+        for (auto& nm : nl->midi) matchMidi(*nm);
         upstreamShared = true;
         track(nl->instrument);
         for (auto& nf : nl->fx) track(*nf);

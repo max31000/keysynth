@@ -23,6 +23,7 @@ float toDb(float peak) {
 
 Session::Session(Engine& engine, const ModuleRegistry& registry, AppPaths paths)
     : engine_(engine), registry_(registry), paths_(paths), model_(registry), presets_(paths) {
+    loadSongSettings();
     pattern_ = emptyPattern();
     publishPattern();
     // Default groove (absent in stripped-down test roots: stays empty).
@@ -295,6 +296,237 @@ bool Session::setProfile(const std::string& accountId) {
     if (patternPath_.rfind("userdata/", 0) == 0) {
         patternPath_.clear();
         patternEdited_ = true;
+    }
+    if (songPath_.rfind("userdata/", 0) == 0) {
+        activeSong_.reset();
+        songPath_.clear();
+        songSection_ = -1;
+        applyControlKeys();
+    }
+    return true;
+}
+
+// --- MIDI tools ------------------------------------------------------------------------------------------------
+
+std::vector<int> Session::learnChord(NodeId node, std::vector<std::pair<std::string, float>>* changed) {
+    const ModuleSlot* slot = model_.findSlot(node);
+    if (!slot) throw PatchError("not_found", "no node " + std::to_string(node));
+    if (slot->type != "chord") throw PatchError("bad_request", "node " + std::to_string(node) + " is not a chord tool");
+    RackGraph* g = engine_.latestGraph();
+    Module* m = g ? g->findModule(node) : nullptr;
+    if (!m) throw PatchError("not_found", "chord tool " + std::to_string(node) + " is not running");
+    const ParamSet& ps = m->params();
+    const int ci = ps.indexOf("held_count");
+    const int count = ci >= 0 ? static_cast<int>(ps.get(ci)) : 0;
+    std::vector<int> notes;
+    for (int k = 1; k <= 8 && k <= count; ++k) {
+        const int i = ps.indexOf("held_" + std::to_string(k));
+        const int v = i >= 0 ? static_cast<int>(ps.get(i)) : -1;
+        if (v >= 0) notes.push_back(v);
+    }
+    if (notes.size() < 2) throw PatchError("no_notes", "hold at least two keys on this layer, then learn");
+    std::sort(notes.begin(), notes.end());
+    std::vector<int> intervals;
+    for (int n : notes) intervals.push_back(std::min(48, n - notes.front()));
+    auto set = [&](const std::string& id, float v) {
+        const float s = setParam(node, id, v);
+        if (changed) changed->emplace_back(id, s);
+    };
+    set("mem_count", static_cast<float>(intervals.size()));
+    for (int k = 1; k <= 8; ++k)
+        set("mem_" + std::to_string(k), k <= static_cast<int>(intervals.size()) ? static_cast<float>(intervals[static_cast<size_t>(k - 1)]) : 0.0f);
+    const ParamSpec* typeSpec = nullptr;
+    if (const ModuleInfo* info = registry_.find("chord"))
+        for (const auto& sp : info->params)
+            if (sp.id == "type") typeSpec = &sp;
+    if (typeSpec && !typeSpec->choices.empty()) set("type", static_cast<float>(typeSpec->choices.size() - 1)); // Memory
+    return intervals;
+}
+
+// --- songs -----------------------------------------------------------------------------------------------------
+
+void Session::loadSongSettings() {
+    std::ifstream f(paths_.settingsFile, std::ios::binary);
+    if (!f) return;
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const nlohmann::json j = nlohmann::json::parse(ss.str(), nullptr, false);
+    if (!j.is_object()) return;
+    const auto s = j.find("songs");
+    if (s == j.end() || !s->is_object()) return;
+    if (auto k = s->find("control_keys"); k != s->end()) {
+        try {
+            globalKeys_ = controlKeysFromJson(*k, globalKeys_);
+        } catch (const PatchError&) {
+        }
+    }
+}
+
+void Session::setGlobalControlKeys(const ControlKeys& keys) {
+    globalKeys_ = keys;
+    applyControlKeys();
+    // Read-modify-write: settings.json also holds the audio settings (AudioHost).
+    nlohmann::json j = nlohmann::json::object();
+    {
+        std::ifstream f(paths_.settingsFile, std::ios::binary);
+        if (f) {
+            std::stringstream ss;
+            ss << f.rdbuf();
+            j = nlohmann::json::parse(ss.str(), nullptr, false);
+            if (!j.is_object()) j = nlohmann::json::object();
+        }
+    }
+    if (!j["songs"].is_object()) j["songs"] = nlohmann::json::object();
+    j["songs"]["control_keys"] = controlKeysToJson(globalKeys_);
+    std::error_code ec;
+    std::filesystem::create_directories(paths_.settingsFile.parent_path(), ec);
+    std::ofstream f(paths_.settingsFile, std::ios::binary | std::ios::trunc);
+    if (f) f << j.dump(2) << '\n';
+    if (!f) throw PatchError("io_error", "cannot write " + pathToUtf8(paths_.settingsFile));
+}
+
+ControlKeys Session::effectiveControlKeys() const {
+    if (activeSong_ && activeSong_->controlKeys) return *activeSong_->controlKeys;
+    return globalKeys_;
+}
+
+void Session::applyControlKeys() {
+    const ControlKeys k = effectiveControlKeys();
+    const bool on = activeSong_.has_value() && k.enabled;
+    seenPresses_[0] = engine_.controlKeyPresses(0);
+    seenPresses_[1] = engine_.controlKeyPresses(1);
+    engine_.setControlKeys(on ? k.prev : -1, on ? k.next : -1);
+}
+
+nlohmann::json Session::songStateJson() const {
+    const ControlKeys k = effectiveControlKeys();
+    nlohmann::json ck = controlKeysToJson(k);
+    ck["source"] = activeSong_ && activeSong_->controlKeys ? "song" : "global";
+    return {{"type", "song_state"},
+            {"path", activeSong_ ? nlohmann::json(songPath_) : nlohmann::json(nullptr)},
+            {"song", activeSong_ ? songToJson(*activeSong_) : nlohmann::json(nullptr)},
+            {"section", activeSong_ ? songSection_ : -1},
+            {"controlKeys", ck},
+            {"globalControlKeys", controlKeysToJson(globalKeys_)}};
+}
+
+std::string Session::saveSong(Song song, bool overwrite, bool* active) {
+    std::string path;
+    {
+        std::lock_guard<std::mutex> lk(profileMutex_);
+        path = songs::save(paths_, std::move(song), overwrite);
+    }
+    if (onUserPresetsChanged) onUserPresetsChanged();
+    const bool isActive = activeSong_ && path == songPath_;
+    if (isActive) {
+        activeSong_ = songs::load(paths_, path);
+        if (songSection_ >= static_cast<int>(activeSong_->sections.size()))
+            songSection_ = static_cast<int>(activeSong_->sections.size()) - 1;
+        applyControlKeys();
+    }
+    if (active) *active = isActive;
+    return path;
+}
+
+void Session::deleteSong(const std::string& path, bool* active) {
+    {
+        std::lock_guard<std::mutex> lk(profileMutex_);
+        songs::remove(paths_, path);
+    }
+    if (onUserPresetsChanged) onUserPresetsChanged();
+    const bool isActive = activeSong_ && path == songPath_;
+    if (isActive) closeSong();
+    if (active) *active = isActive;
+}
+
+std::vector<std::string> Session::selectSong(const std::string& path, int section) {
+    Song s = songs::load(paths_, path);
+    if (s.sections.empty()) throw PatchError("bad_request", "the song has no sections");
+    if (section < 0 || section >= static_cast<int>(s.sections.size()))
+        throw PatchError("bad_request", "section index out of range");
+    auto resolved = paths_.resolveAllowed(path);
+    activeSong_ = std::move(s);
+    songPath_ = resolved ? paths_.relativeToRoot(*resolved) : path;
+    songSection_ = -1;
+    applyControlKeys();
+    return selectSection(section);
+}
+
+std::vector<std::string> Session::selectSection(int index) {
+    if (!activeSong_) throw PatchError("no_song", "no song selected");
+    const Song& song = *activeSong_;
+    if (index < 0 || index >= static_cast<int>(song.sections.size()))
+        throw PatchError("bad_request", "section index out of range");
+    const SongSection& sec = song.sections[static_cast<size_t>(index)];
+    songSection_ = index;
+    std::vector<std::string> w;
+    auto fail = [&](const std::string& what, const std::exception& e) {
+        w.push_back(sec.name + ": " + what + ": " + e.what());
+        if (log) log("error", w.back(), true);
+    };
+    if (sec.preset) {
+        const std::string p = presetRefToPath(*sec.preset);
+        try {
+            if (p.empty()) throw PatchError("bad_path", "invalid preset reference '" + *sec.preset + "'");
+            // Same preset, unedited: keep it (no reload click, tails survive).
+            if (p != presetPath_ || model_.dirty()) loadPreset(p);
+        } catch (const std::exception& e) {
+            fail("preset", e);
+        }
+    }
+    if (song.timeSig) setTimeSignature(song.timeSig->first, song.timeSig->second);
+    if (sec.pattern) {
+        try {
+            if (!isPatternRef(*sec.pattern)) throw PatchError("bad_path", "invalid pattern path '" + *sec.pattern + "'");
+            if (*sec.pattern != patternPath_ || patternEdited_) loadPattern(*sec.pattern, true);
+        } catch (const std::exception& e) {
+            fail("pattern", e);
+        }
+    }
+    if (const auto t = sec.tempo ? sec.tempo : song.tempo) setTempo(*t);
+    if (sec.drums) {
+        if (*sec.drums) {
+            engine_.rhythm().drumsEnabled.store(true);
+            if (!engine_.transport().playing()) engine_.transport().setPlaying(true);
+        } else {
+            engine_.transport().setPlaying(false);
+        }
+    }
+    return w;
+}
+
+bool Session::stepSection(int delta, std::vector<std::string>* warnings) {
+    if (!activeSong_) throw PatchError("no_song", "no song selected");
+    const int next = songSection_ + delta;
+    if (next < 0 || next >= static_cast<int>(activeSong_->sections.size())) return false;
+    auto w = selectSection(next);
+    if (warnings) *warnings = std::move(w);
+    return true;
+}
+
+void Session::closeSong() {
+    activeSong_.reset();
+    songPath_.clear();
+    songSection_ = -1;
+    applyControlKeys();
+}
+
+bool Session::pollSongKeys() {
+    const uint32_t p = engine_.controlKeyPresses(0), n = engine_.controlKeyPresses(1);
+    const uint32_t dp = p - seenPresses_[0], dn = n - seenPresses_[1];
+    seenPresses_[0] = p;
+    seenPresses_[1] = n;
+    if (!activeSong_ || (dp == 0 && dn == 0)) return false;
+    // Several presses within one pump tick: apply only the resulting section (one preset load).
+    const int last = static_cast<int>(activeSong_->sections.size()) - 1;
+    const int target = std::clamp(songSection_ - static_cast<int>(std::min<uint32_t>(dp, 64)) +
+                                      static_cast<int>(std::min<uint32_t>(dn, 64)),
+                                  0, last);
+    if (target == songSection_) return false;
+    try {
+        selectSection(target);
+    } catch (const PatchError&) {
+        return false;
     }
     return true;
 }

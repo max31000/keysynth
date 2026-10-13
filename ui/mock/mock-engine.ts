@@ -21,11 +21,15 @@ import type {
   PatternSnapshot,
   PluginStatus,
   PresetEntry,
+  ControlKeys,
+  Song,
+  SongInfo,
   TransportState,
   Zone,
 } from '../src/protocol/types';
 import { CATALOG, catalogMap, defaultParams } from './catalog';
 import { INIT_PATCH, factoryPresets, makeFx, makeLayer, type MockPreset } from './presets';
+import { factorySongs, type MockSong } from './songs';
 import { factoryPatterns, parsePatternJson, type MockPattern } from './patterns';
 import { emptyPattern, numSteps, setTimeSig } from '../src/lib/stepGrid';
 
@@ -53,7 +57,9 @@ const WEB_ALLOWED = new Set([
   'set_instrument', 'add_fx', 'remove_fx', 'move_fx', 'set_fx_bypass', 'note', 'cc', 'panic', 'list_patterns',
   'set_pattern', 'rescan_midi', 'list_devices', 'set_audio_device', 'open_audio_panel', 'restart_audio', 'list_plugins',
   'save_preset', 'save_pattern', 'load_preset', 'get_pattern', 'transport', 'set_patch', 'cloud_link', 'cloud_unlink',
-  'sync_now', 'samples_list', 'samples_fetch', 'samples_cancel', 'samples_delete',
+  'sync_now', 'samples_list', 'samples_fetch', 'samples_cancel', 'samples_delete', 'chord_learn', 'song_list',
+  'song_get', 'song_save', 'song_delete', 'song_select', 'song_section', 'song_next', 'song_prev', 'song_close',
+  'song_control_keys',
 ]);
 /** Remote (relay) sessions: web + these denied (docs/specs/2026-10-12-remote.md §10.3). */
 const REMOTE_DENIED = new Set(['cloud_link', 'cloud_unlink', 'set_audio_device', 'open_audio_panel', 'samples_delete', 'reload_plugin']);
@@ -154,6 +160,8 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       l.node ??= nextNode++;
       l.instrument = slot(l.instrument);
       l.fx = l.fx.map((f) => slot(f));
+      if (l.midi?.length) l.midi = l.midi.map((f) => slot(f));
+      else delete l.midi;
     }
     copy.master.fx = copy.master.fx.map((f) => slot(f));
     const r = copy.rhythm ?? {};
@@ -166,20 +174,24 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       delete l.node;
       delete l.instrument.node;
       for (const f of l.fx) delete f.node;
+      for (const f of l.midi ?? []) delete f.node;
     }
     for (const f of c.master.fx) delete f.node;
     if (c.rhythm) delete c.rhythm.node;
     return c;
   }
   const allSlots = (): ModuleSlot[] => [
-    ...patch.layers.flatMap((l) => [l.instrument, ...l.fx]),
+    ...patch.layers.flatMap((l) => [...(l.midi ?? []), l.instrument, ...l.fx]),
     ...patch.master.fx,
     ...(patch.rhythm?.node !== undefined ? [{ node: patch.rhythm.node, type: 'drums', params: (patch.rhythm.kit ??= {}) }] : []),
   ];
   const findSlot = (node: number) => allSlots().find((s) => s.node === node);
   const findLayer = (node: number) => patch.layers.find((l) => l.node === node);
   const chainOf = (fxNode: number): FxSlot[] | undefined => {
-    for (const l of patch.layers) if (l.fx.some((f) => f.node === fxNode)) return l.fx;
+    for (const l of patch.layers) {
+      if (l.fx.some((f) => f.node === fxNode)) return l.fx;
+      if (l.midi?.some((f) => f.node === fxNode)) return l.midi;
+    }
     if (patch.master.fx.some((f) => f.node === fxNode)) return patch.master.fx;
     return undefined;
   };
@@ -334,6 +346,8 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     const t = String(m.type);
     if (!WEB_ALLOWED.has(t)) return `'${t}' is not available to web sessions`;
     if (t === 'load_preset' && !isLogical(m.path, ['presets/factory/', 'userdata/presets/'])) return 'load_preset: bad path';
+    if ((t === 'song_get' || t === 'song_select' || t === 'song_delete') && !isLogical(m.path, ['presets/songs/', 'userdata/songs/']))
+      return `${t}: bad path`;
     const pat = (v: unknown) => v === undefined || v === '' || isLogical(v, ['presets/patterns/', 'userdata/patterns/']);
     if (t === 'get_pattern' && !pat(m.path)) return 'get_pattern: bad path';
     if (t === 'transport' && !pat(m.pattern)) return 'transport: bad pattern';
@@ -347,6 +361,106 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     }
     return null;
   };
+
+  // ─────────────── songs (PROTOCOL.md "Songs") ───────────────
+  const songs: MockSong[] = factorySongs();
+  let globalKeys: ControlKeys = { enabled: false, prev: 21, next: 22 };
+  let active: { path: string; song: Song; section: number } | null = null;
+  const SONG_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+  const songSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64).replace(/-+$/, '');
+  const songInfo = (s: MockSong): SongInfo => ({
+    path: s.path, id: s.song.id, title: s.song.title, artist: s.song.artist ?? '', sections: s.song.sections.length, factory: s.factory,
+  });
+  const songList = () =>
+    [...songs].sort((a, b) => (a.factory === b.factory ? a.song.title.localeCompare(b.song.title) : a.factory ? -1 : 1)).map(songInfo);
+  const effectiveKeys = () =>
+    active?.song.control_keys ? { ...active.song.control_keys, source: 'song' as const } : { ...globalKeys, source: 'global' as const };
+  const songState = () => ({
+    type: 'song_state', path: active?.path ?? null, song: active?.song ?? null, section: active ? active.section : -1,
+    controlKeys: effectiveKeys(), globalControlKeys: globalKeys,
+  });
+  const keyOk = (v: unknown) => v === null || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 127);
+  const tempoOk = (v: unknown) => v === undefined || (typeof v === 'number' && v >= 20 && v <= 400);
+  const textOk = (v: unknown, max: number) => v === undefined || (typeof v === 'string' && v.length <= max);
+  /** song_save validation: the message names the field (PROTOCOL.md). */
+  const songProblem = (s: Record<string, unknown>): string | null => {
+    if (typeof s.title !== 'string' || !s.title.trim() || s.title.length > 200) return 'title: 1..200 chars';
+    if (!textOk(s.artist, 200) || !textOk(s.key, 200)) return 'artist/key: string';
+    if (!textOk(s.notes, 2000)) return 'notes: ≤ 2000 chars';
+    if (!tempoOk(s.tempo)) return 'tempo: 20..400';
+    if (s.time_sig !== undefined) {
+      const ts = s.time_sig as unknown[];
+      if (!Array.isArray(ts) || ts.length !== 2 || !((ts[0] as number) >= 1 && (ts[0] as number) <= 16) || ![2, 4, 8, 16].includes(ts[1] as number))
+        return 'time_sig: [1..16, 2|4|8|16]';
+    }
+    if (s.control_keys !== undefined) {
+      const ck = s.control_keys as Record<string, unknown>;
+      if (!ck || typeof ck !== 'object' || typeof ck.enabled !== 'boolean' || !keyOk(ck.prev) || !keyOk(ck.next)) return 'control_keys';
+    }
+    const secs = s.sections;
+    if (!Array.isArray(secs) || secs.length < 1 || secs.length > 64) return 'sections: 1..64 entries';
+    for (const [i, x] of (secs as Record<string, unknown>[]).entries()) {
+      if (!x || typeof x !== 'object' || typeof x.name !== 'string' || !x.name.trim() || x.name.length > 60) return `sections[${i}].name: 1..60 chars`;
+      if (x.preset !== undefined && !(isLogical(x.preset, ['presets/factory/', 'userdata/presets/']) || SONG_SLUG.test(String(x.preset))))
+        return `sections[${i}].preset: logical path or slug`;
+      if (x.pattern !== undefined && x.pattern !== '' && !isLogical(x.pattern, ['presets/patterns/', 'userdata/patterns/']))
+        return `sections[${i}].pattern: logical path`;
+      if (x.drums !== undefined && typeof x.drums !== 'boolean') return `sections[${i}].drums: bool`;
+      if (!tempoOk(x.tempo)) return `sections[${i}].tempo: 20..400`;
+      if (!textOk(x.notes, 2000)) return `sections[${i}].notes: ≤ 2000 chars`;
+    }
+    return null;
+  };
+  const closeSong = () => {
+    if (!active) return;
+    active = null;
+    broadcast(songState());
+  };
+  /** Apply the active section: preset → song time_sig → pattern → tempo → drums (ARCHITECTURE §18). */
+  const applySection = (): string[] => {
+    const warnings: string[] = [];
+    if (!active) return warnings;
+    const { song } = active;
+    const sec = song.sections[active.section];
+    if (!sec) return warnings;
+    const fail = (w: string) => {
+      warnings.push(w);
+      broadcast({ type: 'log', level: 'error', notify: true, message: w });
+    };
+    if (sec.preset !== undefined) {
+      const path = sec.preset.includes('/') ? sec.preset : `userdata/presets/${sec.preset}.json`;
+      const p = presets.find((x) => x.path === path);
+      if (p) applyPreset(p);
+      else fail(`song: preset not found: ${sec.preset}`);
+    }
+    if (song.time_sig) {
+      current.pattern = setTimeSig(current.pattern, song.time_sig[0], song.time_sig[1]);
+      transport.time_sig = [...song.time_sig];
+    }
+    if (sec.pattern !== undefined && !applyPattern(sec.pattern)) fail(`song: pattern not found: ${sec.pattern}`);
+    const tempo = sec.tempo ?? song.tempo;
+    if (tempo !== undefined) transport.tempo = tempo;
+    if (sec.drums === true) {
+      if (!transport.playing) playStartedAt = Date.now();
+      transport.drums = true;
+      transport.playing = true;
+    } else if (sec.drums === false) transport.playing = false;
+    transport.pattern = current.path;
+    transport.pattern_edited = current.edited;
+    return warnings;
+  };
+  /** select / section / next / prev / control keys: broadcasts as the engine does */
+  const goSection = (i: number): string[] | null => {
+    if (!active || i < 0 || i >= active.song.sections.length) return null;
+    active.section = i;
+    const w = applySection();
+    broadcast(songState());
+    broadcastState();
+    return w;
+  };
+  // ─────────────── chord memory (ARCHITECTURE §17) ───────────────
+  /** Input notes of a layer's MIDI chain = the held keys inside its zone (the mock has no real MIDI path). */
+  const heldIn = (l: Patch['layers'][number]) => [...held.keys()].filter((n) => n >= l.zone.key_lo && n <= l.zone.key_hi).sort((a, b) => a - b);
 
   // ─────────────── server ───────────────
   const wss = new WebSocketServer({
@@ -375,6 +489,29 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     broadcastState(ws, id);
   };
 
+  function applyPreset(p: MockPreset) {
+    const keepRhythm = !p.patch.rhythm ? patch.rhythm : undefined; // presets without rhythm keep the current one
+    patch = assignNodes(keepRhythm ? { ...p.patch, rhythm: keepRhythm } : p.patch);
+    presetPath = p.path;
+    dirty = false;
+    if (patch.tempo) transport.tempo = patch.tempo;
+    energy.clear();
+  }
+  /** Make `path` the current pattern ("" = empty); false when it does not exist. */
+  function applyPattern(path: string): boolean {
+    const found = path ? patterns.find((x) => x.entry.path === path) : undefined;
+    if (path && !found) return false;
+    current.path = path;
+    current.edited = false;
+    current.pattern = found ? structuredClone(found.pattern) : emptyPattern();
+    if (current.pattern.tempo) transport.tempo = current.pattern.tempo;
+    if (current.pattern.kit !== undefined && patch.rhythm?.kit) patch.rhythm.kit.kit = current.pattern.kit;
+    if (patch.rhythm) patch.rhythm.pattern = path;
+    transport.swing = current.pattern.swing;
+    transport.time_sig = [...current.pattern.time_sig];
+    return true;
+  }
+
   function noteEvent(on: boolean, note: number, velocity: number) {
     if (on) held.set(note, velocity);
     else held.delete(note);
@@ -400,6 +537,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       case 'hello':
         send(ws, { ...stateMsg(id), version: MOCK_VERSION, engine: { product: 'keysynth', kind: 'mock', version: MOCK_VERSION, pid: process.pid }, trust: trustOf.get(ws) ?? 'local', cloud: cloudStatus() });
         send(ws, syncStatus());
+        send(ws, songState());
         return;
       case 'cloud_link': {
         const token = typeof m.token === 'string' ? m.token : '';
@@ -419,6 +557,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
           broadcast({ type: 'cloud_status', ...cloudStatus() }, ws);
           if (switched) {
             if (presetPath?.startsWith('userdata/')) presetPath = null;
+            if (active?.path.startsWith('userdata/')) closeSong();
             broadcastState();
           }
           runSync();
@@ -434,6 +573,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         send(ws, { type: 'cloud_status', id, ...cloudStatus() });
         broadcast({ type: 'cloud_status', ...cloudStatus() }, ws);
         broadcast(syncStatus());
+        if (had && active?.path.startsWith('userdata/')) closeSong();
         if (had) broadcastState();
         return;
       }
@@ -499,12 +639,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       case 'load_preset': {
         const p = presets.find((x) => x.path === m.path);
         if (!p) return err(ws, id, 'not_found', `preset not found: ${String(m.path)}`);
-        const keepRhythm = !p.patch.rhythm ? patch.rhythm : undefined; // presets without rhythm keep the current one
-        patch = assignNodes(keepRhythm ? { ...p.patch, rhythm: keepRhythm } : p.patch);
-        presetPath = p.path;
-        dirty = false;
-        if (patch.tempo) transport.tempo = patch.tempo;
-        energy.clear();
+        applyPreset(p);
         send(ws, { type: 'load_preset_ok', id });
         broadcastState();
         log('loaded', p.path);
@@ -570,6 +705,16 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       case 'add_fx': {
         const layerId = num('layer');
         const mod = typeof m.module === 'string' ? catalogMap[m.module] : undefined;
+        if (mod?.kind === 'midi') {
+          // MIDI processors go into the layer's MIDI chain (refused on the master chain), ≤ 8
+          const l = layerId === 0 ? undefined : findLayer(layerId ?? -1);
+          if (!l) return err(ws, id, 'bad_request', 'MIDI processors need a layer (not the master chain)');
+          const chain = (l.midi ??= []);
+          if (chain.length >= 8) return err(ws, id, 'bad_request', 'at most 8 MIDI processors per layer');
+          const idx = num('index') ?? chain.length;
+          chain.splice(Math.max(0, Math.min(idx, chain.length)), 0, { ...makeFx(mod.typeId), node: nextNode++ });
+          return structuralChange(ws, id);
+        }
         const chain = layerId === 0 ? patch.master.fx : findLayer(layerId ?? -1)?.fx;
         if (!chain || !mod || mod.kind !== 'effect') return err(ws, id, 'bad_request', 'layer and effect module required');
         const f = { ...makeFx(mod.typeId), node: nextNode++ };
@@ -582,6 +727,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         const chain = chainOf(node);
         if (!chain) return err(ws, id, 'unknown_node', 'no such fx');
         chain.splice(chain.findIndex((f) => f.node === node), 1);
+        for (const l of patch.layers) if (l.midi && !l.midi.length) delete l.midi; // written only when not empty
         return structuralChange(ws, id);
       }
       case 'move_fx': {
@@ -609,6 +755,12 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
       case 'note': {
         const note = num('note');
         if (note === undefined || note < 0 || note > 127) return err(ws, id, 'bad_request', 'note 0..127 required');
+        // control keys: while a song is selected their note-ons switch sections and are not played
+        const keys = effectiveKeys();
+        if (active && keys.enabled && (note === keys.prev || note === keys.next)) {
+          if (m.on) goSection(active.section + (note === keys.next ? 1 : -1));
+          return;
+        }
         noteEvent(!!m.on, note, Math.max(1, Math.min(127, num('velocity') ?? 100)));
         return;
       }
@@ -622,17 +774,7 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
             return err(ws, id, 'bad_request', 'time_sig: num 1..16, den 2/4/8/16');
         }
         if (typeof m.pattern === 'string') {
-          const path = m.pattern;
-          const found = path ? patterns.find((x) => x.entry.path === path) : undefined;
-          if (path && !found) return err(ws, id, 'not_found', `pattern not found: ${path}`);
-          current.path = path;
-          current.edited = false;
-          current.pattern = found ? structuredClone(found.pattern) : emptyPattern();
-          if (current.pattern.tempo) transport.tempo = current.pattern.tempo;
-          if (current.pattern.kit !== undefined && patch.rhythm?.kit) patch.rhythm.kit.kit = current.pattern.kit;
-          if (patch.rhythm) patch.rhythm.pattern = path;
-          transport.swing = current.pattern.swing;
-          transport.time_sig = [...current.pattern.time_sig];
+          if (!applyPattern(m.pattern)) return err(ws, id, 'not_found', `pattern not found: ${m.pattern}`);
           all = true;
         }
         if (Array.isArray(m.time_sig) && m.time_sig.length === 2) {
@@ -796,6 +938,111 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
         }, 300);
         return;
       }
+      case 'chord_learn': {
+        const node = num('node') ?? -1;
+        const l = patch.layers.find((x) => x.midi?.some((f) => f.node === node));
+        const s = l?.midi?.find((f) => f.node === node);
+        if (!l || !s) return err(ws, id, 'not_found', `no MIDI processor ${node}`);
+        if (s.type !== 'chord') return err(ws, id, 'bad_request', `node ${node} is not a chord processor`);
+        const notes = heldIn(l).slice(0, 8);
+        if (notes.length < 2) return err(ws, id, 'no_notes', 'hold 2 or more notes on the layer');
+        const intervals = notes.map((n) => Math.min(48, n - notes[0]!));
+        const changes: [string, number][] = [['mem_count', intervals.length], ...intervals.map((v, i): [string, number] => [`mem_${i + 1}`, v]), ['type', 12]];
+        for (const [param, value] of changes) s.params[param] = value;
+        dirty = true;
+        send(ws, { type: 'chord_learn_ok', id, node, intervals });
+        for (const [param, value] of changes) broadcast({ type: 'param', node, param, value });
+        return;
+      }
+      case 'song_list':
+        send(ws, { type: 'song_list_ok', id, songs: songList() });
+        return;
+      case 'song_get': {
+        const s = songs.find((x) => x.path === m.path);
+        if (!s) return err(ws, id, 'not_found', `song not found: ${String(m.path)}`);
+        send(ws, { type: 'song_get_ok', id, path: s.path, song: s.song });
+        return;
+      }
+      case 'song_save': {
+        const raw = m.song as Record<string, unknown> | undefined;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return err(ws, id, 'bad_request', 'song: object required');
+        const why = songProblem(raw);
+        if (why) return err(ws, id, 'bad_request', why);
+        const sid = typeof raw.id === 'string' && SONG_SLUG.test(raw.id) && raw.id.length <= 64 ? raw.id : songSlug(String(raw.title));
+        if (!sid) return err(ws, id, 'bad_request', 'id: title has no slug, set an id');
+        const path = `userdata/songs/${sid}.json`;
+        const i = songs.findIndex((x) => x.path === path);
+        if (i >= 0 && m.overwrite !== true) return err(ws, id, 'exists', `song '${sid}' already exists`);
+        const song = { ...structuredClone(raw), format: 1, id: sid } as Song;
+        if (i >= 0) songs[i] = { path, factory: false, song };
+        else songs.push({ path, factory: false, song });
+        send(ws, { type: 'song_save_ok', id, path, warnings: [] });
+        broadcast({ type: 'songs_changed' }, ws);
+        if (active?.path === path) {
+          active = { path, song, section: Math.min(active.section, song.sections.length - 1) };
+          broadcast(songState());
+        }
+        runSync();
+        return;
+      }
+      case 'song_delete': {
+        const i = songs.findIndex((x) => x.path === m.path);
+        if (i < 0) return err(ws, id, 'not_found', `song not found: ${String(m.path)}`);
+        if (songs[i]!.factory) return err(ws, id, 'read_only', 'factory songs are read-only');
+        songs.splice(i, 1);
+        send(ws, { type: 'song_delete_ok', id, path: m.path });
+        broadcast({ type: 'songs_changed' }, ws);
+        if (active?.path === m.path) closeSong();
+        runSync();
+        return;
+      }
+      case 'song_select': {
+        const s = songs.find((x) => x.path === m.path);
+        if (!s) return err(ws, id, 'not_found', `song not found: ${String(m.path)}`);
+        const section = num('section') ?? 0;
+        if (!Number.isInteger(section) || section < 0 || section >= s.song.sections.length) return err(ws, id, 'bad_request', 'section out of range');
+        active = { path: s.path, song: structuredClone(s.song), section };
+        const warnings = applySection();
+        send(ws, { type: 'song_select_ok', id, warnings });
+        broadcast(songState());
+        broadcastState();
+        return;
+      }
+      case 'song_section':
+      case 'song_next':
+      case 'song_prev': {
+        if (!active) return err(ws, id, 'no_song', 'no song selected');
+        const n = active.song.sections.length;
+        const target = m.type === 'song_section' ? (num('index') ?? -1) : active.section + (m.type === 'song_next' ? 1 : -1);
+        if (m.type === 'song_section' && (target < 0 || target >= n)) return err(ws, id, 'bad_request', 'index out of range');
+        if (target < 0 || target >= n) {
+          send(ws, { type: 'song_section_ok', id, warnings: [] }); // first / last section: nothing changes
+          return;
+        }
+        active.section = target;
+        const warnings = applySection();
+        send(ws, { type: 'song_section_ok', id, warnings });
+        broadcast(songState());
+        broadcastState();
+        return;
+      }
+      case 'song_close':
+        send(ws, { type: 'song_close_ok', id });
+        active = null;
+        broadcast(songState());
+        return;
+      case 'song_control_keys': {
+        if (m.enabled !== undefined && typeof m.enabled !== 'boolean') return err(ws, id, 'bad_request', 'enabled: bool');
+        if ((m.prev !== undefined && !keyOk(m.prev)) || (m.next !== undefined && !keyOk(m.next))) return err(ws, id, 'bad_request', 'prev/next: 0..127 or null');
+        globalKeys = {
+          enabled: typeof m.enabled === 'boolean' ? m.enabled : globalKeys.enabled,
+          prev: m.prev !== undefined ? (m.prev as number | null) : globalKeys.prev,
+          next: m.next !== undefined ? (m.next as number | null) : globalKeys.next,
+        };
+        send(ws, { type: 'song_control_keys_ok', id });
+        broadcast(songState());
+        return;
+      }
       default:
         return err(ws, id, 'unknown_type', `unknown message type: ${String(m.type)}`);
     }
@@ -850,6 +1097,13 @@ export function startMockEngine(opts: MockOptions = {}): Promise<MockEngine> {
     const readouts: Record<string, Record<string, number>> = {};
     for (const l of patch.layers) {
       const e = energy.get(l.node!) ?? 0;
+      for (const f of l.midi ?? []) {
+        if (f.type !== 'chord') continue;
+        const h = heldIn(l);
+        const r: Record<string, number> = { held_count: Math.min(16, h.length) };
+        for (let i = 0; i < 8; i++) r[`held_${i + 1}`] = h[i] ?? -1;
+        readouts[String(f.node)] = r;
+      }
       if (l.instrument.type === 'va') readouts[String(l.instrument.node)] = { active_voices: Math.min(16, held.size) };
       if (l.instrument.type === 'sampler') {
         // like the engine: a downloadable entry that is not cached and no job covers it → not linked (1)

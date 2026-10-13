@@ -1,5 +1,6 @@
 #pragma once
-// Preset sync (ARCHITECTURE §15; algorithm: cloud-api spec §3.4, status: PROTOCOL.md `sync_status`).
+// Preset + song sync (ARCHITECTURE §15, §18; algorithm: cloud-api spec §3.4, status: PROTOCOL.md `sync_status`).
+// One SyncEngine per collection (presets, songs): same algorithm, own endpoint / body key / sync.json section.
 // SyncEngine = one pass of the algorithm against an API function (testable with a fake transport);
 // SyncService = the worker thread that runs passes on link, every 60 s, on local changes and on `sync_now`.
 // Local file steps (read, write, rename) hold `fileMutex` (Session::profileMutex()), never across network calls.
@@ -39,15 +40,27 @@ struct SyncPassResult {
 
 bool isValidSlug(const std::string& s); // ^[a-z0-9]+(-[a-z0-9]+)*$, 1..64
 
+// What a SyncEngine syncs (cloud-api spec §3.3 presets, §3.3a songs).
+struct SyncCollection {
+    std::string endpoint = "/api/presets";        // REST collection URL
+    std::string bodyKey = "patch";                // document key in PUT bodies / GET replies
+    std::string baseKey = "presets";              // section of sync.json
+    std::string logicalDir = "userdata/presets/"; // wire prefix of conflict files
+    static SyncCollection presets() { return {}; }
+    static SyncCollection songs() { return {"/api/songs", "song", "songs", "userdata/songs/"}; }
+};
+
 class SyncEngine {
 public:
     using Api = std::function<HttpResponse(HttpRequest)>;
-    SyncEngine(Api api, std::filesystem::path presetsDir, std::filesystem::path syncFile, std::mutex* fileMutex);
+    SyncEngine(Api api, std::filesystem::path presetsDir, std::filesystem::path syncFile, std::mutex* fileMutex,
+               SyncCollection collection = SyncCollection::presets());
 
     SyncPassResult runPass(const std::atomic<bool>* cancel = nullptr);
     // Local presets changed since their last sync (incl. new and deleted ones).
     int pendingCount() const;
-    static std::vector<SyncConflict> conflicts(const std::filesystem::path& presetsDir);
+    static std::vector<SyncConflict> conflicts(const std::filesystem::path& dir,
+                                               const std::string& logicalDir = "userdata/presets/");
     std::string lastSyncAt() const;
     // Conflict file name for a slug at a UTC time ("<slug>.conflict-20261012T140300Z.json").
     static std::string conflictName(const std::string& slug, const std::string& compactUtc);
@@ -73,7 +86,10 @@ private:
     Step resolveServerChanged(const std::string& slug, const ServerMeta& s, SyncPassResult& res);
     std::filesystem::path fileOf(const std::string& slug) const { return dir_ / (slug + ".json"); }
 
+    std::string url(const std::string& slug) const { return col_.endpoint + "/" + slug; }
+
     Api api_;
+    SyncCollection col_;
     std::filesystem::path dir_, syncFile_;
     std::mutex* fileMutex_;
     std::map<std::string, SyncBase> base_;
@@ -87,8 +103,10 @@ public:
 
     void start();
     void stop();
-    // Profile to sync: account presets dir + its sync.json. Empty = disabled. Triggers a pass.
-    void setProfile(const std::filesystem::path& presetsDir, const std::filesystem::path& syncFile);
+    // Profile to sync: account presets dir + its sync.json (+ songs dir, empty = presets only). Empty = disabled.
+    // Triggers a pass.
+    void setProfile(const std::filesystem::path& presetsDir, const std::filesystem::path& syncFile,
+                    const std::filesystem::path& songsDir = {});
     void requestSync();      // sync_now, local change
     void notifyLocalChange(); // recompute `pending` and schedule a pass
     nlohmann::json statusJson() const; // sync_status payload (no type)
@@ -104,7 +122,7 @@ private:
     int intervalMs_;
     mutable std::mutex m_;
     std::condition_variable cv_;
-    std::filesystem::path dir_, syncFile_;
+    std::filesystem::path dir_, syncFile_, songsDir_;
     uint64_t profileGen_ = 0;
     bool requested_ = false, stop_ = false;
     std::string state_ = "disabled", error_, lastSyncAt_;

@@ -115,6 +115,17 @@ TEST_CASE("relay trust: remote allow/deny for every PROTOCOL request", "[relay][
         {"samples_fetch", {{{"scope", "all"}}, true}},
         {"samples_cancel", {{}, true}},
         {"samples_delete", {{{"scope", "all"}}, false}},
+        {"chord_learn", {{{"node", 5}}, true}},
+        {"song_list", {{}, true}},
+        {"song_get", {{{"path", "presets/songs/x.json"}}, true}},
+        {"song_save", {{{"song", json::object()}}, true}},
+        {"song_delete", {{{"path", "userdata/songs/x.json"}}, true}},
+        {"song_select", {{{"path", "userdata/songs/x.json"}}, true}},
+        {"song_section", {{{"index", 1}}, true}},
+        {"song_next", {{}, true}},
+        {"song_prev", {{}, true}},
+        {"song_close", {{}, true}},
+        {"song_control_keys", {{{"enabled", true}}, true}},
     };
     const std::set<std::string> documented = protocolRequestTypes();
     REQUIRE(documented.size() >= 30);
@@ -138,6 +149,13 @@ TEST_CASE("relay trust: remote allow/deny for every PROTOCOL request", "[relay][
     CHECK_FALSE(
         remoteRestriction({{"type", "set_patch"},
                            {"patch", {{"layers", {{{"instrument", {{"state", {{"sfz", "C:/x.sfz"}}}}}}}}}}})
+            .empty());
+    CHECK_FALSE(remoteRestriction({{"type", "song_select"}, {"path", "C:/songs/x.json"}}).empty());
+    CHECK_FALSE(remoteRestriction({{"type", "song_get"}, {"path", "presets/factory/x.json"}}).empty());
+    CHECK_FALSE(remoteRestriction({{"type", "song_delete"}}).empty());
+    CHECK_FALSE(
+        webRestriction({{"type", "set_patch"},
+                        {"patch", {{"layers", {{{"midi", {{{"type", "arp"}, {"state", {{"path", "C:/x"}}}}}}}}}}}})
             .empty());
     // Unknown / future messages.
     CHECK_FALSE(remoteRestriction({{"type", "song_load"}}).empty());
