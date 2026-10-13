@@ -837,7 +837,7 @@ TEST_CASE("relay client + server: remote request round trip through bindRelay", 
 
 // ---------------- WinHTTP socket against a local ixwebsocket server ----------------
 
-TEST_CASE("winhttp websocket: headers, text both ways, server close code", "[relay][net]") {
+TEST_CASE("platform websocket: headers, text both ways, server close code", "[relay][net]") {
     ix::initNetSystem();
     int port = 0;
     std::unique_ptr<ix::WebSocketServer> srv;
@@ -875,7 +875,7 @@ TEST_CASE("winhttp websocket: headers, text both ways, server close code", "[rel
     std::vector<std::string> texts;
     int closeCode = 0;
     {
-        auto ws = platform::makeWinHttpWebSocket();
+        auto ws = platform::makeDefaultWebSocket();
         REQUIRE(ws);
         platform::WsHandshake hs;
         hs.url = "ws://127.0.0.1:" + std::to_string(port) + "/keysynth/api/relay?role=host";
@@ -921,7 +921,7 @@ TEST_CASE("winhttp websocket: headers, text both ways, server close code", "[rel
     }
     // Upgrade refused -> httpStatus (an HTTP 404 from a non-WS path is fine for this check: no 101).
     {
-        auto ws = platform::makeWinHttpWebSocket();
+        auto ws = platform::makeDefaultWebSocket();
         platform::WsHandshake hs;
         hs.url = "http://127.0.0.1:1/nothing"; // nothing listens on port 1
         hs.timeoutMs = 2000;

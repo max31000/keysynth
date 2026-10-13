@@ -148,7 +148,7 @@ TEST_CASE("app paths: dev, installed, KS_DATA_DIR, profiles, logical paths", "[c
     fs::remove_all(root);
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__APPLE__)
 TEST_CASE("dpapi: round trip, wrong entropy, garbage", "[cloud]") {
     const std::string secret = test::kFakeToken;
     const auto blob = platform::dpapiProtect(secret, "keysynth-cloud-v1");
@@ -160,6 +160,10 @@ TEST_CASE("dpapi: round trip, wrong entropy, garbage", "[cloud]") {
     corrupt[corrupt.size() / 2] ^= 0x5a;
     CHECK_FALSE(platform::dpapiUnprotect(corrupt, "keysynth-cloud-v1"));
     CHECK_FALSE(platform::dpapiUnprotect("", "keysynth-cloud-v1"));
+    const auto again = platform::dpapiProtect(secret, "keysynth-cloud-v1"); // fresh IV/salt every time
+    REQUIRE(again);
+    CHECK(*again != *blob);
+    CHECK(platform::dpapiUnprotect(*again, "keysynth-cloud-v1") == secret);
     CHECK_FALSE(platform::computerName().empty());
 }
 #endif

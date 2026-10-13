@@ -363,10 +363,14 @@ private:
 } // namespace
 
 std::unique_ptr<WebSocket> makeWinHttpWebSocket() { return std::make_unique<WinHttpWebSocket>(); }
+std::unique_ptr<WebSocket> makeDefaultWebSocket() { return makeWinHttpWebSocket(); }
 
 #else
 
 std::unique_ptr<WebSocket> makeWinHttpWebSocket() { return nullptr; }
+#if !defined(__APPLE__) // macOS: WebSocket_mac.mm
+std::unique_ptr<WebSocket> makeDefaultWebSocket() { return nullptr; }
+#endif
 
 #endif
 

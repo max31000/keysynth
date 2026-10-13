@@ -1,6 +1,6 @@
 #pragma once
 // Outbound WebSocket client (ARCHITECTURE §15 *Relay*). Abstract `WebSocket` so tests use a fake; production =
-// WinHTTP (TLS, system/automatic proxy, no new dependency). Never used on the audio thread.
+// WinHTTP on Windows, NSURLSessionWebSocketTask on macOS (TLS, system/automatic proxy, no new dependency). Never used on the audio thread.
 //
 // Threading: open() blocks (handshake) on the caller's thread. After a successful open the implementation runs a
 // receive thread (invokes onText / onClose) and a send thread (drains the queue filled by send()). send() and
@@ -55,7 +55,9 @@ public:
 
 using WebSocketFactory = std::function<std::unique_ptr<WebSocket>()>;
 
-std::unique_ptr<WebSocket> makeWinHttpWebSocket();
+std::unique_ptr<WebSocket> makeWinHttpWebSocket(); // Windows only (nullptr elsewhere)
+// The platform's client: WinHTTP (Windows), NSURLSessionWebSocketTask (macOS, WebSocket_mac.mm); nullptr elsewhere.
+std::unique_ptr<WebSocket> makeDefaultWebSocket();
 
 // "wss://h/p" -> "https://h/p", "ws://" -> "http://"; others unchanged.
 std::string wsToHttpUrl(const std::string& url);

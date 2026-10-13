@@ -31,7 +31,7 @@ public:
     using Post = std::function<void(std::function<void()>)>;
 
     struct Options {
-        platform::WebSocketFactory factory; // default: WinHTTP
+        platform::WebSocketFactory factory; // default: platform::makeDefaultWebSocket
         int backoffMinMs = 1000, backoffMaxMs = 30000;
         int pingIntervalMs = 20000;   // app-level {t:"ping"}
         int silenceTimeoutMs = 45000; // no frame for this long -> reconnect

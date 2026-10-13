@@ -42,7 +42,7 @@ RelayClient::RelayClient(CloudClient& client, std::string version) : RelayClient
 
 RelayClient::RelayClient(CloudClient& client, std::string version, Options opt)
     : client_(client), version_(std::move(version)), opt_(std::move(opt)) {
-    if (!opt_.factory) opt_.factory = [] { return platform::makeWinHttpWebSocket(); };
+    if (!opt_.factory) opt_.factory = [] { return platform::makeDefaultWebSocket(); };
     random_ = opt_.random;
     if (!random_) {
         auto rng = std::make_shared<std::mt19937>(std::random_device{}());
