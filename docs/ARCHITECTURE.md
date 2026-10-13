@@ -666,8 +666,15 @@ installer*. The engine stays one process; desktop mode only adds a tray icon and
     and is skipped for a link launch.
   - Single instance (`--quit`, dev `--tray` runs): exclusive `flock` on `$TMPDIR/keysynth-engine-<uid>.lock` + a
     datagram socket next to it carrying open/quit (polled like the Windows events).
-  - Tray = `NSStatusItem` (JUCE): template icon `assets/icon/keysynth-tray-template.png`, the menu on any click
-    («Open keysynth» first), «Open at Login» = `SMAppService.mainAppService` (no-op outside a bundle).
+  - Tray = own `NSStatusItem` (`platform/MenuBar`, AppKit; JUCE's macOS tray has no working menu, tooltip or
+    balloons): template icon `assets/icon/keysynth-tray-template.png` (tinted orange while a notice is pending).
+    Left click = status popover: engine state pill (running / port busy / no audio), notice banner (port conflict,
+    failed audio restart — the Windows balloons), audio device + rate/buffer/latency, CPU and output meters (Pump
+    keeps decayed peaks of the telemetry it already polls), voices, preset, MIDI inputs, UI / remote clients, cloud
+    account; buttons open keysynth / locally, restart audio, «At login» switch, log (Finder), quit. Refreshed at
+    4 Hz only while open; data via `TrayActions::status` (a `MenuBarStatus` snapshot built in main.cpp), actions are
+    the same callbacks as on Windows. Right click / control-click = native menu with the same actions.
+    «Open at Login» = `SMAppService.mainAppService` (no-op outside a bundle).
   - No console: started without a terminal, stdout/stderr go to `<data>/logs/engine.log`; fatal start errors use a
     system alert (`CFUserNotificationDisplayAlert`).
   - No installer: the first start of the bundle copies the example plugins into `<data>/plugins` (never over an

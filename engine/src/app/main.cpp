@@ -39,6 +39,7 @@
 #include <juce_events/juce_events.h>
 
 #include <atomic>
+#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <cstdio>
@@ -139,17 +140,39 @@ public:
         }
         const auto midi = s_.pollMidi();
         const auto tele = s_.pollTelemetry();
+        updateLive(tele);
         srv_.tickRemote(); // coalesced params / midi batch of relayed controllers
         if (srv_.clientCount() == 0) return;
         if (!midi.is_null()) srv_.broadcast(midi);
         srv_.broadcast(tele);
     }
 
+    // Latest audio telemetry for the macOS menu-bar widget: peaks held and decayed so a 4 Hz reader sees them.
+    struct Live {
+        float cpu = 0.0f;
+        int voices = 0;
+        float masterDb = -120.0f;
+    };
+    const Live& live() const noexcept { return live_; }
+
 private:
+    void updateLive(const nlohmann::json& t) {
+        const float cpu = t.value("cpu", 0.0f);
+        live_.cpu = std::max(cpu, live_.cpu * 0.92f);
+        live_.voices = t.value("voices", 0);
+        float db = -120.0f;
+        if (auto m = t.find("meters"); m != t.end())
+            if (auto ma = m->find("master"); ma != m->end() && ma->is_array())
+                for (const auto& v : *ma)
+                    if (v.is_number()) db = std::max(db, v.get<float>());
+        live_.masterDb = std::max(db, live_.masterDb - 1.5f); // ~45 dB/s fall
+    }
+
     ks::Session& s_;
     ks::ControlServer& srv_;
     ks::plugins::PluginHost* plugins_;
     ks::cloud::CloudServices* cloud_;
+    Live live_;
 };
 
 void printStatus(const ks::AudioStatus& st, const char* prefix) {
@@ -522,6 +545,45 @@ int main(int argc, char** argv) {
         ta.autostartEnabled = [] { return ks::platform::autostartEnabled(); };
         ta.setAutostart = [exePath](bool on) { return ks::platform::setAutostart(on, exePath); };
         ta.quit = [] { g_quit.store(true); };
+        ta.openLogs = [dir = paths.logsDir] {
+            std::error_code ec;
+            std::filesystem::create_directories(dir, ec);
+            const juce::File d(juce::String::fromUTF8(ks::pathToUtf8(dir).c_str()));
+            const juce::File log = d.getChildFile("engine.log");
+            (log.existsAsFile() ? log : d).revealToUser();
+        };
+        ta.status = [&session, &server, &pump, c = cloud.get(), &args] {
+            ks::platform::MenuBarStatus s;
+            s.version = ks::engineVersion();
+            s.wsPort = args.wsPort;
+            s.engineOk = server.wsRunning();
+            if (const auto& busy = server.wsConflict()) s.portProblem = ks::conflictMessage(*busy, ks::app::trayRussian());
+            s.remoteClients = static_cast<int>(server.remoteCount());
+            s.localClients = static_cast<int>(server.clientCount()) - s.remoteClients;
+            if (const ks::AudioControl* a = session.audio()) {
+                const ks::AudioStatus st = a->status();
+                s.audioRunning = st.running;
+                s.audioType = st.type;
+                s.audioDevice = st.name;
+                s.sampleRate = st.sampleRate;
+                s.bufferSize = st.bufferSize;
+                s.outputLatencyMs = st.outputLatencyMs;
+            }
+            s.cpu = pump.live().cpu;
+            s.voices = pump.live().voices;
+            s.masterDb = pump.live().masterDb;
+            s.preset = session.model().patch().meta.name;
+            if (const auto* m = session.midi()) s.midiInputs = m->inputs();
+            if (c) {
+                const auto cs = c->client().status();
+                s.cloudEnabled = true;
+                s.cloudLinked = cs.linked;
+                s.cloudAccount = cs.accountName;
+            }
+            s.localAvailable = server.httpRunning();
+            s.autostart = ks::platform::autostartEnabled();
+            return s;
+        };
         ta.poll = [inst = instance.get(), openUi] {
             if (inst->takeQuitRequest()) g_quit.store(true);
             if (inst->takeOpenRequest() || ks::platform::takeAppReopenRequest()) openUi();

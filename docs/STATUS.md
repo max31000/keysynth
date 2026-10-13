@@ -3,6 +3,10 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- macOS menu-bar widget (`platform/MenuBar_mac.mm`, ARCHITECTURE §16 *macOS*): native status item replacing JUCE's
+  (whose macOS menu never opened): status popover (engine / audio / CPU + output meters / preset / MIDI / clients /
+  cloud, restart audio, at-login switch, log, quit) + right-click menu. Checked by rendering (light / dark) and a
+  start/quit run; clicking through it is a manual check.
 - macOS port (Apple Silicon, macOS 13+), same features as Windows (ARCHITECTURE §1, §16 *macOS*; TESTING *macOS*):
   CoreAudio/CoreMIDI (default buffer 128), POSIX/Cocoa platform layer (per-user 0600 token key file, NSURLSession relay
   socket, libproc port owner, flock + socket single instance, Apple Events, SMAppService login item, signal-based

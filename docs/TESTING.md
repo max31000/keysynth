@@ -371,7 +371,7 @@ cat /tmp/ks-data/logs/engine.log          # faust plugins ok, examples copied to
 out/stage/keysynth.app/Contents/MacOS/keysynth-engine --quit               # clean quit (exit 0)
 ```
 
-Manual checks (need a person): menu-bar icon and menu (light + dark), «Open at Login» (System Settings > General >
+Manual checks (need a person): menu-bar icon, status popover (left click) and menu (right click), light + dark, «Open at Login» (System Settings > General >
 Login Items), `keysynth://open` link from the web UI (starts / wakes the app, no extra browser tab), first start of
 a *downloaded* dmg (Privacy & Security > «Open Anyway»), the microphone prompt when an audio input is selected, and
 the web UI in Safari (`https://mvv42.ru/keysynth/` reaching `ws://127.0.0.1:7341`; if Safari blocks it, the local UI
