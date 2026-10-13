@@ -3,6 +3,7 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- v0.6.0 macOS (Apple Silicon) release: `keysynth-macos.dmg` next to `keysynth-setup.exe`, same version.
 - macOS menu-bar widget (`platform/MenuBar_mac.mm`, ARCHITECTURE §16 *macOS*): native status item replacing JUCE's
   (whose macOS menu never opened): status popover (engine / audio / CPU + output meters / preset / MIDI / clients /
   cloud, restart audio, at-login switch, log, quit) + right-click menu. Checked by rendering (light / dark) and a
