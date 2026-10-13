@@ -8,7 +8,7 @@ Two paths, one host:
 | | Faust `.dsp` (primary) | C++ `.cpp` → DLL |
 |---|---|---|
 | Use for | almost everything: synths, filters, modulation, physical models | heavy/hand-optimized C++ DSP, existing C++ code |
-| Build | none — the engine JIT-compiles it (libfaust/LLVM) | `scripts/build_plugin.ps1 <name>` (MSVC) |
+| Build | none — the engine JIT-compiles it (libfaust/LLVM) | `scripts/build_plugin.ps1 <name>` (MSVC) / `scripts/build_plugin.sh <name>` (macOS, clang++) |
 | Reload | save the file → ~0.1 s later it sounds | rebuild → the engine picks up the new DLL |
 | Params | from the Faust UI (sliders etc.) | `ks_param_spec` table |
 | Polyphony | engine-provided (freq/gain/gate) | your own |
@@ -24,7 +24,7 @@ plugins/<name>/<name>.dsp      Faust source            (or)   plugins/<name>/<na
 plugins/<name>/plugin.json     optional manifest (Faust)       plugins/<name>/*.h          local headers
 plugins/<name>/*.dsp|*.lib     local Faust imports (hashed into the cache key)
 plugins/<name>/demo.json       a patch using the plugin (convention, for ks-render)
-plugins/.build/                gitignored: <name>-<hash>.dll, cache/ (Faust machine code), obj/
+plugins/.build/                gitignored: <name>-<hash>.dll (.dylib on macOS), cache/ (Faust machine code), obj/
 ```
 
 `<name>` = directory name = plugin id: `[a-z][a-z0-9_]{0,63}` (other directories are ignored). Ids and param ids
@@ -125,7 +125,8 @@ Header: `sdk/include/keysynth/plugin_abi.h` (documented in place; read it first)
 - `set_param` arrives on the audio thread at block start, only when a value changed (all once after `prepare`).
 - `save_state` may run on the control thread while `process` runs: make it thread-safe (copy atomically).
 
-Build: `scripts/build_plugin.ps1 my_fx` (`-Config Debug`, `-ExtraFlags '/arch:AVX2'`) → `plugins/.build/my_fx-<hash>.dll`
+Build: `scripts/build_plugin.ps1 my_fx` (`-Config Debug`, `-ExtraFlags '/arch:AVX2'`) → `plugins/.build/my_fx-<hash>.dll`;
+macOS: `scripts/build_plugin.sh my_fx` (`--config Debug`, `--flag -mcpu=apple-m1`) → `my_fx-<hash>.dylib`
 (~1–2 s; exit 3 = MSVC not found, 1 = compile error with the compiler output; arguments go through a response
 file, never through `cmd.exe`). The running engine loads the newest
 build within ~0.5 s. Static CRT (`/MT`), `/W4`; only the C ABI crosses the boundary — no C++ types, no exceptions
@@ -164,13 +165,13 @@ Over the protocol: `{"type":"reload_plugin","name":"faust_pluck"}` forces a reco
 
 | Symptom | Fix |
 |---|---|
-| `libfaust (faust.dll) not found` | `scripts/fetch_faust.ps1` (installs `.tools/faust`), or set `KS_FAUST_DIR` to a Faust 2.88 install |
+| `libfaust (faust.dll) not found` / `(libfaust.2.dylib)` | `scripts/fetch_faust.ps1` / `.sh` (installs `.tools/faust`), or set `KS_FAUST_DIR` to a Faust 2.88 install |
 | `starts with a UTF-8 BOM` | save the `.dsp` as UTF-8 without BOM (PowerShell 5 `Set-Content -Encoding utf8` adds one) |
 | `<file>.dsp:12 : ERROR : ...` | Faust compiler message; line numbers refer to your file |
 | `instrument has no 'gate' control` | add `gate = button("gate");` and use it, or set `"kind": "effect"` |
 | `duplicate param id 'x'` / `invalid [id:...]` | add/rename `[id:...]` metadata |
 | `effect must have 1-2 inputs and 1-2 outputs` | fix `process` arity (`_,_ : ...` for stereo) |
-| `not built: run scripts/build_plugin.ps1 <name>` | C++ plugin without a DLL in `plugins/.build/` |
+| `not built: run scripts/build_plugin.ps1 <name>` (`.sh` on macOS) | C++ plugin without a DLL / dylib in `plugins/.build/` |
 | `descriptor id ... must equal the plugin directory name` | set `id` in the descriptor to the directory name |
 | `faulted: crashed (exception 0xC0000005)` | null/out-of-bounds access in plugin code; fix, rebuild (new instance) |
 | `faulted: produced NaN/Inf` | unstable filter/feedback or division by zero; clamp params, add `ma.EPSILON` |

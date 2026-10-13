@@ -1,0 +1,57 @@
+# Engine on macOS (Apple Silicon): build + ks-tests on every push / PR that touches the engine, so Windows-side
+# changes cannot silently break the macOS build (clang -Werror, POSIX platform code). Windows is covered by the
+# release workflow; local equivalent: docs/TESTING.md "macOS".
+name: Engine (macOS)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'engine/**'
+      - 'sdk/**'
+      - 'third_party/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'presets/**'
+      - 'plugins/**'
+      - 'scripts/*.sh'
+      - '.github/workflows/engine-macos.yml'
+  pull_request:
+    paths:
+      - 'engine/**'
+      - 'sdk/**'
+      - 'third_party/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'presets/**'
+      - 'plugins/**'
+      - 'scripts/*.sh'
+      - '.github/workflows/engine-macos.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install ninja
+      - uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: deps-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: .tools/faust
+          key: faust-${{ runner.os }}-${{ hashFiles('scripts/fetch_faust.sh') }}
+      - run: scripts/fetch_faust.sh
+      - run: scripts/configure.sh build -DKS_WITH_SFIZZ=ON -DKS_WITH_FAUST=ON
+      - run: cmake --build build --target keysynth-engine keysynth-app ks-render ks-tests --parallel
+      - run: build/bin/ks-tests --reporter compact

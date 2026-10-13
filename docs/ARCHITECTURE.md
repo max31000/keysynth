@@ -12,7 +12,9 @@ Non-goals (for now): hosting third-party VST3, DAW timeline, MIDI controller map
 only external audio is the device input bus, §6 *Audio input*), MPE (API is ready for it: `noteId`), plugin builds of
 keysynth itself.
 
-Platform: Windows 11 + ASIO first. Code stays portable: no Win32 calls outside `engine/src/platform/`.
+Platforms: Windows 11 (ASIO first) and macOS 13+ on Apple Silicon (CoreAudio), same features and version (one
+release, §16). Code stays portable: no Win32 / Cocoa calls outside `engine/src/platform/` (`*.mm` = Objective-C++,
+macOS only) and the few `#if` blocks in `app/` (process-level glue).
 
 ## 2. Process topology
 
@@ -74,8 +76,9 @@ engine/
   src/audio/      AudioHost (devices, ASIO, settings), MidiHub (all MIDI inputs).
   src/plugins/    PluginHost: Faust JIT (libfaust C API) + C ABI DLLs (sdk/include/keysynth/plugin_abi.h), hot reload.
   src/render/     OfflineRenderer (patch + notes/MIDI → buffer/WAV without a device).
-  src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, SEH wrapper, DPAPI, desktop integration:
-                  single instance, HKCU autostart, browser launch — §16).
+  src/platform/   OS specifics (MMCSS "Pro Audio", power throttling, fault guard (SEH / signals), secrets at rest
+                  (DPAPI / keychain key), relay WebSocket (WinHTTP / NSURLSession), port owner, desktop
+                  integration: single instance, autostart, Apple Events, browser launch — §16).
   src/cloud/      CloudClient (HTTPS to mvv42.ru, device token), SyncService (presets), CloudServices (§15).
   src/samples/    SampleCache + downloader (manifest, jobs, resume, verify), manifest path rules (§15).
   src/app/        main.cpp — wiring only; Tray (JUCE tray icon + menu), DesktopShell (log/console, UI opener),
@@ -89,8 +92,10 @@ userdata/         (gitignored) user presets, settings.json, recordings.
 assets/samples/   (gitignored) sample libraries; assets/samples.json manifest (committed).
 ui/               Vite + React + TS.
 scripts/          configure.ps1, fetch_samples.py, fetch_faust.ps1, build_plugin.ps1, analyze_wav.py,
-                  build_installer.ps1, make_icon.py.
-installer/        keysynth.iss (Inno Setup 6, per-user installer, §16).   assets/icon/  app icon (generated).
+                  build_installer.ps1, make_icon.py; macOS: configure.sh, fetch_faust.sh, build_plugin.sh,
+                  build_app_macos.sh, start*.sh / stop-dev.sh.
+installer/        keysynth.iss (Inno Setup 6, per-user installer), macos/Info.plist.in (keysynth.app), §16.
+                  assets/icon/  app icon + macOS menu-bar template (generated).
 docs/             ARCHITECTURE, PROTOCOL, PRESETS, PLUGINS, TESTING, STATUS, DSP_NOTES.
 ```
 
@@ -320,7 +325,9 @@ Patch (data)                              RackGraph (live, audio thread)
     and copies an error text into a fixed buffer) and forwards unexpected ones as `log { notify: true }`
     (`AudioControl::onLog`). `restart_audio` (protocol) runs the same recovery on demand.
 - On the first callback `platform/` registers the audio thread with MMCSS (`AvSetMmThreadCharacteristicsW
-  "Pro Audio"`) and disables power throttling for it (Intel hybrid P/E cores).
+  "Pro Audio"`) and disables power throttling for it (Intel hybrid P/E cores). macOS: nothing to do — CoreAudio's
+  IO thread is already a real-time (time-constraint) thread. No ASIO there: the first start opens the system
+  default device with a 128-sample buffer (CoreAudio would pick 512); later starts use the saved device.
 - **Audio input** (external input bus; consumer: `vocoder`). Up to 2 input channels of the device are opened
   (`set_audio_input`, PROTOCOL.md *Audio input*); none by default, so the driver opens outputs only. Persisted as
   `audio.inputName` / `audio.inputChannels` (device channel indices, ascending) in `userdata/settings.json`. ASIO:
@@ -415,8 +422,9 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
   (`createCDSPFactoryFromFile`, `-I share/faust -I <plugin dir>` + white-listed `faust_options`, LLVM opt level
   max). Factories are cached as machine code in `plugins/.build/cache/<name>-<key>.fmc`, key = hash of libfaust
   version, LLVM target, options and every `.dsp/.lib` in the plugin dir. Only libfaust's **C API** is used, loaded
-  at runtime from `<KS_FAUST_DIR>/lib/faust.dll` (function table, no import lib): faust.dll uses the dynamic CRT,
-  keysynth the static one, so no C++ objects may cross. Factory create/read/write/delete hold one mutex (a factory released
+  at runtime from `<KS_FAUST_DIR>/lib/faust.dll` (macOS: `lib/libfaust.2.dylib`, from the official arm64 dmg via
+  `scripts/fetch_faust.sh`) (function table, no import lib): faust.dll uses the dynamic CRT, keysynth the static
+  one, so no C++ objects may cross (kept on macOS too). Factory create/read/write/delete hold one mutex (a factory released
   while a compile runs is queued and deleted later, so the control thread never waits for a compile); instance
   create/delete run on the control thread, compute/clear on the audio thread.
   - Instruments (0 inputs, 1–2 outputs): keysynth's own polyphony (not Faust's `mydsp_poly`, which is C++ API and
@@ -437,9 +445,10 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
   latency_samples, save_state/load_state (blob)}. `ks_event` is layout-identical to `MidiEvent` (static_assert, no
   copy). `set_param` is called on the audio thread at block start only when the value changed (all values once
   after `prepare`). `scripts/build_plugin.ps1 <name>` compiles with MSVC (/MT, /O2) into
-  `plugins/.build/<name>-<hash>.dll` (temp name + rename). The host loads the newest `<name>-*.dll` through a copy
-  `%TEMP%/keysynth-plugins/<pid>/<name>-<hash>-<n>.dll` (so builds can overwrite/delete; only directories of dead
-  pids are swept at startup), validates the
+  `plugins/.build/<name>-<hash>.dll` (temp name + rename); on macOS `scripts/build_plugin.sh <name>` (clang++ -O2,
+  `-fvisibility=hidden`) into `<name>-<hash>.dylib` (`platform::kSharedLibraryExt`). The host loads the newest
+  `<name>-*.dll` / `.dylib` through a copy `<temp>/keysynth-plugins/<pid>/<name>-<hash>-<n>.<ext>` (so builds can
+  overwrite/delete; only directories of dead pids are swept at startup), validates the
   descriptor (sizes, ids, ranges, required functions) and copies all strings.
 - **PluginHost** (control thread API; one loader `std::thread`): scans `plugins/` every 500 ms from the 30 Hz
   pump (signature = names/sizes/mtimes of `.dsp/.lib/plugin.json`, or the newest DLL); a change queues a job
@@ -458,7 +467,10 @@ User guide and conventions: `docs/PLUGINS.md`. Code: `engine/src/plugins/`, OS b
   (`&module->info() == registry.find(type)`), so plugin modules are rebuilt and everything else is shared → normal
   swap (crossfade). Protocol: `list_plugins`, `reload_plugin`, `plugin_status` events (`docs/PROTOCOL.md`).
 - **Isolation-lite.** Every call into plugin code (DLL functions, Faust compute) runs inside
-  `platform::guardedCall` (SEH `__try`, `_resetstkoflw` on stack overflow) with MXCSR saved/restored (FTZ/DAZ
+  `platform::guardedCall` (Windows: SEH `__try`, `_resetstkoflw` on stack overflow; POSIX: SIGSEGV/SIGBUS/SIGILL/
+  SIGFPE handlers + `sigsetjmp`/`siglongjmp`, re-installed when another component replaced them, an alternate
+  signal stack per thread from a static pool, C++ exceptions caught; codes reported as the Windows ones, e.g.
+  `0xC0000005`, so messages match) with the FP control register (MXCSR / ARM64 FPCR) saved/restored (FTZ/DAZ
   re-asserted, §4.5). A fault mutes that instance for good (until a reload creates new ones) and is reported via
   an atomic counter on the version → `plugin_status` `faulted` + `log` error (polled on the control thread).
   NaN/Inf output zeroes the block and resets/clears the instance (a DLL instance is muted after 8 consecutive bad
@@ -477,8 +489,10 @@ JSON over WebSocket, see `docs/PROTOCOL.md` (source of truth for UI and engine; 
 - **Port conflicts.** ixwebsocket sets `SO_REUSEADDR`, which on Windows lets a second socket bind a port that is
   already listening. So before each bind `ControlServer::probe` tries an exclusive bind (`SO_EXCLUSIVEADDRUSE`) of
   exactly `127.0.0.1:<port>`; when refused, the owner is named from the listener table (`platform/PortOwner`:
-  `GetExtendedTcpTable` IPv4 + IPv6 → pid → image; a listener on `127.0.0.1`, `0.0.0.0` or `[::]`) and classified
-  (`control/PortConflict`: `keysynth` = image `keysynth-engine.exe`, else `foreign`). Refused without a nameable
+  `GetExtendedTcpTable` IPv4 + IPv6 → pid → image; macOS: `libproc`, the user's own processes; a listener on
+  `127.0.0.1`, `0.0.0.0` or `[::]`) and classified (`control/PortConflict`: `keysynth` = image
+  `keysynth-engine[.exe]`, else `foreign`). On macOS (BSD sockets) a busy port is refused by the bind itself; the
+  trial bind (no `SO_REUSEADDR`) only names the owner earlier. Refused without a nameable
   listener (TIME_WAIT connections of a previous run) → the real bind decides. A v6-only `[::]` / `[::1]` listener
   and a non-exclusive `0.0.0.0` one (the more specific 127.0.0.1 bind wins loopback traffic) do not block; `[::1]`
   is logged (`localhost` clients may reach it). WS (7341) and HTTP (7340) bind independently.
@@ -519,15 +533,18 @@ Design `docs/specs/2026-10-12-cloud.md` (§11 wins), REST + storage contract `do
 wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thread.
 
 - **AppPaths** (`core/AppPaths`): *installed* mode iff `installed.flag` is next to the exe (app dir = exe dir, data
-  root `%LOCALAPPDATA%\keysynth`), else *dev* (repo checkout, data root `<repo>/userdata`, as before); `KS_DATA_DIR`
+  root `%LOCALAPPDATA%\keysynth`) or in `keysynth.app/Contents/Resources` (app dir = Resources, data root
+  `~/Library/Application Support/keysynth`), else *dev* (repo checkout, data root `<repo>/userdata`, as before); `KS_DATA_DIR`
   replaces the data root (`discover()` only). Holds every location of the contract table (settings, `cloud.json`,
   logs, plugins + build/Faust cache, sample cache) and the **active profile** (`userdata`: local profile or
   `accounts/<id>`). Wire paths are *logical* (`userdata/…` = active profile, `presets/…` = app dir,
   `assets/samples/…` = asset dirs or cache); `resolveAllowed` maps logical → disk, `relativeToRoot` disk → logical.
 - **HTTP** behind `cloud::HttpTransport` (one blocking `send()` with streaming sink + cancel flag); production =
-  `JuceHttpTransport` (JUCE `WebInputStream`, WinINet on Windows, no redirects followed), tests = fakes. Base URL
+  `JuceHttpTransport` (JUCE `WebInputStream`, WinINet on Windows, NSURLSession on macOS, no redirects followed), tests = fakes. Base URL
   compiled in (service root `https://mvv42.ru/keysynth`; requests go to `<root>/api/...`, nginx maps `/keysynth/api/` → app `/api/`), dev override `--cloud-api` / `KS_CLOUD_API` (dev builds only).
-- **CloudClient** (`cloud/`): `cloud.json` (deviceId, link; the token DPAPI-protected via `platform/Dpapi`), link /
+- **CloudClient** (`cloud/`): `cloud.json` (deviceId, link; the token protected via `platform/Dpapi`: DPAPI on
+  Windows; macOS: AES-256-CBC + HMAC-SHA256 with a random per-user key in the login keychain, item `keysynth` /
+  `secret-key:<entropy>` — same blob-at-rest contract), link /
   unlink / status, bearer header on every call, drops the token on any 401. One worker thread for its own calls;
   `api()` is callable from other workers (thread-safe, token under a mutex).
 - **SampleService** (`samples/`): manifest (cached `manifest.json` + ETag), `cache.json` index, jobs (entry /
@@ -547,9 +564,11 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   engine keeps no listening port for it: while linked, `cloud::RelayClient` (owned by CloudServices, started by the
   app after the ControlServer exists) holds one outbound WebSocket `<api root>/api/relay?role=host` (`https`→`wss`)
   with `Authorization: Bearer <device token>`.
-  - Socket: `platform/WinHttpWebSocket` behind the abstract `platform::WebSocket` (tests use a fake): WinHTTP with
-    `WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY`, TLS for `wss`, custom headers, blocking handshake, a receive thread
-    (callbacks) and a send thread draining a queue (`send()` never blocks the caller). No new dependency.
+  - Socket: `platform::makeDefaultWebSocket()` behind the abstract `platform::WebSocket` (tests use a fake).
+    Windows `platform/WinHttpWebSocket`: WinHTTP with `WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY`, TLS for `wss`, custom
+    headers, blocking handshake, a receive thread (callbacks) and a send thread draining a queue (`send()` never
+    blocks the caller). macOS `platform/WebSocket_mac.mm`: `NSURLSessionWebSocketTask` (system proxy, TLS), the
+    same contract with callbacks on the session's serial delegate queue. No new dependency.
   - RelayClient thread: connect while linked (token re-read each attempt; a changed token reconnects), `hello
     {deviceId,name,version}` after the upgrade, app-level `{t:"ping"}` every 20 s, `{t:"pong"}` to server pings,
     close + reconnect after 45 s without any frame. Failures back off 1 s → 30 s (doubling, ±20 % jitter; reset by
@@ -586,7 +605,7 @@ wire messages PROTOCOL.md *Cloud & samples*. Nothing here runs on the audio thre
   exists only in local variables of the link call (never stored, logged or put in a URL). Update check: GitHub
   `releases/latest` vs `hello.version`.
 
-## 16. Desktop app (Windows packaging)
+## 16. Desktop app (Windows and macOS packaging)
 
 Design `docs/specs/2026-10-12-cloud.md` §7 + §11 (Windows packaging); build/test `docs/TESTING.md` *Release /
 installer*. The engine stays one process; desktop mode only adds a tray icon and process-level glue.
@@ -628,6 +647,32 @@ installer*. The engine stays one process; desktop mode only adds a tray icon and
   is set in `PrepareToInstall` / `usUninstall`; silent setup stops it at start and restarts it with `--tray`
   afterwards. Keeps `%LOCALAPPDATA%\keysynth` unless the user agrees (silent: `/DELETEDATA`). English +
   Russian (chosen from the Windows UI language).
+- **macOS** (same features, differences only): `keysynth.app` built by `scripts/build_app_macos.sh` (the
+  `keysynth-app` binary as `Contents/MacOS/keysynth-engine`, `Info.plist` from `installer/macos/Info.plist.in`:
+  `LSUIElement` = menu-bar app without a Dock icon, `keysynth://` scheme, microphone usage text for the audio
+  input; `Contents/Resources` = the Windows app dir: `installed.flag`, presets, `ui/dist`, `lib/libfaust.2.dylib`
+  + `share/faust/*.lib`, Faust example plugins), ad-hoc signed (no Apple Developer ID: the first start of a
+  downloaded copy needs «Open Anyway»; no hardened runtime, so the Faust JIT and user `.dylib` plugins load), in
+  `keysynth-macos[-X.Y.Z].dmg`. Differences in the glue:
+  - `main()` creates `NSApp` before JUCE's initialiser (`platform::initApplication`: JUCE does it only for
+    `START_JUCE_APPLICATION` apps; without it `[NSApp run]` returns at once) and sets the accessory policy in
+    desktop mode.
+  - LaunchServices never starts a second process for a running app; it sends Apple Events
+    (`platform::installAppEventHandlers`, after JUCE's, replacing its URL handler): *reopen* (Finder / Dock /
+    Spotlight launch) = an open request, *quit* (logout, shutdown) = a clean quit (AppKit would `exit()`),
+    `kAEGetURL` = a `keysynth://` launch — it arrives after the run loop starts, so open-on-start waits 500 ms
+    and is skipped for a link launch.
+  - Single instance (`--quit`, dev `--tray` runs): exclusive `flock` on `$TMPDIR/keysynth-engine-<uid>.lock` + a
+    datagram socket next to it carrying open/quit (polled like the Windows events).
+  - Tray = `NSStatusItem` (JUCE): template icon `assets/icon/keysynth-tray-template.png`, the menu on any click
+    («Open keysynth» first), «Open at Login» = `SMAppService.mainAppService` (no-op outside a bundle).
+  - No console: started without a terminal, stdout/stderr go to `<data>/logs/engine.log`; fatal start errors use a
+    system alert (`CFUserNotificationDisplayAlert`).
+  - No installer: the first start of the bundle copies the example plugins into `<data>/plugins` (never over an
+    existing dir); uninstall = drag to the Trash (the data dir stays).
+- **Release**: `.github/workflows/release.yml` builds and tests both platforms; the GitHub Release (tag `vX.Y.Z`)
+  is published only when both succeed, so Windows and macOS always ship the same version. The web UI picks the
+  download by OS (`ui/src/platform/os.ts`).
 
 ## 17. MIDI processors (per-layer MIDI tools)
 

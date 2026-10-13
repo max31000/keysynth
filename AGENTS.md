@@ -45,10 +45,14 @@ scripts/start.ps1 / scripts/start-dev.ps1        # launchers (play / UI dev), se
 cd ui; npm install; npm run dev                   # UI dev server (http://localhost:5173)
 cd ui; npm test
 ```
+macOS (Apple Silicon): `scripts/configure.sh`, `cmake --build build --target ...`, `build/bin/ks-tests`,
+`scripts/start.sh` / `start-dev.sh` / `stop-dev.sh`, `scripts/fetch_faust.sh`, `scripts/build_plugin.sh`,
+`scripts/build_app_macos.sh` (docs/TESTING.md *macOS*). Both platforms ship the same features and version: a change
+that touches `engine/src/platform/` or `app/` needs both branches (Windows / macOS); CI builds macOS on every PR.
 Parallel agents: use your own build dir (`-B build-<task>`) to avoid clobbering.
 
 ## Conventions
-- C++20, MSVC, warnings as errors in `engine/` code (not deps). `namespace ks`. Files `PascalCase.h/.cpp`.
+- C++20, MSVC and Apple clang, warnings as errors in `engine/` code (not deps). `namespace ks`. Files `PascalCase.h/.cpp`.
 - Param ids `snake_case`; module typeIds lowercase (`va`, `epiano`, `plugin:<id>`).
 - UI: TypeScript strict, React function components, Zustand store, protocol types in `ui/src/protocol/`.
 - Commits: conventional (`feat(va): ...`, `fix(engine): ...`).

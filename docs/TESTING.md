@@ -1,7 +1,7 @@
 # Testing, rendering and analysis
 
 All commands from the repo root in PowerShell (Git Bash works too). Windows 11, MSVC Build Tools (VS 18 / 2026),
-CMake ≥ 3.25, Python 3.12.
+CMake ≥ 3.25, Python 3.12. macOS (Apple Silicon): see [macOS](#macos) — same tests, `.sh` scripts.
 
 ## Build
 
@@ -322,7 +322,56 @@ out\keysynth-setup.exe /VERYSILENT /CURRENTUSER /DIR="$dir"   # silent upgrade w
 & "$dir\unins000.exe" /VERYSILENT /DELETEDATA   # without /DELETEDATA %LOCALAPPDATA%\keysynth is kept
 ```
 
-CI: `.github/workflows/release-windows.yml` on tags `v*` (and manual dispatch, artifact only): windows-latest,
+CI: `.github/workflows/release.yml` on tags `v*` (and manual dispatch, artifact only). Windows job: windows-latest,
 `.deps` + Faust cache, `scripts/configure.ps1 -Generator auto` (newest VS on the runner: 17 2022 or 18 2026),
 Release build, `ks-tests` default tier, `scripts/build_installer.ps1 -NoBuild`, uploads `keysynth-setup.exe` +
 `keysynth-setup-X.Y.Z.exe` to the GitHub Release of the tag. Unsigned: SmartScreen shows "More info → Run anyway".
+The macOS job (macos-15, arm64) builds, runs `ks-tests` and `scripts/build_app_macos.sh`; the release is published
+only when both jobs pass (same version on both platforms).
+
+## macOS
+
+Apple Silicon, macOS 13+. Xcode command line tools (`xcode-select --install`), `brew install cmake ninja`, Node 22+,
+Python 3 (analysis scripts). Same tests and tools as Windows; scripts are the `.sh` counterparts of the `.ps1` ones.
+
+```bash
+scripts/fetch_faust.sh                 # Faust 2.88.0 arm64 dmg -> .tools/faust (libfaust.2.dylib)
+scripts/configure.sh                   # -> build/ (Ninja, Release), deps cached in .deps/
+scripts/configure.sh build-va          # own build dir (worktrees / parallel agents)
+cmake --build build --target keysynth-engine ks-render ks-bench ks-tests
+build/bin/ks-tests --reporter compact  # all 257+ cases run on macOS, none skipped with Faust present
+build/bin/keysynth-engine              # CoreAudio + CoreMIDI; --no-audio for UI work; --buffer N
+scripts/start.sh                       # play: engine + UI in the browser (start-dev.sh: Vite; stop-dev.sh)
+scripts/build_plugin.sh cpp_bitcrusher # C++ plugin -> plugins/.build/<name>-<hash>.dylib
+```
+
+Binaries are in `build/bin/` (single-config Ninja; `keysynth-app` in `build/bin/Release/app/`). `[dll]` tests build
+their plugins with `build_plugin.sh` (clang++); the fault-isolation test crashes a plugin on purpose (SIGSEGV is
+caught, the message reads `0xC0000005` as on Windows). The `[cloud]` secret test writes one keychain item
+(`keysynth` / `secret-key:keysynth-cloud-v1`) — the same key a linked engine uses, never a token.
+
+CI: `.github/workflows/engine-macos.yml` (push to main / PRs touching the engine): build + `ks-tests` on macos-15.
+
+### macOS release
+
+```bash
+scripts/build_app_macos.sh                         # version: vX.Y.Z tag on HEAD, else project()
+scripts/build_app_macos.sh --version 1.2.3 --no-build --skip-ui   # repackage
+# -> out/keysynth-macos-X.Y.Z.dmg + out/keysynth-macos.dmg (keysynth.app inside, ad-hoc signed)
+```
+
+Smoke test without touching `~/Library` (the bundle is in installed mode, data in a temp dir):
+
+```bash
+KS_DATA_DIR=/tmp/ks-data out/stage/keysynth.app/Contents/MacOS/keysynth-engine --tray --no-audio --port 7361 --http-port 7360 &
+out/stage/keysynth.app/Contents/MacOS/keysynth-engine --tray --port 7361   # second instance: "already running", exit 0
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7360/          # 200 (bundled ui/dist)
+cat /tmp/ks-data/logs/engine.log          # faust plugins ok, examples copied to /tmp/ks-data/plugins
+out/stage/keysynth.app/Contents/MacOS/keysynth-engine --quit               # clean quit (exit 0)
+```
+
+Manual checks (need a person): menu-bar icon and menu (light + dark), «Open at Login» (System Settings > General >
+Login Items), `keysynth://open` link from the web UI (starts / wakes the app, no extra browser tab), first start of
+a *downloaded* dmg (Privacy & Security > «Open Anyway»), the microphone prompt when an audio input is selected, and
+the web UI in Safari (`https://mvv42.ru/keysynth/` reaching `ws://127.0.0.1:7341`; if Safari blocks it, the local UI
+`http://127.0.0.1:7340/` always works).

@@ -3,6 +3,16 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- macOS port (Apple Silicon, macOS 13+), same features as Windows (ARCHITECTURE §1, §16 *macOS*; TESTING *macOS*):
+  CoreAudio/CoreMIDI (default buffer 128), POSIX/Cocoa platform layer (keychain-held token key, NSURLSession relay
+  socket, libproc port owner, flock + socket single instance, Apple Events, SMAppService login item, signal-based
+  plugin fault guard, FPCR flush-to-zero), Faust (official arm64 libfaust), C++ plugins as `.dylib`,
+  `keysynth.app` menu-bar app + dmg (`scripts/build_app_macos.sh`, ad-hoc signed), `.sh` launchers, OS-aware web
+  UI downloads, `release.yml` (one release for both OSes) + `engine-macos.yml` (PR CI). All `ks-tests` pass on
+  macOS with nothing skipped. Fixes found on the way that also mattered elsewhere: `resolveAllowed` rejected every
+  absolute POSIX path, aligned `operator new` (RT checks) rejected alignments < 8 on non-MSVC, duplicate
+  `platform::currentProcessId`. Manual checks still open (need a person at the Mac): menu-bar menu in light/dark,
+  «Open at Login», `keysynth://` link, first start of a downloaded dmg, microphone prompt, web UI in Safari.
 - v0.5.0 presets +73 (keys/acoustic: piano, EP, organ, bells, brass, strings, choir, splits) → 203 factory presets,
   all at −16 LUFS. Synth/FX preset batch (~65) pending (agent launch blocked by the permission classifier).
 - v0.4.0 MIDI tools per layer (`arp`, `chord`, `hold`; module kind Midi) + songs/setlists (`song_*`, control keys,
@@ -133,7 +143,6 @@ Update when a chunk of work lands. Newest first inside each section.
   Access prompt) → automatic account link → preset with samples auto-downloads → play. Also inside the shell iframe
   (LNA permission may need an iframe `allow` attribute) and `keysynth://open` from the page.
 - Plugin sync (deferred for security: needs local confirmation + hash pinning).
-- macOS port (separate task on the owner's MacBook).
 - Test on real hardware: ASIO panel button with UR22C, buffer change in the Yamaha driver app while playing
   (check `userdata/logs/audio.log`), play-feel per engine on the P-143.
 - Ideas from preset work: wah, Binson Echorec-style drum echo, step sequencer/arpeggiator, pitch-bend envelope for

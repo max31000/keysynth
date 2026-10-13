@@ -1,8 +1,10 @@
-# Windows release: tag vX.Y.Z -> build + test -> Inno Setup installer -> GitHub Release assets
-#   keysynth-setup.exe (stable name for the direct "latest/download" link) and keysynth-setup-X.Y.Z.exe.
-# Manual dispatch builds the same installer as a workflow artifact only (no release).
-# Local equivalent and details: docs/TESTING.md "Release / installer", ARCHITECTURE §16.
-name: Release (Windows)
+# Release: tag vX.Y.Z -> Windows and macOS builds + tests -> one GitHub Release with both, so the two platforms
+# always ship the same version (the release job needs both builds):
+#   Windows: keysynth-setup.exe (stable name for the direct "latest/download" link) + keysynth-setup-X.Y.Z.exe
+#   macOS:   keysynth-macos.dmg (stable name) + keysynth-macos-X.Y.Z.dmg
+# Manual dispatch builds both as workflow artifacts only (no release).
+# Local equivalent and details: docs/TESTING.md "Release / installer" and "macOS release", ARCHITECTURE §16.
+name: Release
 
 on:
   push:
@@ -19,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-windows-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -109,9 +111,81 @@ jobs:
             out/keysynth-setup-${{ steps.ver.outputs.version }}.exe
           if-no-files-found: error
 
+  macos:
+    runs-on: macos-15 # Apple Silicon
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]] || { echo "tag must be vX.Y.Z (got $GITHUB_REF_NAME)"; exit 1; }
+            v="${BASH_REMATCH[1]}"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            v="$INPUT_VERSION"
+          else
+            v="$(sed -nE 's/^project\(keysynth VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)"
+          fi
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad version '$v'"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "keysynth $v"
+
+      - name: Toolchain
+        run: |
+          brew install ninja
+          clang --version
+          cmake --version
+          node --version
+
+      - name: Cache dependency sources (.deps)
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: deps-${{ runner.os }}-
+
+      - name: Cache Faust
+        uses: actions/cache@v4
+        with:
+          path: .tools/faust
+          key: faust-${{ runner.os }}-${{ hashFiles('scripts/fetch_faust.sh') }}
+
+      - name: Fetch Faust
+        run: scripts/fetch_faust.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Configure (sfizz ON, Faust ON)
+        run: scripts/configure.sh build -DKS_VERSION=${{ steps.ver.outputs.version }} -DKS_WITH_SFIZZ=ON -DKS_WITH_FAUST=ON
+
+      - name: Build (Release)
+        run: cmake --build build --target keysynth-app ks-tests --parallel
+
+      - name: Tests (default tier; hidden [.samples] / [.cloud-live] / [.full] are not run)
+        run: build/bin/ks-tests --reporter compact
+
+      - name: App + disk image
+        run: scripts/build_app_macos.sh --build-dir build --version ${{ steps.ver.outputs.version }} --no-build --clean-ui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keysynth-macos-${{ steps.ver.outputs.version }}
+          path: |
+            out/keysynth-macos.dmg
+            out/keysynth-macos-${{ steps.ver.outputs.version }}.dmg
+          if-no-files-found: error
+
   release:
     if: github.ref_type == 'tag'
-    needs: installer
+    needs: [installer, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -120,11 +194,17 @@ jobs:
         with:
           name: keysynth-setup-${{ needs.installer.outputs.version }}
           path: out
+      - uses: actions/download-artifact@v4
+        with:
+          name: keysynth-macos-${{ needs.installer.outputs.version }}
+          path: out
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             out/keysynth-setup.exe
             out/keysynth-setup-${{ needs.installer.outputs.version }}.exe
+            out/keysynth-macos.dmg
+            out/keysynth-macos-${{ needs.installer.outputs.version }}.dmg
           fail_on_unmatched_files: true
           generate_release_notes: true
