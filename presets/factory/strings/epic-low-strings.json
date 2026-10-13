@@ -1,0 +1,110 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Epic Low Strings",
+    "category": "Strings",
+    "tags": [
+      "strings",
+      "film",
+      "epic",
+      "cello",
+      "bass",
+      "sampled"
+    ],
+    "description": "Cello section with the double basses an octave below, sustain, big hall: dark, weighty low-string pads and themes. Reference: Hans Zimmer - Time (Inception).",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Celli",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.15,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/cello-SEC-sustain.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Basses 8vb",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 72,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": -12,
+        "channel": 0,
+        "volume_db": -3,
+        "pan": -0.15,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/bass-SEC-sustain.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": 0,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "hp_on": 1,
+          "hp_hz": 30,
+          "p1_hz": 200,
+          "p1_db": -1.5,
+          "p1_q": 0.8
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.22,
+          "decay": 2.2,
+          "size": 0.75,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

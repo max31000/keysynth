@@ -1,0 +1,101 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Gospel Grand",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "grand",
+      "gospel",
+      "church",
+      "sampled"
+    ],
+    "description": "Full, bright grand for gospel runs and shout chords: easy velocity curve, body boost around 150 Hz, presence lift and a church-like chamber. Reference: Aretha Franklin - Amazing Grace, Sunday-service gospel piano.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Grand",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4,
+          "velocity_curve": -0.3,
+          "polyphony": 128
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "ls_hz": 150,
+            "ls_db": 2,
+            "p1_hz": 450,
+            "p1_db": -1.5,
+            "p1_q": 1.0,
+            "p2_hz": 3000,
+            "p2_db": 2,
+            "p2_q": 0.8
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -16,
+            "ratio": 2.5,
+            "attack_ms": 15,
+            "release_ms": 200,
+            "makeup_db": 2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.22,
+            "decay": 1.9,
+            "size": 0.65,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 9.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

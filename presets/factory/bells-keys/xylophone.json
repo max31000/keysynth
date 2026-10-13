@@ -1,0 +1,72 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Xylophone (SSO)",
+    "category": "Bells & Keys",
+    "tags": [
+      "xylophone",
+      "orchestral",
+      "mallet",
+      "sampled"
+    ],
+    "description": "Sonatina Symphonic Orchestra xylophone, dry and woody, small hall. Reference: Saint-Saens - Danse macabre.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Xylophone",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Percussion - Xylophone.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.15,
+            "decay": 1.4,
+            "size": 0.5,
+            "predelay_ms": 15,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 11.9,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

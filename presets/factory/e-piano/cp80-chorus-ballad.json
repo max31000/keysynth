@@ -1,0 +1,95 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "CP80 Chorus Ballad",
+    "category": "E.Piano",
+    "tags": [
+      "cp80",
+      "electric grand",
+      "80s",
+      "chorus",
+      "sampled"
+    ],
+    "description": "Greg Sullivan Yamaha CP80 electric grand with a stereo Dimension-style chorus and plate: the shimmering 80s stage-ballad sound. Reference: Tony Banks (Genesis), early-80s ballads.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "CP80",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6,
+          "velocity_curve": -0.1
+        },
+        "state": {
+          "sfz": "assets/samples/gregsullivan-epianos/GregSullivan.E-Pianos-master/CP80/CP80.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 60,
+            "p1_hz": 350,
+            "p1_db": -1.5,
+            "p1_q": 1.0,
+            "hs_hz": 9000,
+            "hs_db": 1.5
+          }
+        },
+        {
+          "type": "chorus",
+          "bypass": false,
+          "params": {
+            "mode": 4,
+            "mix": 0.5
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.18,
+            "decay": 1.6,
+            "size": 0.5,
+            "predelay_ms": 18,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 8.6,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Mellotron Combined Choir",
+    "category": "Choir & Vox",
+    "tags": [
+      "mellotron",
+      "choir",
+      "tape",
+      "prog",
+      "sampled"
+    ],
+    "description": "MelloSFZotron combined choir tapes (8 s, no loop; CC1 = pitch): male + female tape choir, darker and wider than the 8-voice choir, chamber reverb. Reference: 70s prog Mellotron choir pads (Genesis, Yes).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Tape Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/mellosfzotron/Combined_Choir.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.22,
+            "decay": 1.9,
+            "size": 0.6,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.4,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

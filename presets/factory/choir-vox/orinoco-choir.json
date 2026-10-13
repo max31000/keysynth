@@ -1,0 +1,101 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Orinoco Choir",
+    "category": "Choir & Vox",
+    "tags": [
+      "choir",
+      "female",
+      "new age",
+      "ethereal",
+      "sampled",
+      "shimmer"
+    ],
+    "description": "Ethereal female choir pad: VPO female choir through a quarter-note ping-pong and a shimmer reverb. Reference: Enya - Orinoco Flow / Only Time.",
+    "author": "factory"
+  },
+  "tempo": 90,
+  "layers": [
+    {
+      "name": "Female Choir",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Vocals/choir-FEMALE-sustain.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 150,
+            "p2_hz": 3000,
+            "p2_db": 1.5,
+            "p2_q": 0.8
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "sync": 7,
+            "feedback": 0.25,
+            "mix": 0.14,
+            "low_cut_hz": 300,
+            "high_cut_hz": 5000,
+            "wow": 0,
+            "flutter": 0,
+            "drive": 0
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 5,
+            "mix": 0.3,
+            "decay": 2.2,
+            "size": 0.75,
+            "predelay_ms": 30,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000,
+            "shimmer": 0.3
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 4.7,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

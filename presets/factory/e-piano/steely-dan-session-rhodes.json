@@ -1,0 +1,109 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Steely Dan Session Rhodes",
+    "category": "E.Piano",
+    "tags": [
+      "rhodes",
+      "70s",
+      "jazz rock",
+      "dry",
+      "compressed"
+    ],
+    "description": "Clean, tight Rhodes Mk I for session-style jazz-rock voicings: medium bark, compressor, presence lift, almost dry. Reference: Steely Dan - Aja / Peg era.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Rhodes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "polyphony": 32,
+          "volume_db": -3,
+          "model": 0,
+          "tone": 0.55,
+          "bark": 0.45,
+          "hammer_hardness": 0.55,
+          "velocity_curve": 0.0,
+          "dynamics": 26,
+          "decay": 1.0,
+          "tine_mix": 0.5,
+          "pickup_distance": 0.45,
+          "drive": 0.12,
+          "noise": 0.2
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -20,
+            "ratio": 3,
+            "attack_ms": 8,
+            "release_ms": 140,
+            "makeup_db": 3
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 50,
+            "p1_hz": 300,
+            "p1_db": -1.5,
+            "p1_q": 1.0,
+            "p2_hz": 2200,
+            "p2_db": 2,
+            "p2_q": 0.9
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.09,
+            "decay": 0.8,
+            "size": 0.3,
+            "predelay_ms": 8,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 8.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

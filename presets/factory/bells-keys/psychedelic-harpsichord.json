@@ -1,0 +1,120 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Psychedelic Harpsichord",
+    "category": "Bells & Keys",
+    "tags": [
+      "harpsichord",
+      "60s",
+      "baroque pop",
+      "psychedelic",
+      "sampled",
+      "phaser"
+    ],
+    "description": "Clavecin harpsichord through a slow phaser and a Binson-style multi-head echo: 60s baroque-psych pop. Reference: The Left Banke - Walk Away Renee, The Beatles - Piggies era.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Harpsichord",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/clavecin/Clavecin-master/Clavecin.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 50
+          }
+        },
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 1,
+            "rate": 0.2,
+            "sync": 0,
+            "depth": 0.7,
+            "centre_hz": 900,
+            "feedback": 0.4,
+            "spread": 0.4,
+            "mix": 0.45
+          }
+        },
+        {
+          "type": "echo",
+          "bypass": false,
+          "params": {
+            "heads": 4,
+            "time": 140,
+            "sync": 0,
+            "feedback": 0.25,
+            "tone": 0.45,
+            "drive": 0.25,
+            "wow": 0.3,
+            "flutter": 0.2,
+            "width": 0.7,
+            "mix": 0.22
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hs_hz": 7000,
+            "hs_db": -3
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.12,
+            "decay": 1.0,
+            "size": 0.4,
+            "predelay_ms": 8,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.7,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

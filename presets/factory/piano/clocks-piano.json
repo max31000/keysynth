@@ -1,0 +1,120 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Clocks Piano",
+    "category": "Piano",
+    "tags": [
+      "acoustic",
+      "grand",
+      "pop",
+      "rock",
+      "2000s",
+      "sampled",
+      "delay"
+    ],
+    "description": "Bright, mid-scooped pop-rock grand for driving arpeggios, a quiet dotted-eighth ping-pong and a plate. Reference: Coldplay - Clocks.",
+    "author": "factory"
+  },
+  "tempo": 130,
+  "layers": [
+    {
+      "name": "Grand",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4,
+          "velocity_curve": -0.35,
+          "polyphony": 96
+        },
+        "state": {
+          "sfz": "assets/samples/salamander/SalamanderGrandPiano-SFZ+FLAC-V3+20200602/SalamanderGrandPiano-V3+20200602.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 70,
+            "p1_hz": 400,
+            "p1_db": -3,
+            "p1_q": 0.9,
+            "p2_hz": 3500,
+            "p2_db": 2.5,
+            "p2_q": 0.8,
+            "hs_hz": 10000,
+            "hs_db": 1.5
+          }
+        },
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -18,
+            "ratio": 2.5,
+            "attack_ms": 10,
+            "release_ms": 140,
+            "makeup_db": 2
+          }
+        },
+        {
+          "type": "delay",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "sync": 11,
+            "feedback": 0.22,
+            "mix": 0.1,
+            "low_cut_hz": 300,
+            "high_cut_hz": 5000,
+            "wow": 0,
+            "flutter": 0,
+            "drive": 0
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.16,
+            "decay": 1.5,
+            "size": 0.5,
+            "predelay_ms": 15,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.3,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

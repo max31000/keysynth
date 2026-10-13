@@ -1,0 +1,86 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Sunday Ballad B3",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "b3",
+      "gospel",
+      "ballad",
+      "soft"
+    ],
+    "description": "Soft gospel-ballad pad: 8' + 4' with a whisper of 16' (608400000), C3 chorus, no click, slow Leslie. Sits behind piano and vocals. Reference: slow gospel / soul ballads.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 6,
+          "db_5_1_3": 0,
+          "db_8": 8,
+          "db_4": 4,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 0,
+          "perc_harmonic": 0,
+          "perc_decay": 0,
+          "perc_volume": 0,
+          "vibrato": 6,
+          "click": 0.15,
+          "leakage": 0.2,
+          "drive": 0.05,
+          "volume_db": 0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 0,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.1,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -3.8,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Baroque Harpsichord + Strings",
+    "category": "Splits & Layers",
+    "tags": [
+      "layer",
+      "harpsichord",
+      "strings",
+      "baroque",
+      "chamber",
+      "sampled"
+    ],
+    "description": "Continuo layer: Clavecin harpsichord in front of a soft VPO solo-strings chamber ensemble, chamber reverb. Reference: Bach - Brandenburg Concertos, Vivaldi - The Four Seasons.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Harpsichord",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/clavecin/Clavecin-master/Clavecin.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Chamber Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": -10,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SOLO-sustain.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": 3.4,
+    "fx": [
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 3,
+          "mix": 0.2,
+          "decay": 1.6,
+          "size": 0.55,
+          "predelay_ms": 15,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

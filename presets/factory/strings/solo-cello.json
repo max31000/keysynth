@@ -1,0 +1,73 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Solo Cello (SSO)",
+    "category": "Strings",
+    "tags": [
+      "cello",
+      "solo",
+      "classical",
+      "elegy",
+      "sampled"
+    ],
+    "description": "Sonatina Symphonic Orchestra solo cello in a warm hall. Play monophonic lines. Reference: Elgar - Cello Concerto, Saint-Saens - The Swan.",
+    "author": "factory"
+  },
+  "tempo": 70,
+  "layers": [
+    {
+      "name": "Cello",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/sso/Sonatina Symphonic Orchestra/Strings - Cello Solo.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.22,
+            "decay": 2.0,
+            "size": 0.65,
+            "predelay_ms": 20,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 2.9,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

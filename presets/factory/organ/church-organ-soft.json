@@ -1,0 +1,81 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Church Organ Soft (Doux)",
+    "category": "Organ",
+    "tags": [
+      "church",
+      "pipe organ",
+      "classical",
+      "sampled",
+      "soft"
+    ],
+    "description": "Orgue Eglise 'Doux' registration: soft flue stops for hymns and chorale preludes, in a church-sized hall. Reference: Bach - chorale preludes, quiet service music.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Pipe Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/orgue-eglise/OrgueEglise-master/Orgue Eglise Doux.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 20
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "mix": 0.25,
+            "decay": 2.3,
+            "size": 0.8,
+            "predelay_ms": 30,
+            "damp_hf": 0.5,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

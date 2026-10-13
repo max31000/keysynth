@@ -1,0 +1,98 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Philly Disco Strings",
+    "category": "Strings",
+    "tags": [
+      "strings",
+      "disco",
+      "70s",
+      "soul",
+      "sampled"
+    ],
+    "description": "Bright, punchy disco string section: VPO accented section strings, compressed, high-passed, glossy plate. Reference: MFSB / Philadelphia International, Chic.",
+    "author": "factory"
+  },
+  "tempo": 118,
+  "layers": [
+    {
+      "name": "Strings",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Strings/all-strings-SEC-accent.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -20,
+            "ratio": 3,
+            "attack_ms": 10,
+            "release_ms": 120,
+            "makeup_db": 3
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 150,
+            "p2_hz": 3000,
+            "p2_db": 3,
+            "p2_q": 0.8,
+            "hs_hz": 10000,
+            "hs_db": 2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.2,
+            "decay": 1.6,
+            "size": 0.5,
+            "predelay_ms": 15,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 0.5,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

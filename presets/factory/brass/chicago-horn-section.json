@@ -1,0 +1,110 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Chicago Horn Section",
+    "category": "Brass",
+    "tags": [
+      "horns",
+      "rock",
+      "70s",
+      "section",
+      "sampled"
+    ],
+    "description": "Punchy rock horn section: VPO trumpet and trombone sections with accented attacks, light compression, medium room. Reference: Chicago - 25 or 6 to 4.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Trumpets",
+      "zone": {
+        "key_lo": 55,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.2,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Brass/trumpet-SEC-accent.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Trombones",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 76,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": -0.2,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Brass/trombone-SEC-accent.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -0.8,
+    "fx": [
+      {
+        "type": "compressor",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "threshold_db": -18,
+          "ratio": 2.5,
+          "attack_ms": 10,
+          "release_ms": 150,
+          "makeup_db": 2
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 3,
+          "mix": 0.16,
+          "decay": 1.4,
+          "size": 0.5,
+          "predelay_ms": 15,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

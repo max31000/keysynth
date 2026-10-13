@@ -1,0 +1,94 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Vibraphone (VPO)",
+    "category": "Bells & Keys",
+    "tags": [
+      "vibraphone",
+      "mallet",
+      "jazz",
+      "sampled",
+      "orchestral"
+    ],
+    "description": "Virtual Playing Orchestra vibraphone (auto-damped: notes stop on release, pedal sustains) with a gentle stereo motor tremolo. Reference: Lionel Hampton, Gary Burton.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Vibes",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 6
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Percussion/vibraphone-auto-damp.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hp_on": 1,
+            "hp_hz": 40
+          }
+        },
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "rate": 4.5,
+            "sync": 0,
+            "depth": 0.3,
+            "shape": 0,
+            "smoothing": 0.5,
+            "stereo_phase": 60
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.15,
+            "decay": 1.4,
+            "size": 0.45,
+            "predelay_ms": 12,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -1.7,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

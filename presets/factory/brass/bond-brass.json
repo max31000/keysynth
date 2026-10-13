@@ -1,0 +1,113 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "007 Bond Brass",
+    "category": "Brass",
+    "tags": [
+      "brass",
+      "film",
+      "spy",
+      "60s",
+      "sampled",
+      "orchestral"
+    ],
+    "description": "Dark, brassy spy-film stack: VPO French horn section with the trombone section an octave below (from Bb2 up, within the trombones' range), wide hall. Reference: John Barry - Goldfinger / James Bond theme brass.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Horns",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.15,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Brass/french-horn-SEC-sustain.sfz"
+        }
+      },
+      "fx": []
+    },
+    {
+      "name": "Trombones 8vb",
+      "zone": {
+        "key_lo": 46,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": -12,
+        "channel": 0,
+        "volume_db": -3,
+        "pan": -0.15,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Brass/trombone-SEC-sustain.sfz"
+        }
+      },
+      "fx": []
+    }
+  ],
+  "master": {
+    "volume_db": -2.2,
+    "fx": [
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "hp_on": 1,
+          "hp_hz": 50,
+          "p1_hz": 250,
+          "p1_db": -1.5,
+          "p1_q": 1.0,
+          "p2_hz": 1800,
+          "p2_db": 1.5,
+          "p2_q": 1.0
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 0,
+          "mix": 0.22,
+          "decay": 2.0,
+          "size": 0.7,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

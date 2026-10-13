@@ -1,0 +1,109 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Goodbye Stranger Wurli",
+    "category": "E.Piano",
+    "tags": [
+      "wurlitzer",
+      "supertramp",
+      "70s",
+      "phaser"
+    ],
+    "description": "Supertramp-style Wurlitzer 200A, tight and percussive, through a slow 6-stage phaser and a compressor. Reference: Supertramp - Goodbye Stranger / Breakfast in America era.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Wurlitzer",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "polyphony": 32,
+          "volume_db": -3,
+          "model": 3,
+          "tone": 0.65,
+          "bark": 0.5,
+          "hammer_hardness": 0.65,
+          "velocity_curve": 0.1,
+          "dynamics": 24,
+          "decay": 0.9,
+          "tine_mix": 0.45,
+          "pickup_position": 0.6,
+          "pickup_distance": 0.35,
+          "drive": 0.25,
+          "noise": 0.25
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "compressor",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "threshold_db": -20,
+            "ratio": 3,
+            "attack_ms": 6,
+            "release_ms": 120,
+            "makeup_db": 3
+          }
+        },
+        {
+          "type": "phaser",
+          "bypass": false,
+          "params": {
+            "stages": 1,
+            "rate": 0.25,
+            "sync": 0,
+            "depth": 0.7,
+            "centre_hz": 800,
+            "feedback": 0.35,
+            "spread": 0.3,
+            "mix": 0.45
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 1,
+            "mix": 0.12,
+            "decay": 1.1,
+            "size": 0.4,
+            "predelay_ms": 10,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.1,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

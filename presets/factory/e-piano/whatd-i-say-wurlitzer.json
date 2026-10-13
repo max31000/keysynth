@@ -1,0 +1,97 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "What'd I Say Wurlitzer",
+    "category": "E.Piano",
+    "tags": [
+      "wurlitzer",
+      "50s",
+      "rnb",
+      "tremolo",
+      "soul"
+    ],
+    "description": "Wurlitzer with the built-in amp tremolo turned well up, preamp grit and a small room. Reference: Ray Charles - What'd I Say.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Wurlitzer",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "epiano",
+        "params": {
+          "polyphony": 32,
+          "volume_db": -3,
+          "model": 3,
+          "tone": 0.6,
+          "bark": 0.55,
+          "hammer_hardness": 0.6,
+          "velocity_curve": 0.0,
+          "dynamics": 26,
+          "decay": 1.0,
+          "tine_mix": 0.45,
+          "pickup_position": 0.55,
+          "pickup_distance": 0.4,
+          "drive": 0.35,
+          "noise": 0.3
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "tremolo",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "rate": 5.8,
+            "sync": 0,
+            "depth": 0.4,
+            "shape": 0,
+            "smoothing": 0.5,
+            "stereo_phase": 0
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.14,
+            "decay": 0.9,
+            "size": 0.35,
+            "predelay_ms": 8,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 10.8,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Jon Lord Overdrive Organ",
+    "category": "Organ",
+    "tags": [
+      "hammond",
+      "c3",
+      "hard rock",
+      "70s",
+      "distortion"
+    ],
+    "description": "888000000 with 3rd percussion, the preamp driven hard into a fuzzy tube stage before a fast-spinning 122. Reference: Deep Purple - Highway Star / Hush (Jon Lord's Hammond C3).",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Organ",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "organ",
+        "params": {
+          "db_16": 8,
+          "db_5_1_3": 8,
+          "db_8": 8,
+          "db_4": 0,
+          "db_2_2_3": 0,
+          "db_2": 0,
+          "db_1_3_5": 0,
+          "db_1_1_3": 0,
+          "db_1": 0,
+          "perc": 1,
+          "perc_harmonic": 1,
+          "perc_decay": 0,
+          "perc_volume": 0,
+          "vibrato": 0,
+          "click": 0.7,
+          "leakage": 0.4,
+          "drive": 0.6,
+          "volume_db": 0
+        },
+        "state": {}
+      },
+      "fx": [
+        {
+          "type": "drive",
+          "bypass": false,
+          "params": {
+            "mode": 0,
+            "drive_db": 14,
+            "asymmetry": 0.35,
+            "tone": 0.4,
+            "level_db": -7,
+            "mix": 1.0,
+            "oversample": 2
+          }
+        },
+        {
+          "type": "rotary",
+          "bypass": false,
+          "params": {
+            "speed": 1,
+            "mod_wheel": 1,
+            "sustain_toggle": 0,
+            "drive": 0.5,
+            "spread": 0.7,
+            "mix": 1.0
+          }
+        },
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "lp_on": 1,
+            "lp_hz": 6500,
+            "p1_hz": 800,
+            "p1_db": 1.5,
+            "p1_q": 0.8
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 2,
+            "mix": 0.1,
+            "decay": 0.9,
+            "size": 0.4,
+            "predelay_ms": 8,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -4.5,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

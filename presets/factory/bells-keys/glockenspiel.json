@@ -1,0 +1,80 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "Glockenspiel (VPO)",
+    "category": "Bells & Keys",
+    "tags": [
+      "glockenspiel",
+      "orchestral",
+      "bell",
+      "sampled"
+    ],
+    "description": "Virtual Playing Orchestra glockenspiel with a bright room. Reference: Bruce Springsteen - Born to Run, orchestral bell lines.",
+    "author": "factory"
+  },
+  "tempo": 120,
+  "layers": [
+    {
+      "name": "Glockenspiel",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "sampler",
+        "params": {
+          "volume_db": 4
+        },
+        "state": {
+          "sfz": "assets/samples/vpo/Virtual-Playing-Orchestra3/Percussion/glockenspiel.sfz"
+        }
+      },
+      "fx": [
+        {
+          "type": "eq",
+          "bypass": false,
+          "params": {
+            "hs_hz": 9000,
+            "hs_db": -2
+          }
+        },
+        {
+          "type": "reverb",
+          "bypass": false,
+          "params": {
+            "mode": 3,
+            "mix": 0.18,
+            "decay": 1.5,
+            "size": 0.5,
+            "predelay_ms": 15,
+            "damp_hf": 0.45,
+            "low_cut_hz": 120,
+            "high_cut_hz": 9000
+          }
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": 12,
+    "fx": [
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}
