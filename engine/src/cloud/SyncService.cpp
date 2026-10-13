@@ -316,6 +316,10 @@ SyncPassResult SyncEngine::runPass(const std::atomic<bool>* cancel) {
     HttpRequest listReq;
     listReq.url = col_.endpoint;
     const HttpResponse lr = api_(listReq);
+    if (lr.status == 404 && col_.optional) { // older API without this collection: nothing to sync
+        res.ok = true;
+        return res;
+    }
     if (lr.status != 200) {
         res.error = fail(lr).error;
         return res;

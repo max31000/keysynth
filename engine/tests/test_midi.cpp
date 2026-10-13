@@ -249,6 +249,16 @@ TEST_CASE("arp: latch, retrigger, legato, velocity, pass-through", "[midi][arp]"
         CHECK(o[1].at == 6000);
         CHECK(o[2].at == 30000); // last step 6000 + 24000
     }
+    SECTION("a much shorter step does not burst the missed steps") {
+        Arpeggiator a;
+        setArp(a, {{"sync", 0.0f}, {"rate", 0.5f}}); // free, 96000 samples per step
+        std::map<int64_t, std::pair<std::string, float>> pa = {{40000, {"rate", 50.0f}}}; // 960 samples
+        const auto o = ons(run(a, {on(0, 60)}, 42000, 64, c, pa));
+        REQUIRE(o.size() >= 3);
+        CHECK(o[0].at == 0);
+        CHECK(o[1].at == 40320); // first grid point of the new length after the change (block 39936)
+        CHECK(o[2].at == 40320 + 960);
+    }
 }
 
 TEST_CASE("chord: tables, voicings, refcount, memory", "[midi][chord]") {
@@ -365,6 +375,16 @@ TEST_CASE("midi chain in the engine: arp drives the instrument, no RT violations
     for (int i = 0; i < 400; ++i) peak = std::max(peak, block()); // latched arp keeps playing
     CHECK(peak > 0.01f);
     CHECK(e.telemetry().voices.load() > 0);
+    // A chain edit (chord tool added behind the latched arp) keeps the arp running.
+    const NodeId chord = m.addFx(layer, "chord", std::nullopt);
+    publish(e, m);
+    for (int i = 0; i < 100; ++i) block();
+    peak = 0;
+    for (int i = 0; i < 400; ++i) peak = std::max(peak, block());
+    CHECK(peak > 0.01f);
+    m.removeFx(chord);
+    publish(e, m);
+    for (int i = 0; i < 100; ++i) block();
     // Bypass: the arp's notes are released, the layer goes quiet.
     if (RackGraph* g = e.latestGraph()) g->findModuleNode(arp)->bypass.store(true);
     m.setFxBypass(arp, true);

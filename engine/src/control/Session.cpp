@@ -454,6 +454,12 @@ std::vector<std::string> Session::selectSong(const std::string& path, int sectio
 
 std::vector<std::string> Session::selectSection(int index) {
     if (!activeSong_) throw PatchError("no_song", "no song selected");
+    // Re-read the file: sync may have pulled a newer version meanwhile (a vanished/broken file keeps the copy).
+    try {
+        Song fresh = songs::load(paths_, songPath_);
+        if (!fresh.sections.empty()) activeSong_ = std::move(fresh);
+    } catch (const PatchError&) {
+    }
     const Song& song = *activeSong_;
     if (index < 0 || index >= static_cast<int>(song.sections.size()))
         throw PatchError("bad_request", "section index out of range");
@@ -474,11 +480,13 @@ std::vector<std::string> Session::selectSection(int index) {
             fail("preset", e);
         }
     }
-    if (song.timeSig) setTimeSignature(song.timeSig->first, song.timeSig->second);
+    const bool reloadPattern = sec.pattern && (*sec.pattern != patternPath_ || patternEdited_);
+    if (song.timeSig && (song.timeSig->first != pattern_.numerator || song.timeSig->second != pattern_.denominator))
+        setTimeSignature(song.timeSig->first, song.timeSig->second);
     if (sec.pattern) {
         try {
             if (!isPatternRef(*sec.pattern)) throw PatchError("bad_path", "invalid pattern path '" + *sec.pattern + "'");
-            if (*sec.pattern != patternPath_ || patternEdited_) loadPattern(*sec.pattern, true);
+            if (reloadPattern) loadPattern(*sec.pattern, true);
         } catch (const std::exception& e) {
             fail("pattern", e);
         }

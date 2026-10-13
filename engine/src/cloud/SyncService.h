@@ -46,8 +46,9 @@ struct SyncCollection {
     std::string bodyKey = "patch";                // document key in PUT bodies / GET replies
     std::string baseKey = "presets";              // section of sync.json
     std::string logicalDir = "userdata/presets/"; // wire prefix of conflict files
+    bool optional = false;                        // 404 on the list = server without this collection: skip
     static SyncCollection presets() { return {}; }
-    static SyncCollection songs() { return {"/api/songs", "song", "songs", "userdata/songs/"}; }
+    static SyncCollection songs() { return {"/api/songs", "song", "songs", "userdata/songs/", true}; }
 };
 
 class SyncEngine {

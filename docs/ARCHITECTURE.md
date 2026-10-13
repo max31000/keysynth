@@ -66,7 +66,7 @@ engine/
   src/instruments/<engine>/   One dir per instrument engine.
   src/effects/<effect>/       One dir per effect.
   src/midi/<tool>/            One dir per MIDI processor (arp, chord, hold; §17).
-  src/song/       Song model + JSON, SongStore (factory + user setlists, §18).
+  src/song/       Song model + JSON, `songs::` file store (factory + user setlists, §18).
   src/transport/  Transport clock, Metronome, DrumSequencer, (later) Looper.
   src/preset/     Patch data model <-> JSON, Migrations, PresetStore.
   src/control/    ControlServer (WS + static HTTP via ix::HttpServer), protocol handlers, snapshots.
@@ -668,9 +668,10 @@ A song = metadata + ordered sections; selecting a section loads its preset and s
 `presets/songs/<slug>.json` (factory, read-only, shipped by the installer) and `userdata/songs/<slug>.json` (active
 profile, synced to the account like presets). Schema PRESETS.md *Songs*; wire messages PROTOCOL.md *Songs*.
 
-- `song/Song` (data + lenient JSON + validation; unknown/reserved keys are kept verbatim and written back),
-  `song/SongStore` (list / read / save / delete on the control thread; writes hold `Session::profileMutex()` and
-  then call `onUserPresetsChanged` → sync).
+- `song/Song` (data + lenient JSON + validation; unknown/reserved keys are kept verbatim and written back; out-of-range
+  tempo / meter in a file are dropped with a warning) and `songs::` in the same file (list / read / save / delete on
+  the control thread; writes hold `Session::profileMutex()` and then call `onUserPresetsChanged` → sync). The active
+  song is re-read from disk on every section switch, so a version pulled by sync applies at the next switch.
 - **Session** owns the active song (logical path, parsed song, section index) and the global control keys
   (`settings.json` key `songs.control_keys`, read-modify-write like AudioHost). `selectSection(i)` applies, in order:
   `preset` (`loadPreset`; a bare slug = `userdata/presets/<slug>.json`) → song `time_sig` → section `pattern` (with

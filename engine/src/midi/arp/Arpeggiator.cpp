@@ -358,6 +358,17 @@ void Arpeggiator::processMidi(MidiEventSpan in, MidiEventBuffer& out, const Proc
             }
             ownLen_ = stepLen_;
         }
+        if (!grid_) {
+            // After a re-anchor with a shorter step the next steps may lie in the past: skip them (no burst of
+            // catch-up notes at offset 0), keeping the grid and the swing parity.
+            const double next = anchorTime_ + static_cast<double>(nextOwn_ - anchorStep_) * ownLen_;
+            if (ownLen_ > 0.0 && next < static_cast<double>(t0_) - 1.0) { // > 1 sample late (not boundary rounding)
+                const int64_t k = static_cast<int64_t>(std::ceil((static_cast<double>(t0_) - next) / ownLen_));
+                anchorTime_ = next + static_cast<double>(k) * ownLen_;
+                nextOwn_ += k;
+                anchorStep_ = nextOwn_;
+            }
+        }
     }
     lastGrid_ = grid_;
     gridBeatsUsed_ = gridBeats_;

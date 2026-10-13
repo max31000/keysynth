@@ -165,7 +165,7 @@ Setlists (ARCHITECTURE §18, file format PRESETS.md *Songs*). Song paths are log
 | type | payload | reply |
 |---|---|---|
 | `song_list` | — | `song_list_ok { songs: SongInfo[] }` (factory first, then user; sorted by title) |
-| `song_get` | `{ path }` | `song_get_ok { path, song: Song }` |
+| `song_get` | `{ path }` | `song_get_ok { path, song: Song, warnings }` |
 | `song_save` | `{ song: Song, overwrite? }` → `userdata/songs/<id>.json` (`id` = `song.id` if it is a valid slug, else the slugified title) | `song_save_ok { path, warnings }`; `songs_changed` to others; `song_state` to all when it is the active song. `error` `exists` (file exists, `overwrite` not true), `bad_request` (validation, message names the field) |
 | `song_delete` | `{ path }` (user songs only) | `song_delete_ok { path }`; `songs_changed` to others; deleting the active song closes it (`song_state` to all). `error` `read_only` (factory), `not_found` |
 | `song_select` | `{ path, section? }` (default 0) | `song_select_ok { warnings }`, then `song_state` and `state` to all |

@@ -3,6 +3,19 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
+- Per-layer MIDI tools + setlists (ARCHITECTURE §17, §18): `ModuleKind::Midi` + `processMidi`, `layer.midi[]`
+  (no format bump), `arp` (6 modes, octaves, NoteDivision sync / free rate, gate/legato, swing, latch, retrigger,
+  velocity modes; transport grid or own sample clock), `chord` (12 types + memory, voicings, inversions,
+  `chord_learn`), `hold` (sustain / latch / pedal); bypass and chain edits release notes. Songs: `song/` model +
+  `songs::` store, `song_*` protocol + `song_state`, section switching (preset → meter → pattern → tempo → drums),
+  keyboard control keys (global in settings.json or per song), 6 factory songs (`presets/songs/`), sync of
+  `userdata/songs/` via `/api/songs` (server: shared DocumentEndpoints, migration 002). UI: MIDI chain in the rack,
+  Learn button, songs drawer/editor/bar, «Пульт» song mode, mock support. 6 factory presets (arp / chord).
+  Tests: `[midi]`, `[songs]`, relay trust table, server SongEndpointTests, 5 Vitest files.
+  Review notes kept open: a full 512-event MIDI buffer can drop a processor's note-off (state already updated);
+  the fading instrument in a crossfade only loses note-ons from shared processors (no test); factory arp presets
+  ship with latch off (render test requires decaying tails); deploy the API before engines that sync songs
+  (older APIs answer 404 → treated as "no songs").
 - v0.2.0 remote control via relay (spec docs/specs/2026-10-12-remote.md): server RelayHub `/api/relay`
   (R-A), engine relay host over WinHTTP WebSocket with remote trust (R-B), UI RelayTransport + touch «Пульт»
   view (R-C), nginx WS location (mvv42-infra PR #3). Engine E2E against the real API: `KS_TESTS_ENGINE=1`.

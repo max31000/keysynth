@@ -62,6 +62,16 @@ int noteOrNone(const json& v) {
     return static_cast<int>(d);
 }
 
+// BPM 20..400 or nothing (files are applied without a save-time validation: factory, synced).
+std::optional<double> tempoOf(const json& j, std::vector<std::string>* w, const std::string& where) {
+    const auto t = optNum(j, "tempo", w, where);
+    if (t && !(*t >= 20.0 && *t <= 400.0)) {
+        warn(w, where + ".tempo: out of range 20..400, ignored");
+        return std::nullopt;
+    }
+    return t;
+}
+
 json noteJson(int n) { return n < 0 ? json(nullptr) : json(n); }
 
 std::string utf8Len(const std::string& s, size_t max, const char* what) {
@@ -115,18 +125,20 @@ Song songFromJson(const json& j, std::vector<std::string>* w) {
         warn(w, "song: expected an object");
         return s;
     }
-    if (auto v = optNum(j, "format", w, "song")) s.format = static_cast<int>(*v);
+    if (auto v = optNum(j, "format", w, "song")) s.format = static_cast<int>(std::clamp(*v, 0.0, 1000.0));
     if (auto v = optStr(j, "id", w, "song")) s.id = *v;
     if (auto v = optStr(j, "title", w, "song")) s.title = *v;
     if (auto v = optStr(j, "artist", w, "song")) s.artist = *v;
     if (auto v = optStr(j, "key", w, "song")) s.key = *v;
     if (auto v = optStr(j, "notes", w, "song")) s.notes = *v;
-    s.tempo = optNum(j, "tempo", w, "song");
+    s.tempo = tempoOf(j, w, "song");
     if (auto it = j.find("time_sig"); it != j.end() && !it->is_null()) {
-        if (it->is_array() && it->size() == 2 && (*it)[0].is_number() && (*it)[1].is_number())
-            s.timeSig = std::make_pair(static_cast<int>((*it)[0].get<double>()), static_cast<int>((*it)[1].get<double>()));
+        const bool shape = it->is_array() && it->size() == 2 && (*it)[0].is_number() && (*it)[1].is_number();
+        const double n = shape ? (*it)[0].get<double>() : 0.0, d = shape ? (*it)[1].get<double>() : 0.0;
+        if (shape && n >= 1 && n <= 16 && n == std::floor(n) && (d == 2 || d == 4 || d == 8 || d == 16))
+            s.timeSig = std::make_pair(static_cast<int>(n), static_cast<int>(d));
         else
-            warn(w, "song.time_sig: expected [num, den], ignored");
+            warn(w, "song.time_sig: expected [num 1..16, den 2/4/8/16], ignored");
     }
     if (auto it = j.find("control_keys"); it != j.end() && !it->is_null()) {
         try {
@@ -148,7 +160,7 @@ Song songFromJson(const json& j, std::vector<std::string>* w) {
             sec.preset = optStr(sj, "preset", w, where);
             sec.pattern = optStr(sj, "pattern", w, where);
             sec.drums = optBool(sj, "drums", w, where);
-            sec.tempo = optNum(sj, "tempo", w, where);
+            sec.tempo = tempoOf(sj, w, where);
             if (auto v = optStr(sj, "notes", w, where)) sec.notes = *v;
             sec.extra = extraOf(sj, {"name", "preset", "pattern", "drums", "tempo", "notes"});
             s.sections.push_back(std::move(sec));

@@ -88,8 +88,9 @@ struct LayerNode {
 
     void filterEvents(MidiEventSpan in, std::vector<MidiEvent>& out) noexcept;
     // Runs the MIDI chain over `in` (audio thread). `readCache`: old graph of a transition — shared processors are
-    // skipped (the new graph runs them). Returns the events for the instrument.
-    MidiEventSpan runMidiChain(MidiEventSpan in, const ProcessContext& ctx, bool readCache) noexcept;
+    // skipped (the new graph runs them; their note-ons are dropped). `flushLayer`: prepend one AllNotesOff to the
+    // chain's output (flushNotes). Returns the events for the instrument.
+    MidiEventSpan runMidiChain(MidiEventSpan in, const ProcessContext& ctx, bool readCache, bool flushLayer) noexcept;
 };
 
 // RhythmNode (ARCHITECTURE §5.3): the `drums` module played by the Engine's DrumSequencer. Rendered into its own

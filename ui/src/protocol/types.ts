@@ -449,7 +449,7 @@ export interface ChordLearnOk { type: 'chord_learn_ok'; id?: number; node: NodeI
 
 // ── Songs ──
 export interface SongListOk { type: 'song_list_ok'; id?: number; songs: SongInfo[] }
-export interface SongGetOk { type: 'song_get_ok'; id?: number; path: string; song: Song }
+export interface SongGetOk { type: 'song_get_ok'; id?: number; path: string; song: Song; warnings?: string[] }
 export interface SongSaveOk { type: 'song_save_ok'; id?: number; path: string; warnings?: string[] }
 export interface SongDeleteOk { type: 'song_delete_ok'; id?: number; path: string }
 export interface SongSelectOk { type: 'song_select_ok'; id?: number; warnings?: string[] }

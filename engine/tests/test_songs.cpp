@@ -157,6 +157,7 @@ TEST_CASE("songs: select, sections apply preset/tempo/drums/pattern, next/prev, 
     CHECK(f.engine.transport().tempo() == 112.0);
     CHECK(f.engine.transport().playing());
     CHECK(f.session->patternPath() == "presets/patterns/basic-rock.json");
+    CHECK_FALSE(f.session->patternEdited()); // the song meter does not mark the pattern edited
 
     f.send({{"type", "song_section"}, {"index", 2}});
     CHECK(f.session->songSection() == 2);
@@ -332,6 +333,10 @@ TEST_CASE("sync: songs use /api/songs and their own sync.json section", "[songs]
     REQUIRE(c.size() == 1);
     CHECK(c[0].file == "userdata/songs/x.conflict-20261013T100000Z.json");
     sf.close();
+    // An API without the songs collection (404 on the list) is not an error.
+    cloud::SyncCollection missing = cloud::SyncCollection::songs();
+    missing.endpoint = "/api/no-such-collection";
+    CHECK(cloud::SyncEngine(api, root / "songs", root / "sync.json", &mu, missing).runPass().ok);
     std::error_code ec;
     fs::remove_all(root, ec);
 }
