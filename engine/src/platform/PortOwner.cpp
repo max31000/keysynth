@@ -7,6 +7,16 @@
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
+#elif defined(__APPLE__)
+#include <arpa/inet.h>
+#include <libproc.h>
+#include <netinet/in.h>
+#include <sys/proc_info.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstring>
 #else
 #include <unistd.h>
 #endif
@@ -135,6 +145,78 @@ std::vector<TcpListener> tcpListeners(int port) {
                 fillProcess(l);
                 out.push_back(std::move(l));
             }
+        }
+    }
+    return out;
+}
+
+#elif defined(__APPLE__)
+
+std::string processImagePath(unsigned long pid) {
+    if (pid == 0) return {};
+    char buf[PROC_PIDPATHINFO_MAXSIZE];
+    const int n = proc_pidpath(static_cast<int>(pid), buf, sizeof(buf));
+    return n > 0 ? std::string(buf, static_cast<size_t>(n)) : std::string();
+}
+
+bool loopbackPortBindable(int port, std::string& error) {
+    if (port <= 0 || port > 65535) return true;
+    const int s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s < 0) return true; // cannot check: let the real bind decide
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(static_cast<uint16_t>(port));
+    inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+    // No SO_REUSEADDR: POSIX never lets two sockets listen on one port with it unset.
+    bool ok = true;
+    if (bind(s, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) != 0) {
+        ok = false;
+        error = errno == EADDRINUSE ? "address in use" : errno == EACCES ? "access denied" : std::strerror(errno);
+    }
+    close(s);
+    return ok;
+}
+
+// Every process we may inspect (the user's own; others fail quietly) -> its TCP sockets in LISTEN on `port`.
+std::vector<TcpListener> tcpListeners(int port) {
+    std::vector<TcpListener> out;
+    if (port <= 0 || port > 65535) return out;
+    std::vector<pid_t> pids(4096);
+    int bytes = proc_listallpids(pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+    if (bytes <= 0) return out;
+    pids.resize(static_cast<size_t>(bytes) / sizeof(pid_t));
+    std::vector<proc_fdinfo> fds;
+    for (const pid_t pid : pids) {
+        if (pid <= 0) continue;
+        const int need = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+        if (need <= 0) continue;
+        fds.resize(static_cast<size_t>(need) / sizeof(proc_fdinfo) + 16);
+        const int got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(), static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+        if (got <= 0) continue;
+        const size_t count = static_cast<size_t>(got) / sizeof(proc_fdinfo);
+        for (size_t i = 0; i < count; ++i) {
+            if (fds[i].proc_fdtype != PROX_FDTYPE_SOCKET) continue;
+            socket_fdinfo si{};
+            if (proc_pidfdinfo(pid, fds[i].proc_fd, PROC_PIDFDSOCKETINFO, &si, sizeof(si)) != sizeof(si)) continue;
+            if (si.psi.soi_kind != SOCKINFO_TCP) continue;
+            const tcp_sockinfo& t = si.psi.soi_proto.pri_tcp;
+            if (t.tcpsi_state != TSI_S_LISTEN) continue;
+            const in_sockinfo& in = t.tcpsi_ini;
+            if (ntohs(static_cast<uint16_t>(in.insi_lport)) != port) continue;
+            TcpListener l;
+            char addr[INET6_ADDRSTRLEN] = {};
+            if (in.insi_vflag & INI_IPV4) {
+                inet_ntop(AF_INET, &in.insi_laddr.ina_46.i46a_addr4, addr, sizeof(addr));
+            } else {
+                l.ipv6 = true;
+                inet_ntop(AF_INET6, &in.insi_laddr.ina_6, addr, sizeof(addr));
+            }
+            l.address = addr;
+            l.pid = static_cast<unsigned long>(pid);
+            l.path = processImagePath(l.pid);
+            const auto slash = l.path.find_last_of('/');
+            l.image = slash == std::string::npos ? l.path : l.path.substr(slash + 1);
+            out.push_back(std::move(l));
         }
     }
     return out;

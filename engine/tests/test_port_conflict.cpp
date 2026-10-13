@@ -17,12 +17,23 @@
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 using namespace ks;
 using platform::TcpListener;
 
 namespace {
+
+#if defined(_WIN32)
+constexpr const char* kTestsImage = "ks-tests.exe";
+#else
+constexpr const char* kTestsImage = "ks-tests";
+#endif
 
 TcpListener listener(std::string addr, unsigned long pid, std::string image) {
     TcpListener l;
@@ -34,14 +45,25 @@ TcpListener listener(std::string addr, unsigned long pid, std::string image) {
     return l;
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__APPLE__)
 // A plain listening socket (no SO_REUSEADDR), like a node/ws mock server.
 struct FakeListener {
-    SOCKET s = INVALID_SOCKET;
+#if defined(_WIN32)
+    using Socket = SOCKET;
+    static constexpr Socket kNone = INVALID_SOCKET;
+    static void closeSocket(Socket x) { closesocket(x); }
+#else
+    using Socket = int;
+    static constexpr Socket kNone = -1;
+    static void closeSocket(Socket x) { ::close(x); }
+#endif
+    Socket s = kNone;
     int port = 0;
     explicit FakeListener(const char* addr = "127.0.0.1") {
+#if defined(_WIN32)
         WSADATA w;
         WSAStartup(MAKEWORD(2, 2), &w);
+#endif
         s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         sockaddr_in a{};
         a.sin_family = AF_INET;
@@ -49,17 +71,19 @@ struct FakeListener {
         a.sin_port = 0;
         REQUIRE(bind(s, reinterpret_cast<sockaddr*>(&a), sizeof(a)) == 0);
         REQUIRE(listen(s, 4) == 0);
-        int len = sizeof(a);
+        socklen_t len = sizeof(a);
         getsockname(s, reinterpret_cast<sockaddr*>(&a), &len);
         port = ntohs(a.sin_port);
     }
     void close() {
-        if (s != INVALID_SOCKET) closesocket(s);
-        s = INVALID_SOCKET;
+        if (s != kNone) closeSocket(s);
+        s = kNone;
     }
     ~FakeListener() {
         close();
+#if defined(_WIN32)
         WSACleanup();
+#endif
     }
 };
 
@@ -111,6 +135,8 @@ TEST_CASE("port conflict: classification of listener tables", "[port]") {
     REQUIRE(k);
     CHECK(k->kind == PortOwnerKind::Keysynth); // a keysynth owner wins: it decides "open its UI and exit"
     CHECK(k->pid == 77);
+    CHECK(isKeysynthImage("keysynth-engine")); // macOS (no extension)
+    CHECK_FALSE(isKeysynthImage("keysynth-engine.app"));
 
     PortConflict c;
     c.port = 7341;
@@ -129,14 +155,14 @@ TEST_CASE("port conflict: classification of listener tables", "[port]") {
     CHECK(portFreeMessage(7341, true) == "Порт 7341 свободен — движок снова доступен.");
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__APPLE__)
 TEST_CASE("port conflict: listener table names the owning process", "[port]") {
     FakeListener fake;
     const auto ls = platform::tcpListeners(fake.port);
     REQUIRE(ls.size() == 1);
     CHECK(ls[0].address == "127.0.0.1");
     CHECK(ls[0].pid == platform::currentProcessId());
-    CHECK(ls[0].image == "ks-tests.exe");
+    CHECK(ls[0].image == kTestsImage);
     const auto c = findConflict(fake.port, ls);
     REQUIRE(c);
     CHECK(c->kind == PortOwnerKind::Foreign);
@@ -147,7 +173,7 @@ TEST_CASE("port conflict: control server refuses a busy port and binds after it 
     ServerFixture f;
     const std::string err = f.server->start(fake.port, 0);
     REQUIRE_FALSE(err.empty());
-    CHECK(err.find("ks-tests.exe") != std::string::npos);
+    CHECK(err.find(kTestsImage) != std::string::npos);
     CHECK_FALSE(f.server->wsRunning());
     REQUIRE(f.server->wsConflict());
     CHECK(f.server->wsConflict()->kind == PortOwnerKind::Foreign);
@@ -178,6 +204,11 @@ TEST_CASE("port conflict: a second control server on the same port is refused (n
     CHECK(b.server->wsRunning());
 }
 
+#endif
+
+// Windows bind semantics (a more specific 127.0.0.1 bind next to a wildcard / v6-only listener succeeds); BSD
+// sockets refuse those binds, so on macOS the conflict is reported instead.
+#if defined(_WIN32)
 TEST_CASE("port conflict: a v6-only [::] listener does not block 127.0.0.1", "[port]") {
     WSADATA w;
     WSAStartup(MAKEWORD(2, 2), &w);

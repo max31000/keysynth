@@ -28,7 +28,7 @@ struct PortConflict {
 
 // A listener on 127.0.0.1, 0.0.0.0 or :: (maybe dual-stack) takes connections to 127.0.0.1:<port>.
 bool blocksLoopback(const platform::TcpListener& l);
-// `keysynth-engine.exe` (both the console and the tray build), case-insensitive.
+// `keysynth-engine.exe` / macOS `keysynth-engine` (both the console and the tray build), case-insensitive.
 bool isKeysynthImage(const std::string& image);
 // First blocking listener → conflict (keysynth owners win over foreign ones when several listen); nullopt = free.
 std::optional<PortConflict> findConflict(int port, const std::vector<platform::TcpListener>& listeners);

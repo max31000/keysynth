@@ -23,7 +23,10 @@ bool blocksLoopback(const platform::TcpListener& l) {
     return l.address == "127.0.0.1" || l.address == "0.0.0.0" || l.address == "::";
 }
 
-bool isKeysynthImage(const std::string& image) { return lower(image) == "keysynth-engine.exe"; }
+bool isKeysynthImage(const std::string& image) {
+    const std::string l = lower(image);
+    return l == "keysynth-engine.exe" || l == "keysynth-engine"; // Windows / macOS
+}
 
 std::optional<PortConflict> findConflict(int port, const std::vector<platform::TcpListener>& listeners) {
     std::optional<PortConflict> best;
