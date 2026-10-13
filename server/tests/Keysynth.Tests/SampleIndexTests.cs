@@ -144,4 +144,15 @@ public class MigrationRunnerTests
             .And.Contain(s => s.StartsWith("CREATE TABLE devices") && s.Contains("token_hash    BINARY(32)"))
             .And.Contain(s => s.StartsWith("CREATE TABLE presets") && s.Contains("ascii_bin"));
     }
+
+    [Fact]
+    public void SongsMigrationMatchesContractTable()
+    {
+        var (version, resource) = MigrationRunner.Discover().Single(m => m.Resource.EndsWith("002_songs.sql", StringComparison.Ordinal));
+        version.Should().Be(2);
+        using var stream = typeof(MigrationRunner).Assembly.GetManifestResourceStream(resource)!;
+        var statements = MigrationRunner.SplitSqlStatements(new StreamReader(stream).ReadToEnd());
+        statements.Should().ContainSingle().Which.Should().StartWith("CREATE TABLE songs")
+            .And.Contain("ascii_bin").And.Contain("song        MEDIUMTEXT    NULL").And.Contain("PRIMARY KEY (user_id, slug)");
+    }
 }

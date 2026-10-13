@@ -80,8 +80,9 @@ std::string SyncEngine::conflictName(const std::string& slug, const std::string&
     return slug + ".conflict-" + compactUtc + ".json";
 }
 
-SyncEngine::SyncEngine(Api api, fs::path presetsDir, fs::path syncFile, std::mutex* fileMutex)
-    : api_(std::move(api)), dir_(std::move(presetsDir)), syncFile_(std::move(syncFile)), fileMutex_(fileMutex) {
+SyncEngine::SyncEngine(Api api, fs::path presetsDir, fs::path syncFile, std::mutex* fileMutex, SyncCollection collection)
+    : api_(std::move(api)), col_(std::move(collection)), dir_(std::move(presetsDir)), syncFile_(std::move(syncFile)),
+      fileMutex_(fileMutex) {
     loadBase();
 }
 
@@ -92,7 +93,7 @@ void SyncEngine::loadBase() {
     const json j = json::parse(*text, nullptr, false);
     if (!j.is_object()) return;
     if (auto l = j.find("lastSyncAt"); l != j.end() && l->is_string()) lastSyncAt_ = l->get<std::string>();
-    if (auto p = j.find("presets"); p != j.end() && p->is_object())
+    if (auto p = j.find(col_.baseKey); p != j.end() && p->is_object())
         for (const auto& [slug, v] : p->items()) {
             if (!isValidSlug(slug) || !v.is_object()) continue;
             SyncBase b;
@@ -105,7 +106,15 @@ void SyncEngine::loadBase() {
 bool SyncEngine::saveBase() {
     json p = json::object();
     for (const auto& [slug, b] : base_) p[slug] = {{"baseRevision", b.revision}, {"hash", b.hash}};
-    const json j = {{"format", 1}, {"lastSyncAt", lastSyncAt_.empty() ? json(nullptr) : json(lastSyncAt_)}, {"presets", p}};
+    // Read-modify-write: the other collection's section stays (callers hold the profile mutex).
+    json j = json::object();
+    if (const auto text = readFile(syncFile_)) {
+        j = json::parse(*text, nullptr, false);
+        if (!j.is_object()) j = json::object();
+    }
+    j["format"] = 1;
+    j["lastSyncAt"] = lastSyncAt_.empty() ? (j.contains("lastSyncAt") ? j["lastSyncAt"] : json(nullptr)) : json(lastSyncAt_);
+    j[col_.baseKey] = p;
     return writeAtomic(syncFile_, j.dump(2) + "\n");
 }
 
@@ -138,7 +147,7 @@ int SyncEngine::pendingCount() const {
     return n;
 }
 
-std::vector<SyncConflict> SyncEngine::conflicts(const fs::path& dir) {
+std::vector<SyncConflict> SyncEngine::conflicts(const fs::path& dir, const std::string& logicalDir) {
     static const std::regex re(R"(^([a-z0-9]+(?:-[a-z0-9]+)*)\.conflict-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z(?:-\d+)?\.json$)");
     std::vector<SyncConflict> out;
     std::error_code ec;
@@ -147,7 +156,7 @@ std::vector<SyncConflict> SyncEngine::conflicts(const fs::path& dir) {
         const std::string name = pathToUtf8(e.path().filename());
         std::smatch m;
         if (!std::regex_match(name, m, re)) continue;
-        out.push_back({m[1].str(), "userdata/presets/" + name,
+        out.push_back({m[1].str(), logicalDir + name,
                        m[2].str() + "-" + m[3].str() + "-" + m[4].str() + "T" + m[5].str() + ":" + m[6].str() + ":" +
                            m[7].str() + "Z"});
     }
@@ -181,7 +190,7 @@ SyncEngine::Step SyncEngine::fail(const HttpResponse& r) {
 
 SyncEngine::Step SyncEngine::download(const std::string& slug, SyncPassResult& res) {
     HttpRequest req;
-    req.url = "/api/presets/" + slug;
+    req.url = url(slug);
     const HttpResponse r = api_(req);
     if (r.status == 404) { // gone meanwhile: forget it
         std::lock_guard<std::mutex> lk(*fileMutex_);
@@ -195,14 +204,14 @@ SyncEngine::Step SyncEngine::download(const std::string& slug, SyncPassResult& r
     const int64_t rev = revOf(j);
     std::lock_guard<std::mutex> lk(*fileMutex_);
     std::error_code ec;
-    if (deletedOf(j) || !j.contains("patch") || !j["patch"].is_object()) {
+    if (deletedOf(j) || !j.contains(col_.bodyKey) || !j[col_.bodyKey].is_object()) {
         if (fs::exists(fileOf(slug), ec)) {
             fs::remove(fileOf(slug), ec);
             ++res.deleted;
         }
         base_[slug] = {rev, ""};
     } else {
-        const std::string bytes = j["patch"].dump(2) + "\n";
+        const std::string bytes = j[col_.bodyKey].dump(2) + "\n";
         if (!writeAtomic(fileOf(slug), bytes)) return {false, false, "io_error"};
         base_[slug] = {rev, Sha256::hex(bytes)};
         ++res.pulled;
@@ -221,11 +230,12 @@ SyncEngine::Step SyncEngine::upload(const std::string& slug, int64_t ifMatch, bo
         bytes = std::move(*b);
     }
     const json patch = json::parse(bytes, nullptr, false);
-    if (!patch.is_object() || !patch.contains("format") || !patch["format"].is_number()) return {false, false, "invalid_patch"};
+    if (!patch.is_object() || !patch.contains("format") || !patch["format"].is_number())
+        return {false, false, "invalid_" + col_.bodyKey};
     HttpRequest req;
     req.method = "PUT";
-    req.url = "/api/presets/" + slug;
-    req.body = json{{"patch", patch}}.dump();
+    req.url = url(slug);
+    req.body = json{{col_.bodyKey, patch}}.dump();
     if (create) req.headers.emplace_back("If-None-Match", "*");
     else req.headers.emplace_back("If-Match", "\"" + std::to_string(ifMatch) + "\"");
     const HttpResponse r = api_(req);
@@ -249,7 +259,7 @@ SyncEngine::Step SyncEngine::upload(const std::string& slug, int64_t ifMatch, bo
 SyncEngine::Step SyncEngine::remove(const std::string& slug, int64_t ifMatch, SyncPassResult& res, ServerMeta* conflict) {
     HttpRequest req;
     req.method = "DELETE";
-    req.url = "/api/presets/" + slug;
+    req.url = url(slug);
     req.headers.emplace_back("If-Match", "\"" + std::to_string(ifMatch) + "\"");
     const HttpResponse r = api_(req);
     if (r.status == 412) {
@@ -304,8 +314,12 @@ SyncEngine::Step SyncEngine::resolveServerChanged(const std::string& slug, const
 SyncPassResult SyncEngine::runPass(const std::atomic<bool>* cancel) {
     SyncPassResult res;
     HttpRequest listReq;
-    listReq.url = "/api/presets";
+    listReq.url = col_.endpoint;
     const HttpResponse lr = api_(listReq);
+    if (lr.status == 404 && col_.optional) { // older API without this collection: nothing to sync
+        res.ok = true;
+        return res;
+    }
     if (lr.status != 200) {
         res.error = fail(lr).error;
         return res;
@@ -356,7 +370,7 @@ SyncPassResult SyncEngine::runPass(const std::atomic<bool>* cancel) {
             } else {
                 // Both sides have it: identical content -> just record; else server wins + conflict file.
                 HttpRequest req;
-                req.url = "/api/presets/" + slug;
+                req.url = url(slug);
                 const HttpResponse r = api_(req);
                 if (r.status != 200) {
                     st = fail(r);
@@ -368,7 +382,7 @@ SyncPassResult SyncEngine::runPass(const std::atomic<bool>* cancel) {
                         mine = readFile(fileOf(slug));
                     }
                     const json localJ = mine ? json::parse(*mine, nullptr, false) : json();
-                    if (j.is_object() && j.contains("patch") && mine && j["patch"] == localJ) {
+                    if (j.is_object() && j.contains(col_.bodyKey) && mine && j[col_.bodyKey] == localJ) {
                         std::lock_guard<std::mutex> lk(*fileMutex_);
                         base_[slug] = {revOf(j), Sha256::hex(*mine)};
                         saveBase();
@@ -482,20 +496,35 @@ bool SyncService::enabled() const {
     return !dir_.empty();
 }
 
-void SyncService::setProfile(const fs::path& presetsDir, const fs::path& syncFile) {
+namespace {
+SyncEngine::Api noApi() {
+    return [](HttpRequest) { return HttpResponse{}; };
+}
+std::vector<SyncConflict> allConflicts(const fs::path& presets, const fs::path& songs) {
+    auto c = SyncEngine::conflicts(presets);
+    if (!songs.empty()) {
+        auto s = SyncEngine::conflicts(songs, SyncCollection::songs().logicalDir);
+        c.insert(c.end(), s.begin(), s.end());
+    }
+    return c;
+}
+} // namespace
+
+void SyncService::setProfile(const fs::path& presetsDir, const fs::path& syncFile, const fs::path& songsDir) {
     {
         std::lock_guard<std::mutex> lk(m_);
         dir_ = presetsDir;
         syncFile_ = syncFile;
+        songsDir_ = presetsDir.empty() ? fs::path() : songsDir;
         ++profileGen_;
         requested_ = !dir_.empty();
         state_ = dir_.empty() ? "disabled" : "idle";
         error_.clear();
         lastSyncAt_.clear();
         pending_ = 0;
-        conflicts_ = dir_.empty() ? std::vector<SyncConflict>{} : SyncEngine::conflicts(dir_);
+        conflicts_ = dir_.empty() ? std::vector<SyncConflict>{} : allConflicts(dir_, songsDir_);
         if (!dir_.empty()) {
-            SyncEngine e([](HttpRequest) { return HttpResponse{}; }, dir_, syncFile_, &fileMutex_);
+            SyncEngine e(noApi(), dir_, syncFile_, &fileMutex_);
             lastSyncAt_ = e.lastSyncAt();
         }
     }
@@ -514,20 +543,21 @@ void SyncService::requestSync() {
 }
 
 void SyncService::notifyLocalChange() {
-    fs::path dir, file;
+    fs::path dir, file, songs;
     {
         std::lock_guard<std::mutex> lk(m_);
         if (dir_.empty()) return;
         dir = dir_;
         file = syncFile_;
+        songs = songsDir_;
     }
-    SyncEngine e([](HttpRequest) { return HttpResponse{}; }, dir, file, &fileMutex_);
-    const int pending = e.pendingCount();
+    int pending = SyncEngine(noApi(), dir, file, &fileMutex_).pendingCount();
+    if (!songs.empty()) pending += SyncEngine(noApi(), songs, file, &fileMutex_, SyncCollection::songs()).pendingCount();
     {
         std::lock_guard<std::mutex> lk(m_);
         if (dir_ != dir) return;
         pending_ = pending;
-        conflicts_ = SyncEngine::conflicts(dir_);
+        conflicts_ = allConflicts(dir_, songsDir_);
         requested_ = true;
     }
     version_.fetch_add(1);
@@ -556,7 +586,7 @@ void SyncService::setState(const std::string& state, const std::string& error) {
 
 void SyncService::loop() {
     for (;;) {
-        fs::path dir, file;
+        fs::path dir, file, songs;
         uint64_t gen = 0;
         std::string token;
         {
@@ -567,6 +597,7 @@ void SyncService::loop() {
             if (dir_.empty()) continue;
             dir = dir_;
             file = syncFile_;
+            songs = songsDir_;
             gen = profileGen_;
             state_ = "syncing";
             cancelPass_.store(false); // under m_: a setProfile() after this point cancels this pass
@@ -575,17 +606,32 @@ void SyncService::loop() {
         version_.fetch_add(1);
         // Every request of this pass uses the token of the account the profile belongs to; after a re-link the
         // client refuses it (not_linked) and the pass aborts before touching another account.
-        SyncEngine engine([this, token](HttpRequest r) { return client_.apiAs(token, std::move(r)); }, dir, file,
-                          &fileMutex_);
-        const SyncPassResult r = engine.runPass(&cancelPass_);
-        const int pending = engine.pendingCount();
+        auto api = [this, token](HttpRequest r) { return client_.apiAs(token, std::move(r)); };
+        SyncEngine presets(api, dir, file, &fileMutex_);
+        SyncPassResult r = presets.runPass(&cancelPass_);
+        int pending = presets.pendingCount();
+        std::string lastSync = presets.lastSyncAt();
+        const bool aborted = !r.ok && (r.error == "offline" || r.error == "unauthorized" || r.error == "not_linked" ||
+                                       r.error == "rate_limited" || r.error == "cancelled" || r.error == "http_error");
+        if (!songs.empty()) {
+            if (!aborted) {
+                // Songs right after presets (cloud-api §3.4); constructed now so it sees the updated sync.json.
+                SyncEngine songEngine(api, songs, file, &fileMutex_, SyncCollection::songs());
+                const SyncPassResult sr = songEngine.runPass(&cancelPass_);
+                if (r.ok && !sr.ok) r = sr;
+                pending += songEngine.pendingCount();
+                if (sr.ok) lastSync = songEngine.lastSyncAt();
+            } else {
+                pending += SyncEngine(noApi(), songs, file, &fileMutex_, SyncCollection::songs()).pendingCount();
+            }
+        }
         {
             std::lock_guard<std::mutex> lk(m_);
             if (gen != profileGen_) continue; // profile switched meanwhile
             pending_ = pending;
-            conflicts_ = SyncEngine::conflicts(dir);
+            conflicts_ = allConflicts(dir, songs);
             if (r.ok) {
-                lastSyncAt_ = engine.lastSyncAt();
+                lastSyncAt_ = lastSync;
                 state_ = "idle";
                 error_.clear();
             } else if (r.error == "offline") {

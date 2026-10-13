@@ -21,6 +21,7 @@ public abstract class RepositoryContractTests
     protected abstract IUserRepository Users { get; }
     protected abstract IDeviceRepository Devices { get; }
     protected abstract IPresetRepository Presets { get; }
+    protected abstract ISongRepository Songs { get; }
     protected virtual void SkipIfUnavailable() { }
 
     private async Task<long> NewUser() =>
@@ -98,49 +99,72 @@ public abstract class RepositoryContractTests
     }
 
     [SkippableFact]
-    public async Task PresetRevisionsAndTombstones()
+    public Task PresetRevisionsAndTombstones() => RevisionsAndTombstones(Presets);
+
+    [SkippableFact]
+    public Task SongRevisionsAndTombstones() => RevisionsAndTombstones(Songs);
+
+    [SkippableFact]
+    public Task PresetListAndLimit() => ListAndLimit(Presets);
+
+    [SkippableFact]
+    public Task SongListAndLimit() => ListAndLimit(Songs);
+
+    [SkippableFact]
+    public async Task PresetsAndSongsAreSeparateTables()
     {
         SkipIfUnavailable();
         var uid = await NewUser();
-        const string patch = """{"format":1,"meta":{"name":"Тёплый"}}""";
-
-        var created = await Presets.CreateAsync(uid, "warm", patch, T0, 1000);
-        created.Status.Should().Be(PresetWriteStatus.Ok);
-        created.Row.Should().Be(new PresetRow("warm", 1, T0, false, patch));
-        (await Presets.CreateAsync(uid, "warm", patch, T0, 1000)).Should().BeEquivalentTo(PresetWriteResult.Conflict(created.Row));
-
-        (await Presets.UpdateAsync(uid, "warm", 2, patch, T0, default)).Status.Should().Be(PresetWriteStatus.Conflict);
-        var upd = await Presets.UpdateAsync(uid, "warm", 1, """{"format":1}""", T0.AddSeconds(1));
-        upd.Row.Should().Be(new PresetRow("warm", 2, T0.AddSeconds(1), false, """{"format":1}"""));
-
-        (await Presets.DeleteAsync(uid, "warm", 1, T0)).Status.Should().Be(PresetWriteStatus.Conflict);
-        (await Presets.DeleteAsync(uid, "nope", 1, T0)).Status.Should().Be(PresetWriteStatus.NotFound);
-        var del = await Presets.DeleteAsync(uid, "warm", 2, T0.AddSeconds(2));
-        del.Row.Should().Be(new PresetRow("warm", 3, T0.AddSeconds(2), true, null));
-        (await Presets.GetAsync(uid, "warm")).Should().Be(del.Row);
-
-        (await Presets.CreateAsync(uid, "warm", patch, T0, 1000)).Status.Should().Be(PresetWriteStatus.Conflict, "tombstone blocks create");
-        var revived = await Presets.UpdateAsync(uid, "warm", 3, patch, T0.AddSeconds(3));
-        revived.Row.Should().Be(new PresetRow("warm", 4, T0.AddSeconds(3), false, patch));
-        (await Presets.UpdateAsync(uid, "missing", 1, patch, T0)).Should().BeEquivalentTo(PresetWriteResult.Conflict(null));
+        (await Presets.CreateAsync(uid, "same", """{"format":1,"p":1}""", T0, 1000)).Status.Should().Be(DocumentWriteStatus.Ok);
+        (await Songs.GetAsync(uid, "same")).Should().BeNull();
+        (await Songs.CreateAsync(uid, "same", """{"format":1,"s":1}""", T0, 1)).Status.Should().Be(DocumentWriteStatus.Ok,
+            "preset rows do not count against the song limit");
+        (await Songs.GetAsync(uid, "same"))!.Body.Should().Be("""{"format":1,"s":1}""");
+        (await Presets.GetAsync(uid, "same"))!.Body.Should().Be("""{"format":1,"p":1}""");
     }
 
-    [SkippableFact]
-    public async Task PresetListAndLimit()
+    private async Task RevisionsAndTombstones(IDocumentRepository repo)
+    {
+        SkipIfUnavailable();
+        var uid = await NewUser();
+        const string body = """{"format":1,"meta":{"name":"Тёплый"}}""";
+
+        var created = await repo.CreateAsync(uid, "warm", body, T0, 1000);
+        created.Status.Should().Be(DocumentWriteStatus.Ok);
+        created.Row.Should().Be(new DocumentRow("warm", 1, T0, false, body));
+        (await repo.CreateAsync(uid, "warm", body, T0, 1000)).Should().BeEquivalentTo(DocumentWriteResult.Conflict(created.Row));
+
+        (await repo.UpdateAsync(uid, "warm", 2, body, T0, default)).Status.Should().Be(DocumentWriteStatus.Conflict);
+        var upd = await repo.UpdateAsync(uid, "warm", 1, """{"format":1}""", T0.AddSeconds(1));
+        upd.Row.Should().Be(new DocumentRow("warm", 2, T0.AddSeconds(1), false, """{"format":1}"""));
+
+        (await repo.DeleteAsync(uid, "warm", 1, T0)).Status.Should().Be(DocumentWriteStatus.Conflict);
+        (await repo.DeleteAsync(uid, "nope", 1, T0)).Status.Should().Be(DocumentWriteStatus.NotFound);
+        var del = await repo.DeleteAsync(uid, "warm", 2, T0.AddSeconds(2));
+        del.Row.Should().Be(new DocumentRow("warm", 3, T0.AddSeconds(2), true, null));
+        (await repo.GetAsync(uid, "warm")).Should().Be(del.Row);
+
+        (await repo.CreateAsync(uid, "warm", body, T0, 1000)).Status.Should().Be(DocumentWriteStatus.Conflict, "tombstone blocks create");
+        var revived = await repo.UpdateAsync(uid, "warm", 3, body, T0.AddSeconds(3));
+        revived.Row.Should().Be(new DocumentRow("warm", 4, T0.AddSeconds(3), false, body));
+        (await repo.UpdateAsync(uid, "missing", 1, body, T0)).Should().BeEquivalentTo(DocumentWriteResult.Conflict(null));
+    }
+
+    private async Task ListAndLimit(IDocumentRepository repo)
     {
         SkipIfUnavailable();
         var uid = await NewUser();
         foreach (var slug in new[] { "b", "a-1", "a" })
-            (await Presets.CreateAsync(uid, slug, """{"format":1}""", T0, 3)).Status.Should().Be(PresetWriteStatus.Ok);
-        (await Presets.CreateAsync(uid, "d", """{"format":1}""", T0, 3)).Status.Should().Be(PresetWriteStatus.TooManyPresets);
-        await Presets.DeleteAsync(uid, "b", 1, T0);
-        (await Presets.CreateAsync(uid, "d", """{"format":1}""", T0, 3)).Status.Should().Be(PresetWriteStatus.TooManyPresets, "tombstones count");
+            (await repo.CreateAsync(uid, slug, """{"format":1}""", T0, 3)).Status.Should().Be(DocumentWriteStatus.Ok);
+        (await repo.CreateAsync(uid, "d", """{"format":1}""", T0, 3)).Status.Should().Be(DocumentWriteStatus.TooMany);
+        await repo.DeleteAsync(uid, "b", 1, T0);
+        (await repo.CreateAsync(uid, "d", """{"format":1}""", T0, 3)).Status.Should().Be(DocumentWriteStatus.TooMany, "tombstones count");
 
-        var list = await Presets.ListAsync(uid);
+        var list = await repo.ListAsync(uid);
         list.Select(p => p.Slug).Should().Equal("a", "a-1", "b");
-        list.Should().AllSatisfy(p => p.Patch.Should().BeNull());
+        list.Should().AllSatisfy(p => p.Body.Should().BeNull());
         list.Single(p => p.Slug == "b").Deleted.Should().BeTrue();
-        (await Presets.ListAsync(await NewUser())).Should().BeEmpty();
+        (await repo.ListAsync(await NewUser())).Should().BeEmpty();
     }
 }
 
@@ -149,7 +173,8 @@ public sealed class InMemoryRepositoryContractTests : RepositoryContractTests
     private readonly InMemoryStore _store = new();
     protected override IUserRepository Users => _store;
     protected override IDeviceRepository Devices => _store;
-    protected override IPresetRepository Presets => _store;
+    protected override IPresetRepository Presets => _store.Presets;
+    protected override ISongRepository Songs => _store.Songs;
 }
 
 /// <summary>MySQL 8.0 container with all migrations applied (pattern: bonds DatabaseFixture).</summary>
@@ -189,6 +214,7 @@ public sealed class MySqlRepositoryContractTests(MySqlFixture db) : RepositoryCo
     protected override IUserRepository Users => new MySqlUserRepository(db.ConnectionString!);
     protected override IDeviceRepository Devices => new MySqlDeviceRepository(db.ConnectionString!);
     protected override IPresetRepository Presets => new MySqlPresetRepository(db.ConnectionString!);
+    protected override ISongRepository Songs => new MySqlSongRepository(db.ConnectionString!);
 
     [SkippableFact]
     public async Task SchemaMigrationsRecorded()
@@ -196,8 +222,8 @@ public sealed class MySqlRepositoryContractTests(MySqlFixture db) : RepositoryCo
         SkipIfUnavailable();
         await using var conn = new MySqlConnection(db.ConnectionString);
         await conn.OpenAsync();
-        await using var cmd = new MySqlCommand("SELECT COUNT(*) FROM schema_migrations WHERE version = 1", conn);
-        Convert.ToInt32(await cmd.ExecuteScalarAsync()).Should().Be(1);
+        await using var cmd = new MySqlCommand("SELECT COUNT(*) FROM schema_migrations WHERE version IN (1, 2)", conn);
+        Convert.ToInt32(await cmd.ExecuteScalarAsync()).Should().Be(2);
     }
 }
 

@@ -26,6 +26,9 @@
 #include "effects/tremolo/TremoloFx.h"
 #include "instruments/epiano/EPiano.h"
 #include "instruments/sampler/SamplerModule.h"
+#include "midi/arp/Arpeggiator.h"
+#include "midi/chord/ChordTool.h"
+#include "midi/hold/HoldTool.h"
 
 namespace ks {
 
@@ -59,6 +62,10 @@ void registerBuiltinModules(ModuleRegistry& r) {
     r.add<WahFx>();
     r.add<EchoFx>();
     r.add<TapeStopFx>();
+    // MIDI processors (ARCHITECTURE §17)
+    r.add<Arpeggiator>();
+    r.add<ChordTool>();
+    r.add<HoldTool>();
 }
 
 } // namespace ks

@@ -106,6 +106,10 @@ function ChainStrip() {
     <div className="chain">
       <div className="panel-label">Signal chain · {layer.name}</div>
       <div className="chain-row">
+        <FxChain kind="midi" layer={layer.node!} fx={layer.midi ?? []} {...(layer.node !== undefined ? { selectLayer: layer.node } : {})} />
+        <span className="chain-arrow" aria-hidden>
+          →
+        </span>
         <button
           type="button"
           className={`chain-inst ${selected === inst.node ? 'on' : ''}`}

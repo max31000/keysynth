@@ -339,7 +339,7 @@ struct CloudFixture {
 TEST_CASE("protocol: hello carries version, trust, cloud; then sync_status", "[cloud][protocol]") {
     CloudFixture f;
     const auto out = f.handler->handle({{"type", "hello"}, {"id", 1}}, ClientInfo{"c1", Trust::Web});
-    REQUIRE(out.size() == 2);
+    REQUIRE(out.size() == 3); // state, sync_status, song_state
     const json& st = out[0].message;
     CHECK(st["type"] == "state");
     CHECK(st["id"] == 1);

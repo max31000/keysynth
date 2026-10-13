@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "id": "take-on-me",
+  "title": "Take On Me",
+  "artist": "a-ha",
+  "tempo": 169,
+  "time_sig": [
+    4,
+    4
+  ],
+  "key": "A major",
+  "sections": [
+    {
+      "name": "Intro riff",
+      "preset": "presets/factory/synth-lead/take-on-me-riff-stack.json",
+      "pattern": "presets/patterns/take-on-me-80s-pop.json",
+      "drums": true
+    },
+    {
+      "name": "Verse",
+      "preset": "presets/factory/synth-lead/va-take-on-me.json",
+      "pattern": "presets/patterns/take-on-me-80s-pop.json",
+      "drums": true
+    },
+    {
+      "name": "Chorus",
+      "preset": "presets/factory/strings/juno-106-strings.json",
+      "drums": true
+    },
+    {
+      "name": "Riff",
+      "preset": "presets/factory/synth-lead/take-on-me-riff-stack.json",
+      "drums": true
+    }
+  ]
+}

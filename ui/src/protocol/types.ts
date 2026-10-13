@@ -31,7 +31,8 @@ export interface ParamSpec {
   choices: string[];
 }
 
-export type ModuleKind = 'instrument' | 'effect';
+/** `midi` = MIDI processor (arp, chord, hold; ARCHITECTURE §17), placed in `layer.midi`. */
+export type ModuleKind = 'instrument' | 'effect' | 'midi';
 
 export interface UiHints {
   /** group display order; groups not listed follow in first-appearance order */
@@ -98,6 +99,8 @@ export interface Layer {
   zone: Zone;
   instrument: ModuleSlot;
   fx: FxSlot[];
+  /** MIDI processors in front of the instrument (PRESETS.md `layers[].midi`), ≤ 8; absent = none */
+  midi?: FxSlot[];
 }
 
 export interface PatchMeta {
@@ -198,6 +201,85 @@ export interface TransportState {
 /** Transport fields a client may send (`pattern_edited` is engine-owned). */
 export type TransportRequest = Partial<Omit<TransportState, 'pattern_edited'>>;
 
+// ───────────────────────────── Songs (PRESETS.md "Songs", PROTOCOL.md "Songs") ─────────────────────────────
+
+/** `prev` / `next`: MIDI note 0..127 or null (none). */
+export interface ControlKeys {
+  enabled: boolean;
+  prev: number | null;
+  next: number | null;
+}
+/** Effective control keys in `song_state` (the song's override or the global setting). */
+export interface EffectiveControlKeys extends ControlKeys {
+  source: 'song' | 'global';
+}
+
+export interface SongSection {
+  /** 1..60 chars */
+  name: string;
+  /** logical preset path or bare user preset slug; absent = keep the current sound */
+  preset?: string;
+  /** logical pattern path; `""` = empty pattern; absent = keep */
+  pattern?: string;
+  /** true = drums on + transport playing; false = transport stopped; absent = unchanged */
+  drums?: boolean;
+  /** BPM override (else the song tempo) */
+  tempo?: number;
+  /** ≤ 2000 chars */
+  notes?: string;
+  /** reserved (not implemented; kept verbatim) */
+  bars?: unknown;
+  start_bar?: unknown;
+  notation_part?: unknown;
+  /** unknown keys are kept verbatim by the engine */
+  [key: string]: unknown;
+}
+
+export interface Song {
+  format: number;
+  /** slug of the file name */
+  id: string;
+  /** 1..200 chars */
+  title: string;
+  artist?: string;
+  /** BPM 20..400; absent = keep the current tempo */
+  tempo?: number;
+  time_sig?: [number, number];
+  /** free text ("E minor") */
+  key?: string;
+  /** ≤ 2000 chars */
+  notes?: string;
+  /** per-song override of the global control keys; absent = global */
+  control_keys?: ControlKeys;
+  /** 1..64, played in order */
+  sections: SongSection[];
+  /** reserved (not implemented; kept verbatim) */
+  notation?: unknown;
+  backing?: unknown;
+  [key: string]: unknown;
+}
+
+export interface SongInfo {
+  /** `presets/songs/<slug>.json` (factory) or `userdata/songs/<slug>.json` */
+  path: string;
+  id: string;
+  title: string;
+  artist: string;
+  /** number of sections */
+  sections: number;
+  factory: boolean;
+}
+
+/** `song_state` payload (without `type`). */
+export interface SongState {
+  path: string | null;
+  song: Song | null;
+  /** -1 without song */
+  section: number;
+  controlKeys: EffectiveControlKeys;
+  globalControlKeys: ControlKeys;
+}
+
 export interface PresetEntry {
   path: string;
   name: string;
@@ -237,6 +319,20 @@ export interface PanicMsg { type: 'panic'; id?: number }
 export interface ListPluginsMsg { type: 'list_plugins'; id?: number }
 /** `name` is the plugin directory name (`plugins/<name>/`), not a path. */
 export interface ReloadPluginMsg { type: 'reload_plugin'; id?: number; name: string }
+/** Copies the notes held on a `chord` MIDI processor's input (≥ 2) into its chord memory. */
+export interface ChordLearnMsg { type: 'chord_learn'; id?: number; node: NodeId }
+
+// ── Songs ──
+export interface SongListMsg { type: 'song_list'; id?: number }
+export interface SongGetMsg { type: 'song_get'; id?: number; path: string }
+export interface SongSaveMsg { type: 'song_save'; id?: number; song: Song; overwrite?: boolean }
+export interface SongDeleteMsg { type: 'song_delete'; id?: number; path: string }
+export interface SongSelectMsg { type: 'song_select'; id?: number; path: string; section?: number }
+export interface SongSectionMsg { type: 'song_section'; id?: number; index: number }
+export interface SongNextMsg { type: 'song_next'; id?: number }
+export interface SongPrevMsg { type: 'song_prev'; id?: number }
+export interface SongCloseMsg { type: 'song_close'; id?: number }
+export interface SongControlKeysMsg { type: 'song_control_keys'; id?: number; enabled?: boolean; prev?: number | null; next?: number | null }
 
 /**
  * `set_instrument`, `add_fx` and `set_audio_device` would carry a payload field named `type`, which collides with
@@ -274,7 +370,9 @@ export type ClientMsg =
   | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
   | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg | SetAudioInputMsg
   | CloudLinkMsg | CloudUnlinkMsg | SyncNowMsg | SamplesListMsg | SamplesFetchMsg | SamplesCancelMsg
-  | SamplesDeleteMsg;
+  | SamplesDeleteMsg | ChordLearnMsg
+  | SongListMsg | SongGetMsg | SongSaveMsg | SongDeleteMsg | SongSelectMsg | SongSectionMsg | SongNextMsg
+  | SongPrevMsg | SongCloseMsg | SongControlKeysMsg;
 
 export type ClientMsgType = ClientMsg['type'];
 
@@ -352,6 +450,23 @@ export interface ListPluginsOk {
 }
 export interface ReloadPluginOk { type: 'reload_plugin_ok'; id?: number; name: string }
 export interface OpenAudioPanelOk { type: 'open_audio_panel_ok'; id?: number }
+/** `intervals`: semitones above the lowest learned note. */
+export interface ChordLearnOk { type: 'chord_learn_ok'; id?: number; node: NodeId; intervals: number[] }
+
+// ── Songs ──
+export interface SongListOk { type: 'song_list_ok'; id?: number; songs: SongInfo[] }
+export interface SongGetOk { type: 'song_get_ok'; id?: number; path: string; song: Song; warnings?: string[] }
+export interface SongSaveOk { type: 'song_save_ok'; id?: number; path: string; warnings?: string[] }
+export interface SongDeleteOk { type: 'song_delete_ok'; id?: number; path: string }
+export interface SongSelectOk { type: 'song_select_ok'; id?: number; warnings?: string[] }
+/** Reply to `song_section`, `song_next`, `song_prev`. */
+export interface SongSectionOk { type: 'song_section_ok'; id?: number; warnings?: string[] }
+export interface SongCloseOk { type: 'song_close_ok'; id?: number }
+export interface SongControlKeysOk { type: 'song_control_keys_ok'; id?: number }
+/** After the hello reply (after `sync_status`) and to all on every change. */
+export interface SongStateEvent extends SongState { type: 'song_state'; id?: number }
+/** User song files changed: re-request `song_list`. */
+export interface SongsChangedEvent { type: 'songs_changed' }
 
 export interface CatalogOk { type: 'catalog_ok'; id?: number; modules: ModuleInfo[] }
 export interface LoadPresetOk { type: 'load_preset_ok'; id?: number }
@@ -393,7 +508,7 @@ export interface CloudStatusEvent extends CloudStatus {
   type: 'cloud_status';
   id?: number;
   /** only in the reply to an account's first link on this PC */
-  merged?: { presets: number; patterns: number };
+  merged?: { presets: number; patterns: number; songs?: number };
 }
 
 /** `state` reply to `hello` carries these extra fields (only that reply). */
@@ -523,7 +638,9 @@ export type EngineMsg =
   | PatternEvent | ListPatternsOk | GetPatternOk | SetPatternOk | SavePatternOk
   | PluginStatusEvent | ListPluginsOk | ReloadPluginOk | OpenAudioPanelOk
   | CloudStatusEvent | SyncStatusEvent | SyncNowOk | SamplesListOk | SamplesFetchOk | SamplesCancelOk
-  | SamplesDeleteOk | SamplesProgressEvent | SamplesDoneEvent | SamplesErrorEvent;
+  | SamplesDeleteOk | SamplesProgressEvent | SamplesDoneEvent | SamplesErrorEvent | ChordLearnOk
+  | SongListOk | SongGetOk | SongSaveOk | SongDeleteOk | SongSelectOk | SongSectionOk | SongCloseOk
+  | SongControlKeysOk | SongStateEvent | SongsChangedEvent;
 
 export type EngineMsgType = EngineMsg['type'];
 export type EngineMsgOf<T extends EngineMsgType> = Extract<EngineMsg, { type: T }>;

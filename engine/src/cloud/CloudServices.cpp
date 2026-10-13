@@ -118,7 +118,7 @@ bool CloudServices::applyProfile() {
     appliedAccount_ = account;
     const AppPaths& p = session_.paths();
     if (account.empty()) sync_->setProfile({}, {});
-    else sync_->setProfile(p.userPresets, p.userdata / "sync.json");
+    else sync_->setProfile(p.userPresets, p.userdata / "sync.json", p.userSongs);
     return changed;
 }
 
@@ -168,7 +168,8 @@ void CloudServices::handle(const std::string& type, const json& msg, const json&
                     fs::create_directories(accountDir, ec);
                     const int presets = copyJsonFiles(p.localProfile / "presets", accountDir / "presets");
                     const int patterns = copyJsonFiles(p.localProfile / "patterns", accountDir / "patterns");
-                    merged = {{"presets", presets}, {"patterns", patterns}};
+                    const int songs = copyJsonFiles(p.localProfile / "songs", accountDir / "songs");
+                    merged = {{"presets", presets}, {"patterns", patterns}, {"songs", songs}};
                 }
                 const bool switched = applyProfile();
                 if (!switched) sync_->requestSync();
@@ -177,6 +178,7 @@ void CloudServices::handle(const std::string& type, const json& msg, const json&
                 q.push_back({clientId, {Outgoing::Target::Reply, std::move(st)}});
                 q.push_back({clientId, {Outgoing::Target::Others, statusEvent(nullptr)}});
                 if (switched) q.push_back({clientId, {Outgoing::Target::Broadcast, session_.stateJson()}});
+                if (switched) q.push_back({clientId, {Outgoing::Target::Broadcast, session_.songStateJson()}});
                 lastCloudVersion_ = client_->statusVersion();
                 relay_->wake();
                 client_->post([this] { samples_->maybeRefreshManifest(); });
@@ -192,6 +194,7 @@ void CloudServices::handle(const std::string& type, const json& msg, const json&
         reply(statusEvent(nullptr));
         out.push_back({Outgoing::Target::Others, statusEvent(nullptr)});
         if (switched) out.push_back({Outgoing::Target::Broadcast, session_.stateJson()});
+        if (switched) out.push_back({Outgoing::Target::Broadcast, session_.songStateJson()});
         lastCloudVersion_ = client_->statusVersion();
         relay_->wake();
         return;
@@ -261,6 +264,7 @@ std::vector<AddressedOutgoing> CloudServices::poll() {
         const bool switched = applyProfile(); // token dropped after a 401
         q.push_back({{}, {Outgoing::Target::Broadcast, statusEvent(nullptr)}});
         if (switched) q.push_back({{}, {Outgoing::Target::Broadcast, session_.stateJson()}});
+        if (switched) q.push_back({{}, {Outgoing::Target::Broadcast, session_.songStateJson()}});
     }
     const auto now = std::chrono::steady_clock::now();
     if (const uint64_t v = sync_->statusVersion(); v != lastSyncVersion_ && now - lastSyncEmit_ >= std::chrono::milliseconds(500)) {

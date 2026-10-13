@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "id": "sonne",
+  "title": "Sonne",
+  "artist": "Rammstein",
+  "tempo": 84,
+  "time_sig": [
+    4,
+    4
+  ],
+  "key": "B minor",
+  "sections": [
+    {
+      "name": "Intro",
+      "preset": "presets/factory/synth-pad/sonne-supersaw-choir.json",
+      "drums": false
+    },
+    {
+      "name": "Verse",
+      "preset": "presets/factory/synth-lead/du-hast-cold-lead.json",
+      "pattern": "presets/patterns/sonne-stomp.json",
+      "drums": true
+    },
+    {
+      "name": "Chorus",
+      "preset": "presets/factory/synth-pad/sonne-supersaw-choir.json",
+      "pattern": "presets/patterns/sonne-stomp.json",
+      "drums": true
+    },
+    {
+      "name": "Outro",
+      "preset": "presets/factory/bells-keys/ich-will-cold-pluck.json",
+      "drums": false
+    }
+  ]
+}

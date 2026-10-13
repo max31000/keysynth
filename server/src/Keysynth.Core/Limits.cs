@@ -6,6 +6,8 @@ public static class Limits
     public const int MaxRequestBodyBytes = 1024 * 1024;
     public const int MaxPatchBytes = 256 * 1024;
     public const int MaxPresetsPerUser = 1000;
+    public const int MaxSongBytes = 256 * 1024;
+    public const int MaxSongsPerUser = 1000;
     public const int MaxDevicesPerUser = 10;
     public const int MaxDeviceNameLength = 100;
     public const int MaxUserNameLength = 255;
@@ -16,6 +18,6 @@ public static class Limits
     public static readonly TimeSpan LastSeenWriteInterval = TimeSpan.FromMinutes(1);
 
     public const int DeviceMintPerHour = 10;
-    public const int PresetWritesPerMinute = 120;
+    public const int PresetWritesPerMinute = 120; // presets + songs, one bucket
     public const int ManifestPerMinute = 60;
 }

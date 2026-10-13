@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "id": "another-brick-in-the-wall",
+  "title": "Another Brick in the Wall, Part 2",
+  "artist": "Pink Floyd",
+  "tempo": 104,
+  "time_sig": [
+    4,
+    4
+  ],
+  "key": "D minor",
+  "sections": [
+    {
+      "name": "Verse",
+      "preset": "presets/factory/splits-layers/floyd-another-brick-synth-rhodes.json",
+      "pattern": "presets/patterns/another-brick-disco.json",
+      "drums": true
+    },
+    {
+      "name": "Chorus",
+      "preset": "presets/factory/splits-layers/floyd-another-brick-synth-rhodes.json",
+      "pattern": "presets/patterns/another-brick-disco.json",
+      "drums": true
+    },
+    {
+      "name": "Solo",
+      "preset": "presets/factory/synth-lead/floyd-run-like-hell-delay.json",
+      "drums": true
+    },
+    {
+      "name": "End",
+      "preset": "presets/factory/e-piano/mellow-ballad-rhodes.json",
+      "drums": false
+    }
+  ]
+}

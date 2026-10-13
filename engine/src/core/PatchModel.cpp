@@ -76,8 +76,10 @@ ModuleSlot PatchModel::makeSlot(const std::string& type, ModuleKind expected) {
     const ModuleInfo* info = registry_.find(type);
     if (info == nullptr) throw PatchError("unknown_module", "unknown module type '" + type + "'");
     if (info->kind != expected)
-        throw PatchError("bad_request", "module '" + type + "' is not an " +
-                                            (expected == ModuleKind::Instrument ? "instrument" : "effect"));
+        throw PatchError("bad_request", "module '" + type + "' is not " +
+                                            (expected == ModuleKind::Instrument ? "an instrument"
+                                             : expected == ModuleKind::Midi     ? "a MIDI processor"
+                                                                                : "an effect"));
     ModuleSlot s;
     s.node = allocId();
     s.type = type;
@@ -105,6 +107,7 @@ std::vector<std::string> PatchModel::setPatch(Patch p) {
     for (auto& l : p.layers) {
         claim(l.node);
         claim(l.instrument.node);
+        for (auto& m : l.midi) claim(m.node);
         for (auto& f : l.fx) claim(f.node);
     }
     for (auto& f : p.master.fx) claim(f.node);
@@ -124,6 +127,14 @@ std::vector<std::string> PatchModel::setPatch(Patch p) {
         l.zone = sanitizeZone(l.zone);
         if (l.name.empty()) l.name = "Layer " + std::to_string(li);
         normalizeSlot(l.instrument, ModuleKind::Instrument, &warnings, where + " instrument");
+        if (l.midi.size() > static_cast<size_t>(kMaxMidiPerChain)) {
+            warnings.push_back(where + ": too many MIDI processors; extra ones dropped");
+            l.midi.resize(kMaxMidiPerChain);
+        }
+        for (auto& m : l.midi) {
+            assign(m.node);
+            normalizeSlot(m, ModuleKind::Midi, &warnings, where + " midi");
+        }
         if (l.fx.size() > static_cast<size_t>(kMaxFxPerChain)) l.fx.resize(kMaxFxPerChain);
         for (auto& f : l.fx) {
             assign(f.node);
@@ -164,6 +175,8 @@ ModuleSlot* PatchModel::slotMut(NodeId node) {
     if (node == 0) return nullptr;
     for (auto& l : patch_.layers) {
         if (l.instrument.node == node) return &l.instrument;
+        for (auto& m : l.midi)
+            if (m.node == node) return &m;
         for (auto& f : l.fx)
             if (f.node == node) return &f;
     }
@@ -176,12 +189,36 @@ ModuleSlot* PatchModel::slotMut(NodeId node) {
 const ModuleSlot* PatchModel::findSlot(NodeId node) const { return const_cast<PatchModel*>(this)->slotMut(node); }
 
 std::optional<NodeId> PatchModel::chainOf(NodeId fx) const {
-    for (const auto& l : patch_.layers)
+    for (const auto& l : patch_.layers) {
         for (const auto& f : l.fx)
             if (f.node == fx) return l.node;
+        for (const auto& m : l.midi)
+            if (m.node == fx) return l.node;
+    }
     for (const auto& f : patch_.master.fx)
         if (f.node == fx) return kMasterNode;
     return std::nullopt;
+}
+
+const Layer* PatchModel::layerOfMidi(NodeId node) const {
+    if (node == 0) return nullptr;
+    for (const auto& l : patch_.layers)
+        for (const auto& m : l.midi)
+            if (m.node == node) return &l;
+    return nullptr;
+}
+
+std::vector<ModuleSlot>* PatchModel::chainContaining(NodeId node) {
+    if (node == 0) return nullptr;
+    auto has = [&](std::vector<ModuleSlot>& c) {
+        return std::any_of(c.begin(), c.end(), [&](const ModuleSlot& s) { return s.node == node; });
+    };
+    for (auto& l : patch_.layers) {
+        if (has(l.fx)) return &l.fx;
+        if (has(l.midi)) return &l.midi;
+    }
+    if (has(patch_.master.fx)) return &patch_.master.fx;
+    return nullptr;
 }
 
 std::vector<ModuleSlot>* PatchModel::chainMut(NodeId layerOrMaster) {
@@ -220,10 +257,19 @@ void PatchModel::setInstrument(NodeId layer, const std::string& type) {
 }
 
 NodeId PatchModel::addFx(NodeId layer, const std::string& type, std::optional<int> index) {
-    auto* chain = chainMut(layer);
+    const ModuleInfo* info = registry_.find(type);
+    const bool midi = info != nullptr && info->kind == ModuleKind::Midi;
+    std::vector<ModuleSlot>* chain = nullptr;
+    if (midi) {
+        if (layer == kMasterNode) throw PatchError("bad_request", "MIDI processors belong to a layer, not the master chain");
+        if (Layer* l = layerMut(layer)) chain = &l->midi;
+    } else {
+        chain = chainMut(layer);
+    }
     if (!chain) throw PatchError("not_found", "no layer " + std::to_string(layer));
-    if (chain->size() >= static_cast<size_t>(kMaxFxPerChain)) throw PatchError("limit", "fx chain is full");
-    ModuleSlot s = makeSlot(type, ModuleKind::Effect);
+    const size_t limit = static_cast<size_t>(midi ? kMaxMidiPerChain : kMaxFxPerChain);
+    if (chain->size() >= limit) throw PatchError("limit", midi ? "MIDI chain is full" : "fx chain is full");
+    ModuleSlot s = makeSlot(type, midi ? ModuleKind::Midi : ModuleKind::Effect);
     const int n = static_cast<int>(chain->size());
     const int at = index ? std::clamp(*index, 0, n) : n;
     const NodeId id = s.node;
@@ -233,17 +279,15 @@ NodeId PatchModel::addFx(NodeId layer, const std::string& type, std::optional<in
 }
 
 void PatchModel::removeFx(NodeId fx) {
-    auto owner = chainOf(fx);
-    if (!owner) throw PatchError("not_found", "no fx " + std::to_string(fx));
-    auto* chain = chainMut(*owner);
+    auto* chain = chainContaining(fx);
+    if (!chain) throw PatchError("not_found", "no fx " + std::to_string(fx));
     chain->erase(std::find_if(chain->begin(), chain->end(), [&](const ModuleSlot& s) { return s.node == fx; }));
     dirty_ = true;
 }
 
 void PatchModel::moveFx(NodeId fx, int to) {
-    auto owner = chainOf(fx);
-    if (!owner) throw PatchError("not_found", "no fx " + std::to_string(fx));
-    auto* chain = chainMut(*owner);
+    auto* chain = chainContaining(fx);
+    if (!chain) throw PatchError("not_found", "no fx " + std::to_string(fx));
     auto it = std::find_if(chain->begin(), chain->end(), [&](const ModuleSlot& s) { return s.node == fx; });
     ModuleSlot s = std::move(*it);
     chain->erase(it);

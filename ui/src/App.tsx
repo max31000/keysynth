@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { actions, connectEngine, retryRelay, useCloud, useEngine, useRemote } from './store';
+import { actions, connectEngine, retryRelay, useCloud, useEngine, useRemote, useSongs } from './store';
 import { TopBar } from './components/TopBar';
 import { PresetBrowser } from './components/PresetBrowser';
 import { Rack } from './components/Rack';
@@ -16,6 +16,8 @@ import { MODE } from './platform/mode';
 import { identityRejected } from './platform/identity';
 import { RemoteView } from './components/remote/RemoteView';
 import { useView } from './lib/view';
+import { SongsDrawer } from './components/songs/SongsDrawer';
+import { SongBar } from './components/songs/SongBar';
 
 function Toast() {
   const err = useEngine((s) => s.lastError);
@@ -87,6 +89,8 @@ function OfflineBanner() {
 export function App() {
   const [audioOpen, setAudioOpen] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
+  const [songsOpen, setSongsOpen] = useState(false);
+  const hasSong = useSongs((s) => !!s.state?.song);
   const [view, setView] = useView();
   const hasPatch = useEngine((s) => s.patch !== null);
   // a dev mock / another program on the engine port: never show it as the synth (platform/identity.ts)
@@ -106,8 +110,14 @@ export function App() {
           <SampleToast />
         </>
       ) : (
-        <div className="app">
-          <TopBar onAudioSettings={() => setAudioOpen(true)} onCloud={() => setCloudOpen(true)} onPult={() => setView('pult')} />
+        <div className={`app${hasSong ? ' has-song' : ''}`}>
+          <TopBar
+            onAudioSettings={() => setAudioOpen(true)}
+            onCloud={() => setCloudOpen(true)}
+            onPult={() => setView('pult')}
+            onSongs={() => setSongsOpen(true)}
+          />
+          <SongBar onOpen={() => setSongsOpen(true)} />
           <PresetBrowser />
           <Rack />
           <MasterSection />
@@ -120,6 +130,7 @@ export function App() {
           <SampleToast />
           <AudioSettings open={audioOpen} onClose={() => setAudioOpen(false)} />
           <CloudDrawer open={cloudOpen} onClose={() => setCloudOpen(false)} />
+          <SongsDrawer open={songsOpen} onClose={() => setSongsOpen(false)} />
         </div>
       )}
       <LinkConfirm />

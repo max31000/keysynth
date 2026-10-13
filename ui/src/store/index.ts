@@ -4,6 +4,7 @@ import { getMe } from '@mvv42/kit/platform';
 import { EngineClient, type WebSocketLike } from '../protocol/client';
 import { bindClient, createEngineStore, type EngineState } from './engineStore';
 import { createCloudStore, type CloudState } from './cloudStore';
+import { createSongStore, type SongsState } from './songStore';
 import { IDLE_RELAY, createRemote, type Remote, type RemoteState } from './remoteStore';
 import { API_BASE, MODE } from '../platform/mode';
 import { createDiscovery, type PermissionsLike } from '../platform/discovery';
@@ -34,6 +35,7 @@ export const client = new EngineClient({
 });
 export const engineStore = createEngineStore({ client });
 bindClient(engineStore, client, { acceptMock: MODE.dev });
+export const songStore = createSongStore({ client, acceptMock: MODE.dev });
 
 export const cloudStore = createCloudStore({
   client,
@@ -45,6 +47,7 @@ export const cloudStore = createCloudStore({
   onProfileChanged: () => {
     void engineStore.getState().refreshPresets();
     void engineStore.getState().refreshPatterns();
+    void songStore.getState().refresh();
   },
 });
 
@@ -136,5 +139,10 @@ export const selectHost = (deviceId: string) => remote?.selectHost(deviceId);
 /** «Повторить» on the relay route */
 export const retryRelay = () => remote?.retry();
 
+export function useSongs<T>(selector: (s: SongsState) => T): T {
+  return useStore(songStore, selector);
+}
+
 export const actions = () => engineStore.getState();
+export const songActions = () => songStore.getState();
 export const cloudActions = () => cloudStore.getState();

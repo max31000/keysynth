@@ -99,6 +99,19 @@ const DEFS: Def[] = [
     layers: [layer('Lead', 'va', { osc1_wave: 0, osc2_wave: 1, cutoff: 5200, resonance: 0.15, amp_release: 180 }, [fx('chorus', { mode: 1 }), fx('delay', { time: 355, mix: 0.18 })])],
   },
   {
+    slug: 'synth-lead/arp-pluck',
+    name: 'Arp Pluck',
+    category: 'Synth Lead',
+    tags: ['arp', 'midi'],
+    tempo: 120,
+    layers: [
+      {
+        ...layer('Arp', 'va', { cutoff: 2600, amp_release: 120 }, [fx('delay', { mix: 0.2 })]),
+        midi: [{ type: 'arp', bypass: false, params: { ...defaultParams('arp'), mode: 2, octaves: 2, latch: 1 } }],
+      },
+    ],
+  },
+  {
     slug: 'synth-lead/floyd-minimoog',
     name: 'Shine On Lead',
     category: 'Synth Lead',

@@ -7,7 +7,7 @@
      Visual Studio unless -Generator) and builds keysynth-app (windows-subsystem keysynth-engine.exe) in Release.
   3. Builds ui/dist (npm ci when node_modules is missing or -CleanUi; vite build --base=/).
   4. Stages out/stage/{app,plugins}: exe, faust.dll + share/faust/*.lib (KS_FAUST_DIR from the CMake cache),
-     VC++ runtime DLLs (app-local, faust.dll uses the dynamic CRT), installed.flag, presets/factory + patterns,
+     VC++ runtime DLLs (app-local, faust.dll uses the dynamic CRT), installed.flag, presets/factory + patterns + songs,
      ui/dist, licences; plugins = Faust example plugins (C++ examples need MSVC, not shipped).
   5. Runs ISCC (Inno Setup 6) on installer/keysynth.iss.
   See docs/TESTING.md "Release / installer".
@@ -117,6 +117,7 @@ Write-Host "VC++ runtime from $($crt.FullName)"
 
 Copy-Tree (Join-Path $repo "presets/factory") (Join-Path $app "presets/factory")
 Copy-Tree (Join-Path $repo "presets/patterns") (Join-Path $app "presets/patterns")
+Copy-Tree (Join-Path $repo "presets/songs") (Join-Path $app "presets/songs")
 Copy-Tree (Join-Path $ui "dist") (Join-Path $app "ui/dist")
 Copy-Item (Join-Path $repo "LICENSE") (Join-Path $app "LICENSE.txt")
 Copy-Item (Join-Path $repo "THIRD_PARTY_NOTICES.md") $app

@@ -15,16 +15,19 @@ public sealed record DeviceMint(long UserId, string DeviceId, string Name, byte[
 
 public enum MintOutcome { Created, Replaced, TooManyDevices }
 
-/// <summary>Row of <c>presets</c>; <see cref="Patch"/> is null iff <see cref="Deleted"/>.</summary>
-public sealed record PresetRow(string Slug, uint Revision, DateTime UpdatedAt, bool Deleted, string? Patch);
+/// <summary>
+/// Row of a revisioned per-user document table (<c>presets</c>, <c>songs</c>; cloud-api.md §3.3 / §3.3a).
+/// <see cref="Body"/> (the <c>patch</c> / <c>song</c> column) is null iff <see cref="Deleted"/>.
+/// </summary>
+public sealed record DocumentRow(string Slug, uint Revision, DateTime UpdatedAt, bool Deleted, string? Body);
 
-public enum PresetWriteStatus { Ok, Conflict, NotFound, TooManyPresets }
+public enum DocumentWriteStatus { Ok, Conflict, NotFound, TooMany }
 
 /// <param name="Row">Ok: the written row. Conflict: the current row (null if there is none). Otherwise null.</param>
-public sealed record PresetWriteResult(PresetWriteStatus Status, PresetRow? Row)
+public sealed record DocumentWriteResult(DocumentWriteStatus Status, DocumentRow? Row)
 {
-    public static PresetWriteResult Ok(PresetRow row) => new(PresetWriteStatus.Ok, row);
-    public static PresetWriteResult Conflict(PresetRow? current) => new(PresetWriteStatus.Conflict, current);
-    public static readonly PresetWriteResult NotFound = new(PresetWriteStatus.NotFound, null);
-    public static readonly PresetWriteResult TooMany = new(PresetWriteStatus.TooManyPresets, null);
+    public static DocumentWriteResult Ok(DocumentRow row) => new(DocumentWriteStatus.Ok, row);
+    public static DocumentWriteResult Conflict(DocumentRow? current) => new(DocumentWriteStatus.Conflict, current);
+    public static readonly DocumentWriteResult NotFound = new(DocumentWriteStatus.NotFound, null);
+    public static readonly DocumentWriteResult TooMany = new(DocumentWriteStatus.TooMany, null);
 }

@@ -55,10 +55,13 @@ struct ModuleNode {
     // but the cached output is not valid for the old chain (upstream differs) -> the old graph passes through.
     int cacheSlot = -1;
     static constexpr int kSharedNoCache = -2;
+    // MIDI processors, audio thread: bypass state seen last block (a bypass edge flushes the processor's notes).
+    bool midiBypassed = false;
 };
 
 struct LayerNode {
     NodeId node = 0;
+    std::vector<std::unique_ptr<ModuleNode>> midi; // MIDI processors before the instrument (ARCHITECTURE §17)
     ModuleNode instrument;
     std::vector<std::unique_ptr<ModuleNode>> fx;
 
@@ -73,13 +76,21 @@ struct LayerNode {
     // GraphSwapper::begin (audio thread); atomics so the control thread may inspect it.
     std::array<std::atomic<uint8_t>, 16 * 128> noteMap{};
 
-    // Audio-thread scratch.
+    // Audio-thread scratch. midiA/midiB: ping-pong buffers of the MIDI chain (kMaxEventsPerBlock each).
     std::vector<MidiEvent> events;
+    std::vector<MidiEvent> midiA, midiB;
+    // Set by GraphSwapper::begin when this layer's MIDI chain differs from the outgoing graph's (a removed
+    // processor cannot release its notes any more): the first block sends AllNotesOff to the layer.
+    bool flushNotes = false;
     std::vector<float> bufL, bufR;
     dsp::OnePoleSmoother gainL, gainR;
     std::atomic<float> meterL{0.0f}, meterR{0.0f}; // block peak of the latest block
 
     void filterEvents(MidiEventSpan in, std::vector<MidiEvent>& out) noexcept;
+    // Runs the MIDI chain over `in` (audio thread). `readCache`: old graph of a transition — shared processors are
+    // skipped (the new graph runs them; their note-ons are dropped). `flushLayer`: prepend one AllNotesOff to the
+    // chain's output (flushNotes). Returns the events for the instrument.
+    MidiEventSpan runMidiChain(MidiEventSpan in, const ProcessContext& ctx, bool readCache, bool flushLayer) noexcept;
 };
 
 // RhythmNode (ARCHITECTURE §5.3): the `drums` module played by the Engine's DrumSequencer. Rendered into its own

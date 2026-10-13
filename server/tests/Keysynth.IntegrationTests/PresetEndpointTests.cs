@@ -187,7 +187,7 @@ public sealed class PresetEndpointTests(KeysynthFactory factory) : IClassFixture
     public async Task ThousandPresetsMaxIncludingTombstones()
     {
         var linked = await factory.LinkAsync();
-        factory.Store.SeedTombstones(long.Parse(linked.AccountId), Limits.MaxPresetsPerUser, factory.Clock.UtcNow);
+        factory.Store.Presets.SeedTombstones(long.Parse(linked.AccountId), Limits.MaxPresetsPerUser, factory.Clock.UtcNow);
         await (await linked.Bearer.SendAsync(Put("one-more", Body(), ifNoneMatch: "*"))).ShouldBe(HttpStatusCode.Conflict, "too_many_presets");
         // updating an existing row is still fine
         (await linked.Bearer.SendAsync(Put("seed-0", Body(), ifMatch: "\"2\""))).StatusCode.Should().Be(HttpStatusCode.OK);

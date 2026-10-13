@@ -201,7 +201,8 @@ Patch patchFromJson(const json& in, std::vector<std::string>* w) {
                 else
                     warn(w, where + ": missing instrument");
                 if (auto fx = lj.find("fx"); fx != lj.end()) l.fx = fxFromJson(*fx, w, where + ".fx");
-                unknownKeys(lj, {"node", "name", "zone", "instrument", "fx"}, w, where);
+                if (auto mi = lj.find("midi"); mi != lj.end()) l.midi = fxFromJson(*mi, w, where + ".midi");
+                unknownKeys(lj, {"node", "name", "zone", "midi", "instrument", "fx"}, w, where);
                 p.layers.push_back(std::move(l));
             }
         }
@@ -232,11 +233,17 @@ json patchToJson(const Patch& p) {
     for (const auto& l : p.layers) {
         json fx = json::array();
         for (const auto& f : l.fx) fx.push_back(slotToJson(f, true));
-        layers.push_back({{"node", l.node},
-                          {"name", l.name},
-                          {"zone", zoneToJson(l.zone)},
-                          {"instrument", slotToJson(l.instrument, false)},
-                          {"fx", fx}});
+        json lj = {{"node", l.node},
+                   {"name", l.name},
+                   {"zone", zoneToJson(l.zone)},
+                   {"instrument", slotToJson(l.instrument, false)},
+                   {"fx", fx}};
+        if (!l.midi.empty()) { // optional key (ARCHITECTURE §17): presets without MIDI tools stay unchanged
+            json midi = json::array();
+            for (const auto& m : l.midi) midi.push_back(slotToJson(m, true));
+            lj["midi"] = std::move(midi);
+        }
+        layers.push_back(std::move(lj));
     }
     json mfx = json::array();
     for (const auto& f : p.master.fx) mfx.push_back(slotToJson(f, true));

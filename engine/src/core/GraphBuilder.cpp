@@ -17,6 +17,7 @@ void fillNode(Ctx& c, ModuleNode& dst, const ModuleSlot& slot, ModuleKind expect
     dst.type = slot.type;
     dst.state = slot.state;
     dst.bypass.store(slot.bypass);
+    dst.midiBypassed = slot.bypass;
 
     const ModuleInfo* info = c.registry.find(slot.type);
     if (info == nullptr || info->kind != expected) {
@@ -71,6 +72,11 @@ BuildResult GraphBuilder::build(const Patch& patch, const ModuleRegistry& regist
         auto ln = std::make_unique<LayerNode>();
         ln->node = l.node;
         ln->setZone(l.zone);
+        for (const ModuleSlot& m : l.midi) {
+            auto mn = std::make_unique<ModuleNode>();
+            fillNode(c, *mn, m, ModuleKind::Midi);
+            ln->midi.push_back(std::move(mn));
+        }
         fillNode(c, ln->instrument, l.instrument, ModuleKind::Instrument);
         for (const ModuleSlot& f : l.fx) {
             auto fn = std::make_unique<ModuleNode>();
