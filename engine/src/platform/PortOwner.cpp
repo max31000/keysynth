@@ -67,7 +67,6 @@ std::string processImagePath(unsigned long pid) {
     return out;
 }
 
-unsigned long currentProcessId() { return GetCurrentProcessId(); }
 
 bool loopbackPortBindable(int port, std::string& error) {
     if (port <= 0 || port > 65535) return true;
@@ -144,7 +143,6 @@ std::vector<TcpListener> tcpListeners(int port) {
 #else
 
 std::string processImagePath(unsigned long) { return {}; }
-unsigned long currentProcessId() { return static_cast<unsigned long>(getpid()); }
 std::vector<TcpListener> tcpListeners(int) { return {}; }
 bool loopbackPortBindable(int, std::string&) { return true; }
 

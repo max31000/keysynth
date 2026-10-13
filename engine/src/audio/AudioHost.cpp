@@ -29,6 +29,9 @@ namespace {
 std::string str(const juce::String& s) { return s.toStdString(); }
 juce::String jstr(const std::string& s) { return juce::String::fromUTF8(s.c_str()); }
 
+// First-start buffer when no device was saved and none is preferred (non-ASIO platforms): 128 = 2.7 ms at 48 kHz.
+[[maybe_unused]] constexpr int kDefaultBufferSize = 128;
+
 bool preferredAsioName(const juce::String& n) {
     return n.containsIgnoreCase("Steinberg") || n.containsIgnoreCase("Yamaha");
 }
@@ -236,6 +239,11 @@ std::string AudioHost::start(const Options& opt, bool startTimerNow) {
             }
         }
     }
+#if !defined(_WIN32)
+    // First start (nothing saved, no ASIO: macOS): the OS default device would open with its own large buffer
+    // (CoreAudio: 512 = 10.7 ms at 48 kHz). A synth wants a small one; the driver rounds to what it supports.
+    if (type.empty() && buffer == 0) buffer = kDefaultBufferSize;
+#endif
     if (opt.bufferSize) buffer = *opt.bufferSize;
     if (opt.sampleRate) sr = *opt.sampleRate;
 

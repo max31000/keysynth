@@ -54,7 +54,8 @@ public:
     enum class State { Stopped, Idle, Connecting, Connected, Backoff };
     static const char* toString(State s);
 
-    RelayClient(CloudClient& client, std::string version, Options opt = {});
+    RelayClient(CloudClient& client, std::string version);
+    RelayClient(CloudClient& client, std::string version, Options opt);
     ~RelayClient();
     RelayClient(const RelayClient&) = delete;
     RelayClient& operator=(const RelayClient&) = delete;

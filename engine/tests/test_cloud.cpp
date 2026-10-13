@@ -115,10 +115,14 @@ TEST_CASE("app paths: dev, installed, KS_DATA_DIR, profiles, logical paths", "[c
         std::ofstream(root / "app" / "installed.flag") << "";
 #if defined(_MSC_VER)
         _putenv_s("KS_DATA_DIR", pathToUtf8(root / "data").c_str());
+#else
+        setenv("KS_DATA_DIR", pathToUtf8(root / "data").c_str(), 1);
 #endif
         AppPaths p = AppPaths::discover(root / "app");
 #if defined(_MSC_VER)
         _putenv_s("KS_DATA_DIR", "");
+#else
+        unsetenv("KS_DATA_DIR");
 #endif
         CHECK(p.installed());
         CHECK(p.dataRoot == fs::weakly_canonical(root / "data"));

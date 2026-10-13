@@ -11,6 +11,18 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <utility>
+
+#if !defined(_WIN32)
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#endif
 
 namespace ks::platform {
 
@@ -98,17 +110,119 @@ bool openInBrowser(const std::string& url) {
     return r > 32;
 }
 
+void initApplication(bool) {}
+void installAppEventHandlers() {}
+bool takeAppReopenRequest() { return false; }
+bool takeAppQuitRequest() { return false; }
+bool appLaunchedByUrl() { return false; }
+
 #else // !_WIN32
 
-SingleInstance::SingleInstance(const std::string&) {}
-SingleInstance::~SingleInstance() = default;
-bool SingleInstance::takeOpenRequest() { return false; }
-bool SingleInstance::takeQuitRequest() { return false; }
-bool SingleInstance::send(Command, const std::string&) { return false; }
-bool SingleInstance::isRunning(const std::string&) { return false; }
+namespace {
+
+std::string runtimeDir() {
+    const char* t = std::getenv("TMPDIR"); // per-user on macOS (/var/folders/...)
+    std::string d = t && *t ? t : "/tmp";
+    if (d.back() != '/') d += '/';
+    return d;
+}
+
+std::string basePath(const std::string& name) { return runtimeDir() + name + "-" + std::to_string(getuid()); }
+
+bool fillAddr(sockaddr_un& a, const std::string& path) {
+    a = {};
+    a.sun_family = AF_UNIX;
+    if (path.size() >= sizeof(a.sun_path)) return false;
+    std::memcpy(a.sun_path, path.c_str(), path.size() + 1);
+    return true;
+}
+
+} // namespace
+
+SingleInstance::SingleInstance(const std::string& name) {
+    const std::string base = basePath(name);
+    lockFd_ = ::open((base + ".lock").c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    // A lock file we can't create counts as "not running" (as an unopenable mutex on Windows).
+    primary_ = lockFd_ < 0 || ::flock(lockFd_, LOCK_EX | LOCK_NB) == 0;
+    if (!primary_ || lockFd_ < 0) return;
+    sockPath_ = base + ".sock";
+    sockaddr_un a;
+    if (!fillAddr(a, sockPath_)) return;
+    ::unlink(sockPath_.c_str()); // stale socket of a crashed primary (we hold the lock: nobody else owns it)
+    sockFd_ = ::socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sockFd_ < 0) return;
+    ::fcntl(sockFd_, F_SETFL, O_NONBLOCK);
+    ::fcntl(sockFd_, F_SETFD, FD_CLOEXEC);
+    if (::bind(sockFd_, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) != 0) {
+        ::close(sockFd_);
+        sockFd_ = -1;
+    }
+}
+
+SingleInstance::~SingleInstance() {
+    if (sockFd_ >= 0) {
+        ::close(sockFd_);
+        ::unlink(sockPath_.c_str());
+    }
+    if (lockFd_ >= 0) ::close(lockFd_); // releases the flock
+}
+
+void SingleInstance::drain() {
+    if (sockFd_ < 0) return;
+    char buf[16];
+    for (;;) {
+        const ssize_t n = ::recv(sockFd_, buf, sizeof(buf), 0);
+        if (n <= 0) break;
+        if (buf[0] == 'o') open_ = true;
+        else if (buf[0] == 'q') quit_ = true;
+    }
+}
+
+bool SingleInstance::takeOpenRequest() {
+    if (!primary_) return false;
+    drain();
+    return std::exchange(open_, false);
+}
+
+bool SingleInstance::takeQuitRequest() {
+    if (!primary_) return false;
+    drain();
+    return std::exchange(quit_, false);
+}
+
+bool SingleInstance::send(Command c, const std::string& name) {
+    sockaddr_un a;
+    if (!fillAddr(a, basePath(name) + ".sock")) return false;
+    const int fd = ::socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (fd < 0) return false;
+    const char msg = c == Command::Open ? 'o' : 'q';
+    const bool ok = ::sendto(fd, &msg, 1, 0, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) == 1;
+    ::close(fd);
+    return ok;
+}
+
+bool SingleInstance::isRunning(const std::string& name) {
+    const int fd = ::open((basePath(name) + ".lock").c_str(), O_RDWR | O_CLOEXEC);
+    if (fd < 0) return false;
+    const bool held = ::flock(fd, LOCK_EX | LOCK_NB) != 0 && errno == EWOULDBLOCK;
+    ::close(fd); // also drops our lock if we just took it
+    return held;
+}
+
+#if !defined(__APPLE__) // macOS: DesktopIntegration_mac.mm
 bool autostartEnabled(const std::string&, const std::string&) { return false; }
 bool setAutostart(bool, const std::filesystem::path&, const std::string&, const std::string&) { return false; }
-bool openInBrowser(const std::string& url) { return juce::URL(juce::String::fromUTF8(url.c_str())).launchInDefaultBrowser(); }
+void initApplication(bool) {}
+void installAppEventHandlers() {}
+bool takeAppReopenRequest() { return false; }
+bool takeAppQuitRequest() { return false; }
+bool appLaunchedByUrl() { return false; }
+#endif
+
+bool openInBrowser(const std::string& url) {
+    if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) return false;
+    return juce::URL(juce::String::fromUTF8(url.c_str())).launchInDefaultBrowser();
+}
 
 #endif
 

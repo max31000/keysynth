@@ -17,7 +17,7 @@ using nlohmann::json;
 namespace {
 
 struct FakeAudio final : AudioControl {
-    AudioStatus st{"FakeType", "Fake Device", 48000.0, 64, 1.0, 2.5, true};
+    AudioStatus st{"FakeType", "Fake Device", 48000.0, 64, 1.0, 2.5, true, false, false, {}, {}, {}};
     std::string lastType, lastName;
     AudioStatus status() const override { return st; }
     AudioDeviceList listDevices() override {

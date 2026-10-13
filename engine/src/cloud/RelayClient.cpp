@@ -38,6 +38,8 @@ const char* RelayClient::toString(State s) {
     }
 }
 
+RelayClient::RelayClient(CloudClient& client, std::string version) : RelayClient(client, std::move(version), Options{}) {}
+
 RelayClient::RelayClient(CloudClient& client, std::string version, Options opt)
     : client_(client), version_(std::move(version)), opt_(std::move(opt)) {
     if (!opt_.factory) opt_.factory = [] { return platform::makeWinHttpWebSocket(); };

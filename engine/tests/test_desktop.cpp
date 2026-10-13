@@ -8,6 +8,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 using namespace ks::platform;
@@ -17,7 +19,7 @@ std::string uniqueName(const char* what) {
 #if defined(_WIN32)
     return std::string("keysynth-test-") + what + "-" + std::to_string(GetCurrentProcessId());
 #else
-    return std::string("keysynth-test-") + what;
+    return std::string("keysynth-test-") + what + "-" + std::to_string(getpid());
 #endif
 }
 } // namespace
@@ -63,7 +65,6 @@ TEST_CASE("desktop: health probe fails fast on a closed port", "[desktop]") {
     CHECK_FALSE(probeHealth("http://127.0.0.1:1/health", 1000));
 }
 
-#if defined(_WIN32)
 TEST_CASE("desktop: single instance and cross-process commands", "[desktop]") {
     const std::string name = uniqueName("instance");
     CHECK_FALSE(SingleInstance::isRunning(name));
@@ -88,6 +89,27 @@ TEST_CASE("desktop: single instance and cross-process commands", "[desktop]") {
     SingleInstance again(name);
     CHECK(again.isPrimary());
 }
+
+#if !defined(_WIN32)
+TEST_CASE("desktop: a crashed primary's stale socket does not block a new one", "[desktop]") {
+    const std::string name = uniqueName("stale");
+    {
+        SingleInstance first(name);
+        REQUIRE(first.isPrimary());
+    } // the destructor removes the socket; a crash would leave it: the next primary replaces it
+    SingleInstance next(name);
+    REQUIRE(next.isPrimary());
+    CHECK(SingleInstance::send(SingleInstance::Command::Quit, name));
+    CHECK(next.takeQuitRequest());
+}
+
+TEST_CASE("desktop: no login item outside an app bundle", "[desktop]") {
+    CHECK_FALSE(autostartEnabled());
+    CHECK_FALSE(setAutostart(true, "/tmp/keysynth-engine"));
+}
+#endif
+
+#if defined(_WIN32)
 
 TEST_CASE("desktop: autostart value round trip", "[desktop]") {
     const std::string key = "Software\\keysynth-tests\\" + uniqueName("run");

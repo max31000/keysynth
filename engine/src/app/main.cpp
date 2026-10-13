@@ -6,7 +6,7 @@
 //   keysynth://...       protocol launch (web page "start" button): desktop mode without opening the browser
 //   --no-audio           drive the engine from a timer thread (null device), for UI/protocol work
 //   --port N             WebSocket port (default 7341); --http-port N static UI port (default 7340, 0 = off)
-//   --asio-buffer N      request this buffer size from the audio device
+//   --buffer N           request this buffer size from the audio device (alias: --asio-buffer)
 //   --sample-rate N      request this sample rate
 //   --preset PATH        initial preset (relative to repo root or absolute, inside the allow-list)
 //   --root DIR           repo root (default: auto-detected)
@@ -96,7 +96,7 @@ Args parseArgs(int argc, char** argv, std::string& err) {
             else if (s == "--no-plugins") a.noPlugins = true;
             else if (s == "--port") a.wsPort = std::stoi(next());
             else if (s == "--http-port") a.httpPort = std::stoi(next());
-            else if (s == "--asio-buffer") a.buffer = std::stoi(next());
+            else if (s == "--asio-buffer" || s == "--buffer") a.buffer = std::stoi(next());
             else if (s == "--sample-rate") a.sampleRate = std::stod(next());
             else if (s == "--preset") a.preset = next();
             else if (s == "--root") a.root = next();
@@ -121,6 +121,7 @@ public:
     Pump(ks::Session& s, ks::ControlServer& srv, ks::plugins::PluginHost* plugins, ks::cloud::CloudServices* cloud)
         : s_(s), srv_(srv), plugins_(plugins), cloud_(cloud) { startTimerHz(30); }
     void timerCallback() override {
+        if (ks::platform::takeAppQuitRequest()) g_quit.store(true); // macOS quit Apple Event (logout, ...)
         if (g_quit.load()) {
             stopTimer();
             juce::MessageManager::getInstance()->stopDispatchLoop();
@@ -251,7 +252,7 @@ int main(int argc, char** argv) {
     const Args args = parseArgs(argc, argv, err);
     if (!err.empty() || args.help) {
         if (!err.empty()) std::fprintf(stderr, "error: %s\n", err.c_str());
-        std::printf("usage: keysynth-engine [--no-audio] [--no-midi] [--port N] [--http-port N] [--asio-buffer N]\n"
+        std::printf("usage: keysynth-engine [--no-audio] [--no-midi] [--port N] [--http-port N] [--buffer N]\n"
                     "                       [--sample-rate HZ] [--preset PATH] [--root DIR] [--no-plugins] [--no-cloud]\n"
                     "                       [--tray | --no-tray] [--quit] [keysynth://open]\n");
         return err.empty() ? 0 : 2;
@@ -263,13 +264,15 @@ int main(int argc, char** argv) {
     std::signal(SIGBREAK, onSignal);
 #endif
 
+    ks::platform::initApplication(false); // macOS: NSApp before JUCE (see DesktopIntegration.h)
     juce::ScopedJuceInitialiser_GUI juceInit; // message manager (+ the tray icon in desktop mode)
+    ks::platform::installAppEventHandlers();
 
     const auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
     const auto exeDir = exeFile.getParentDirectory();
-    // Wide path: the install dir is under the user's profile, often non-ASCII (C:/Users/<Cyrillic name>/...).
+    // UTF-8 -> path: the install dir is under the user's profile, often non-ASCII (C:/Users/<Cyrillic name>/...).
     const ks::AppPaths paths =
-        args.root.empty() ? ks::AppPaths::discover(std::filesystem::path(exeDir.getFullPathName().toWideCharPointer()))
+        args.root.empty() ? ks::AppPaths::discover(ks::pathFromUtf8(exeDir.getFullPathName().toStdString()))
                           : ks::AppPaths::fromRoot(args.root);
 
     // Desktop mode (ARCHITECTURE §16): tray + single instance. A second launch hands over to the first and exits.
@@ -288,6 +291,7 @@ int main(int argc, char** argv) {
             return 0;
         }
     }
+    if (desktop) ks::platform::initApplication(true); // macOS: menu bar app, no Dock icon
     // After the instance check: only the primary desktop instance rotates the log.
     ks::app::setupGuiOutput(paths.logsDir, desktop);
     std::printf("keysynth-engine — root %s%s\n", ks::pathToUtf8(paths.root).c_str(),
@@ -496,22 +500,31 @@ int main(int argc, char** argv) {
             }
             return e;
         };
-        const std::filesystem::path exePath(exeFile.getFullPathName().toWideCharPointer());
+        const std::filesystem::path exePath = ks::pathFromUtf8(exeFile.getFullPathName().toStdString());
         ta.autostartEnabled = [] { return ks::platform::autostartEnabled(); };
         ta.setAutostart = [exePath](bool on) { return ks::platform::setAutostart(on, exePath); };
         ta.quit = [] { g_quit.store(true); };
         ta.poll = [inst = instance.get(), openUi] {
             if (inst->takeQuitRequest()) g_quit.store(true);
-            if (inst->takeOpenRequest()) openUi();
+            if (inst->takeOpenRequest() || ks::platform::takeAppReopenRequest()) openUi();
         };
         tray = std::make_unique<ks::app::Tray>(std::move(ta), ks::engineVersion());
         if (!server.wsRunning()) {
             openWhenBound = openOnStart;
             portWatch->notifyConflict(); // balloon instead of a modal box
         } else if (openOnStart) {
+#if defined(__APPLE__)
+            // A `keysynth://` link launch arrives as an Apple Event once the run loop starts, not in argv: wait
+            // for it briefly, a link launch must not open a browser (DesktopMode).
+            juce::Timer::callAfterDelay(500, [o = opener.get()] {
+                if (!ks::platform::appLaunchedByUrl()) o->openPreferred();
+            });
+#else
             opener->openPreferred();
+#endif
         }
     }
+#if defined(_WIN32) // elsewhere the driver's IO thread is already real-time (CoreAudio HAL): nothing to report
     if (audioHost)
         juce::Timer::callAfterDelay(1000, [host = audioHost.get()] {
             std::printf("audio thread: MMCSS \"Pro Audio\" %s (err %lu), power throttling %s\n",
@@ -519,6 +532,7 @@ int main(int argc, char** argv) {
                         host->powerThrottlingDisabled() ? "disabled" : "unchanged");
             std::fflush(stdout);
         });
+#endif
     juce::MessageManager::getInstance()->runDispatchLoop();
 
     std::printf("shutting down...\n");

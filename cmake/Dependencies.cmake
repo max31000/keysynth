@@ -145,6 +145,16 @@ if(KS_WITH_SFIZZ)
             if(NOT _type STREQUAL "INTERFACE_LIBRARY" AND NOT _type STREQUAL "UTILITY")
                 if(MSVC)
                     target_compile_options(${_t} PRIVATE /W0)
+                else()
+                    # Apple clang 21 makes the bundled atomic_queue's `x.template f()` (no args) a hard error.
+                    target_compile_options(${_t} PRIVATE -w $<$<COMPILE_LANG_AND_ID:CXX,AppleClang,Clang>:-Wno-missing-template-arg-list-after-template-kw>)
+                endif()
+                # sfizz 1.2.3 adds 32-bit ARM flags (-mfpu=neon -mfloat-abi=hard) for any processor matching "arm.*",
+                # arm64 included, where clang rejects them. Strip them from every target that inherited them.
+                get_target_property(_opts ${_t} COMPILE_OPTIONS)
+                if(_opts)
+                    list(REMOVE_ITEM _opts -mfpu=neon -mfloat-abi=hard)
+                    set_target_properties(${_t} PROPERTIES COMPILE_OPTIONS "${_opts}")
                 endif()
                 set_target_properties(${_t} PROPERTIES FOLDER "deps/sfizz")
             endif()

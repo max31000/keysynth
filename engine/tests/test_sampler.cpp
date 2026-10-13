@@ -24,7 +24,12 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#if defined(_WIN32)
 #include <process.h>
+#else
+#include <unistd.h>
+#define _getpid getpid
+#endif
 #include <thread>
 
 using namespace ks;

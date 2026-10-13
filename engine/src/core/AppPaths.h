@@ -2,7 +2,8 @@
 // App / user-data locations and the path allow-list (ARCHITECTURE §11, §15; layout table: cloud-api spec §6.1).
 //
 // Mode: installed iff `installed.flag` exists next to the exe (app dir = exe dir, data root
-// %LOCALAPPDATA%\keysynth), else dev (repo checkout: data root = <repo>/userdata, the layout used so far).
+// %LOCALAPPDATA%\keysynth) or, macOS, in the app bundle's Contents/Resources (app dir = Resources, data root
+// ~/Library/Application Support/keysynth), else dev (repo checkout: data root = <repo>/userdata, the layout used so far).
 // KS_DATA_DIR replaces the data root in both modes (discover() only; fromRoot() is always the dev layout).
 //
 // Paths on the wire are *logical* (PROTOCOL.md "Sessions, Origin, Host"): `userdata/...` = the active profile,

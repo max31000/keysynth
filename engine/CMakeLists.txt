@@ -61,6 +61,10 @@ endif()
 file(GLOB_RECURSE KS_CORE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
+if(APPLE) # Objective-C++ platform code (engine/src/platform/*.mm)
+    file(GLOB_RECURSE KS_CORE_MM CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.mm)
+    list(APPEND KS_CORE_SOURCES ${KS_CORE_MM})
+endif()
 list(FILTER KS_CORE_SOURCES EXCLUDE REGEX "/src/app/")
 add_library(ks_core STATIC ${KS_CORE_SOURCES})
 target_include_directories(ks_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -85,6 +89,10 @@ target_compile_definitions(ks_core PUBLIC
     $<$<BOOL:${KS_RT_CHECKS}>:KS_RT_CHECKS=1>)
 if(WIN32)
     target_link_libraries(ks_core PUBLIC avrt ws2_32 crypt32 wininet)
+elseif(APPLE)
+    target_link_libraries(ks_core PUBLIC "-framework Foundation" "-framework Security" "-framework SystemConfiguration"
+                                         "-framework ServiceManagement" "-framework AppKit")
+    target_compile_options(ks_core PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 endif()
 # Plugin SDK (C ABI header).
 target_include_directories(ks_core PUBLIC ${CMAKE_SOURCE_DIR}/sdk/include)

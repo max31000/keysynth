@@ -1,7 +1,8 @@
 #pragma once
-// Desktop-app integration for the tray app (ARCHITECTURE §16): single instance + cross-process commands, HKCU
-// autostart, UI URL choice. Message thread only (probeHealth blocks: call it from a worker). Non-Windows: stubs
-// (always primary, no autostart).
+// Desktop-app integration for the tray app (ARCHITECTURE §16): single instance + cross-process commands, autostart,
+// UI URL choice. Message thread only (probeHealth blocks: call it from a worker).
+// Windows: named mutex/events, HKCU Run key. macOS: lock file + datagram socket, SMAppService login item, Apple
+// Events (DesktopIntegration_mac.mm). Other POSIX: single instance as macOS, no autostart.
 
 #include <filesystem>
 #include <string>
@@ -14,8 +15,9 @@ inline constexpr const char* kWebHealthUrl = "https://mvv42.ru/keysynth/health";
 inline constexpr const char* kAutostartValue = "keysynth";
 inline constexpr const char* kRunKey = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
-// Named mutex `<name>` + auto-reset events `<name>-open` / `<name>-quit` (session-local namespace). The first
-// process holding the mutex is the primary; later ones send it a command and exit.
+// Windows: named mutex `<name>` + auto-reset events `<name>-open` / `<name>-quit` (session-local namespace).
+// POSIX: exclusive flock on $TMPDIR/<name>-<uid>.lock + a datagram socket next to it that receives the commands.
+// The first process holding the lock is the primary; later ones send it a command and exit.
 class SingleInstance {
 public:
     explicit SingleInstance(const std::string& name = kInstanceName);
@@ -34,13 +36,23 @@ public:
     static bool isRunning(const std::string& name = kInstanceName);
 
 private:
+#if defined(_WIN32)
     void* mutex_ = nullptr;
     void* openEvent_ = nullptr;
     void* quitEvent_ = nullptr;
+#else
+    int lockFd_ = -1;
+    int sockFd_ = -1;
+    std::string sockPath_;
+    bool open_ = false, quit_ = false; // commands drained from the socket, not yet taken
+    void drain();
+#endif
     bool primary_ = true;
 };
 
-// Autostart = HKCU\<runKey> value `<valueName>` = autostartCommand(exe). `runKey` is a parameter for tests.
+// Autostart. Windows: HKCU\<runKey> value `<valueName>` = autostartCommand(exe) (`runKey` is a parameter for
+// tests). macOS: the app bundle's login item (SMAppService.mainAppService; the key/value/exe arguments are
+// unused) — false outside an app bundle.
 std::string autostartCommand(const std::filesystem::path& exe); // "\"<exe>\" --tray"
 bool autostartEnabled(const std::string& runKey = kRunKey, const std::string& valueName = kAutostartValue);
 // Returns false if the registry write/delete failed.
@@ -59,6 +71,18 @@ bool isProtocolArg(const std::string& arg);
 // True if any argument is a protocol URL. Such a launch must ignore every other argument: a URL with unescaped
 // quotes/spaces can be split by the shell into extra flags (`--root`, `--preset`, ...).
 bool isProtocolLaunch(int argc, const char* const* argv);
+
+// macOS application object and Apple Events (no-ops elsewhere). initApplication() must run before JUCE's GUI
+// initialiser (JUCE creates NSApp only for START_JUCE_APPLICATION apps, and [NSApp run] needs it); `menuBarApp`
+// = no Dock icon (accessory activation policy). installAppEventHandlers() after it: LaunchServices never starts a
+// second process for a running app, it sends the running one an Apple Event instead — "reopen" (Finder / Dock
+// launch) becomes an open request, kAEGetURL (`keysynth://` link) marks a protocol launch, "quit" (logout,
+// shutdown, `osascript quit`) a quit request instead of AppKit's immediate exit().
+void initApplication(bool menuBarApp);
+void installAppEventHandlers();
+bool takeAppReopenRequest(); // true once per reopen event
+bool takeAppQuitRequest();   // true once per quit event
+bool appLaunchedByUrl();     // a kAEGetURL event has arrived (sticky)
 
 struct DesktopMode {
     bool desktop = false;     // tray icon + single instance

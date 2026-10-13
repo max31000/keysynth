@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
+# macOS (ARCHITECTURE §1): Apple Silicon only, macOS 13+ (SMAppService login item). Must precede project().
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
+    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS architectures")
+endif()
 project(keysynth VERSION 0.5.0 LANGUAGES C CXX)
+if(APPLE)
+    enable_language(OBJCXX) # engine/src/platform/*.mm (Cocoa / Foundation APIs)
+endif()
 
 option(KS_BUILD_TESTS "Build Catch2 tests (ks-tests)" ON)
 option(KS_WITH_SFIZZ "Build the sfizz-based SFZ sampler module (`sampler`)" ON)

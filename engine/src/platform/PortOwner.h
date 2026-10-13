@@ -3,6 +3,8 @@
 // listeners only) → owning pid → image path. Other platforms: empty table. Message thread / tests only (a table
 // read is a few syscalls; never on the audio thread).
 
+#include "platform/DynamicLibrary.h" // currentProcessId
+
 #include <string>
 #include <vector>
 
@@ -23,6 +25,5 @@ std::vector<TcpListener> tcpListeners(int port);
 bool loopbackPortBindable(int port, std::string& error);
 // Full image path of `pid` (UTF-8), "" if it cannot be opened (other user, exited, System).
 std::string processImagePath(unsigned long pid);
-unsigned long currentProcessId();
 
 } // namespace ks::platform

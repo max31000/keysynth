@@ -195,7 +195,7 @@ bool buildDll(const fs::path& pluginsDir, const std::string& name, std::string& 
     return rc == 0;
 }
 
-std::string readRepoFile(const std::string& rel) {
+[[maybe_unused]] std::string readRepoFile(const std::string& rel) {
     std::ifstream f(fs::path(KS_SOURCE_DIR) / rel, std::ios::binary);
     std::stringstream ss;
     ss << f.rdbuf();

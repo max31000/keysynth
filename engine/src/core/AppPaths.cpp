@@ -106,17 +106,31 @@ AppPaths AppPaths::discover(const fs::path& exeDirIn) {
     fs::path exeDir = exeDirIn;
     if (exeDir.empty()) {
         const auto exe = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
-        exeDir = fs::path(exe.getFullPathName().toWideCharPointer());
+        exeDir = pathFromUtf8(exe.getFullPathName().toStdString());
     }
     const std::string dataOverride = envVar("KS_DATA_DIR");
     std::error_code ec;
-    if (!exeDir.empty() && fs::is_regular_file(exeDir / "installed.flag", ec)) {
+    // Installed: installed.flag next to the exe (Windows) or in the app bundle's Resources (macOS:
+    // keysynth.app/Contents/MacOS/<exe> + Contents/Resources/{installed.flag, presets, ui, share, ...}).
+    fs::path appDir;
+    if (!exeDir.empty() && fs::is_regular_file(exeDir / "installed.flag", ec)) appDir = exeDir;
+    else if (!exeDir.empty() && fs::is_regular_file(exeDir.parent_path() / "Resources" / "installed.flag", ec))
+        appDir = exeDir.parent_path() / "Resources";
+    if (!appDir.empty()) {
         fs::path data = pathFromUtf8(dataOverride);
         if (data.empty()) {
+            // %LOCALAPPDATA%\keysynth (Windows), ~/Library/Application Support/keysynth (macOS).
+#if defined(_WIN32)
             const auto la = juce::File::getSpecialLocation(juce::File::windowsLocalAppData);
-            data = fs::path(la.getFullPathName().toWideCharPointer()) / "keysynth";
+#elif defined(__APPLE__)
+            const auto la = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                                .getChildFile("Application Support");
+#else
+            const auto la = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#endif
+            data = pathFromUtf8(la.getFullPathName().toStdString()) / "keysynth";
         }
-        return installedLayout(exeDir, data);
+        return installedLayout(appDir, data);
     }
     AppPaths a;
     if (const std::string env = envVar("KS_ROOT"); !env.empty()) a = fromRoot(pathFromUtf8(env));
@@ -192,7 +206,9 @@ std::optional<fs::path> AppPaths::resolveAllowed(const std::string& s) const {
     if (s.size() >= 2 && (s[0] == '/' || s[0] == '\\') && (s[1] == '/' || s[1] == '\\')) return std::nullopt;
     fs::path p = pathFromUtf8(s);
     // Drive-relative ("C:foo") and root-relative ("/foo" on Windows) paths are ambiguous: reject.
+#if defined(_WIN32)
     if (p.has_root_name() != p.has_root_directory()) return std::nullopt;
+#endif
     if (p.is_relative()) {
         auto it = p.begin();
         const fs::path first = *it;
