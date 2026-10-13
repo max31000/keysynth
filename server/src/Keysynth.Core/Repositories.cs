@@ -26,19 +26,26 @@ public interface IDeviceRepository
     Task TouchAsync(long id, DateTime now, CancellationToken ct = default);
 }
 
-public interface IPresetRepository
+/// <summary>Revisioned per-user documents with tombstones (cloud-api.md §3.3); one table per document kind.</summary>
+public interface IDocumentRepository
 {
-    /// <summary>All rows incl. tombstones, ordered by slug (ordinal).</summary>
-    Task<IReadOnlyList<PresetRow>> ListAsync(long userId, CancellationToken ct = default);
+    /// <summary>All rows incl. tombstones, ordered by slug (ordinal), without bodies.</summary>
+    Task<IReadOnlyList<DocumentRow>> ListAsync(long userId, CancellationToken ct = default);
 
-    Task<PresetRow?> GetAsync(long userId, string slug, CancellationToken ct = default);
+    Task<DocumentRow?> GetAsync(long userId, string slug, CancellationToken ct = default);
 
-    /// <summary>Revision 1. Conflict when any row (live or tombstone) exists; TooManyPresets at the limit.</summary>
-    Task<PresetWriteResult> CreateAsync(long userId, string slug, string patch, DateTime now, int maxPresets, CancellationToken ct = default);
+    /// <summary>Revision 1. Conflict when any row (live or tombstone) exists; TooMany at <paramref name="maxRows"/>.</summary>
+    Task<DocumentWriteResult> CreateAsync(long userId, string slug, string body, DateTime now, int maxRows, CancellationToken ct = default);
 
     /// <summary>Update / revive when the current revision equals <paramref name="expectedRevision"/>, else Conflict.</summary>
-    Task<PresetWriteResult> UpdateAsync(long userId, string slug, uint expectedRevision, string patch, DateTime now, CancellationToken ct = default);
+    Task<DocumentWriteResult> UpdateAsync(long userId, string slug, uint expectedRevision, string body, DateTime now, CancellationToken ct = default);
 
     /// <summary>Tombstone when the revision matches; NotFound for an unknown slug; else Conflict.</summary>
-    Task<PresetWriteResult> DeleteAsync(long userId, string slug, uint expectedRevision, DateTime now, CancellationToken ct = default);
+    Task<DocumentWriteResult> DeleteAsync(long userId, string slug, uint expectedRevision, DateTime now, CancellationToken ct = default);
 }
+
+/// <summary>Table <c>presets</c> (body = <c>patch</c>).</summary>
+public interface IPresetRepository : IDocumentRepository;
+
+/// <summary>Table <c>songs</c> (body = <c>song</c>).</summary>
+public interface ISongRepository : IDocumentRepository;

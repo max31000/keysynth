@@ -8,7 +8,10 @@
 #include "core/ModuleRegistry.h"
 #include "core/PatchModel.h"
 #include "preset/PresetStore.h"
+#include "song/Song.h"
 #include "transport/Pattern.h"
+
+#include <optional>
 
 #include <nlohmann/json.hpp>
 
@@ -106,6 +109,36 @@ public:
     nlohmann::json patternJson() const; // { path, edited, pattern }
     static Pattern emptyPattern();
 
+    // --- MIDI tools (ARCHITECTURE §17) ---
+    // `chord_learn`: the notes held on a `chord` node's input (its ReadOnly held_* readouts, >= 2) become its chord
+    // memory (mem_count, mem_1.., type = Memory) via setParam. Returns the intervals; `changed` gets every written
+    // (param, value). Throws PatchError (not_found, bad_request, no_notes).
+    std::vector<int> learnChord(NodeId node, std::vector<std::pair<std::string, float>>* changed = nullptr);
+
+    // --- songs (ARCHITECTURE §18, PROTOCOL.md "Songs"). Throw PatchError on bad input. ---
+    std::vector<SongInfo> listSongs() const { return songs::list(paths_); }
+    Song readSong(const std::string& path, std::vector<std::string>* warnings = nullptr) const {
+        return songs::load(paths_, path, warnings);
+    }
+    // Saves to userdata/songs (sync is notified). `active`: set when the saved file is the active song (reloaded).
+    std::string saveSong(Song song, bool overwrite, bool* active = nullptr);
+    void deleteSong(const std::string& path, bool* active = nullptr);
+    std::vector<std::string> selectSong(const std::string& path, int section = 0);
+    std::vector<std::string> selectSection(int index);
+    // +1 / -1. False (nothing applied) at the first / last section.
+    bool stepSection(int delta, std::vector<std::string>* warnings = nullptr);
+    void closeSong();
+    bool hasSong() const noexcept { return activeSong_.has_value(); }
+    const std::string& songPath() const noexcept { return songPath_; }
+    int songSection() const noexcept { return songSection_; }
+    const ControlKeys& globalControlKeys() const noexcept { return globalKeys_; }
+    void setGlobalControlKeys(const ControlKeys& keys); // persisted in settings.json (songs.control_keys)
+    ControlKeys effectiveControlKeys() const;
+    nlohmann::json songStateJson() const; // `song_state` event
+    // Pump (30 Hz): control-key presses -> next/prev. True when the section changed (caller broadcasts
+    // song_state + state).
+    bool pollSongKeys();
+
     // Snapshots for the protocol.
     nlohmann::json stateJson() const;
     nlohmann::json transportJson() const;
@@ -126,6 +159,8 @@ public:
 private:
     void logWarnings(const std::vector<std::string>& w);
     void publishPattern();
+    void applyControlKeys(); // effective keys -> Engine (none without an active song)
+    void loadSongSettings();
 
     Engine& engine_;
     const ModuleRegistry& registry_;
@@ -142,6 +177,12 @@ private:
     std::map<const Module*, std::string> reportedErrors_; // pollModuleErrors: module -> last reported error
     std::set<std::string> notifiedMissing_;                // pollModuleErrors: "<reason>|<entry>" already notified
     std::mutex profileMutex_;
+    // Active song (ARCHITECTURE §18).
+    std::optional<Song> activeSong_;
+    std::string songPath_;
+    int songSection_ = -1;
+    ControlKeys globalKeys_;
+    uint32_t seenPresses_[2] = {0, 0};
 };
 
 } // namespace ks

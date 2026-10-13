@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "id": "shine-on-you-crazy-diamond",
+  "title": "Shine On You Crazy Diamond",
+  "artist": "Pink Floyd",
+  "tempo": 63,
+  "time_sig": [
+    4,
+    4
+  ],
+  "key": "G minor",
+  "sections": [
+    {
+      "name": "Intro pad",
+      "preset": "presets/factory/splits-layers/floyd-shine-on-split.json",
+      "drums": false
+    },
+    {
+      "name": "Moog solo",
+      "preset": "presets/factory/synth-lead/va-minimoog-shine-on.json",
+      "drums": false
+    },
+    {
+      "name": "Verse",
+      "preset": "presets/factory/organ/b3-echoes-floyd.json",
+      "pattern": "presets/patterns/ballad.json",
+      "drums": true
+    },
+    {
+      "name": "Outro",
+      "preset": "presets/factory/synth-pad/floyd-comfortably-numb-pad.json",
+      "drums": false
+    }
+  ]
+}

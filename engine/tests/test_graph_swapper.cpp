@@ -137,7 +137,14 @@ TEST_CASE("GraphSwapper stress: 10k random publishes while rendering", "[swap][s
                 if (p.layers.size() > 1) m.removeLayer(p.layers[pick(p.layers.size())].node);
                 break;
             case 2:
-                if (!p.layers.empty()) m.addFx(p.layers[pick(p.layers.size())].node, rng() % 2 ? "gain" : "limiter", std::nullopt);
+                if (!p.layers.empty()) {
+                    static const char* kTypes[] = {"gain", "limiter", "arp", "chord", "hold"};
+                    const Layer& l = p.layers[pick(p.layers.size())];
+                    const char* t = kTypes[pick(5)];
+                    const bool midi = t[0] == 'a' || t[0] == 'c' || t[0] == 'h';
+                    if (midi && l.midi.size() >= 4) m.removeFx(l.midi[0].node); // MIDI processors too (§17)
+                    else m.addFx(l.node, t, std::nullopt);
+                }
                 break;
             case 3:
                 for (const auto& l : p.layers)

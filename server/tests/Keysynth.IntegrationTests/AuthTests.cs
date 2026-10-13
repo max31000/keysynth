@@ -30,7 +30,7 @@ public static class Http
 public sealed class AuthTests(KeysynthFactory factory) : IClassFixture<KeysynthFactory>
 {
     private static readonly string[] CookieEndpoints = ["/api/devices"];
-    private static readonly string[] DeviceEndpoints = ["/api/devices/me", "/api/presets", "/api/presets/x"];
+    private static readonly string[] DeviceEndpoints = ["/api/devices/me", "/api/presets", "/api/presets/x", "/api/songs", "/api/songs/x"];
     private static readonly string[] AnyUserEndpoints = ["/api/samples/manifest"];
 
     [Fact]

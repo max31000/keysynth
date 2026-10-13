@@ -154,7 +154,17 @@ function SamplesButton({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-export function TopBar({ onAudioSettings, onCloud, onPult }: { onAudioSettings: () => void; onCloud: () => void; onPult: () => void }) {
+export function TopBar({
+  onAudioSettings,
+  onCloud,
+  onPult,
+  onSongs,
+}: {
+  onAudioSettings: () => void;
+  onCloud: () => void;
+  onPult: () => void;
+  onSongs: () => void;
+}) {
   const audio = useEngine((s) => s.audio);
   const relay = useRemote((s) => s.route === 'relay');
   const canPanel = useCloud((s) => canSend(s.trust, 'open_audio_panel'));
@@ -263,6 +273,9 @@ export function TopBar({ onAudioSettings, onCloud, onPult }: { onAudioSettings: 
       </button>
 
       <div className="cloud-zone">
+        <button type="button" className="btn small pult-btn" onClick={onSongs} title="Песни (сет-лист)">
+          Песни
+        </button>
         <button type="button" className="btn small pult-btn" onClick={onPult} title="Сенсорный пульт">
           Пульт
         </button>

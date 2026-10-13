@@ -6,8 +6,8 @@ export interface ModuleLocation {
   slot: ModuleSlot;
   /** owning layer (undefined = master chain or rhythm) */
   layer?: Layer;
-  /** `rhythm` = the drum-sequencer kit (patch.rhythm) */
-  kind: 'instrument' | 'fx' | 'rhythm';
+  /** `rhythm` = the drum-sequencer kit (patch.rhythm); `midi` = a MIDI processor of `layer.midi` */
+  kind: 'instrument' | 'fx' | 'midi' | 'rhythm';
 }
 
 /** The RhythmNode's kit as a module slot (type `drums`, params = `rhythm.kit`). */
@@ -23,6 +23,8 @@ export function findModule(patch: Patch | null, node: NodeId): ModuleLocation | 
     if (layer.instrument.node === node) return { slot: layer.instrument, layer, kind: 'instrument' };
     const fx = layer.fx.find((f) => f.node === node);
     if (fx) return { slot: fx, layer, kind: 'fx' };
+    const midi = layer.midi?.find((f) => f.node === node);
+    if (midi) return { slot: midi, layer, kind: 'midi' };
   }
   const mfx = patch.master.fx.find((f) => f.node === node);
   if (mfx) return { slot: mfx, kind: 'fx' };
@@ -48,6 +50,11 @@ function mapSlot(patch: Patch, node: NodeId, f: <S extends ModuleSlot>(s: S) => 
     if (fx !== l.fx) {
       changed = true;
       return { ...l, fx };
+    }
+    const midi = l.midi ? mapFx(l.midi, node, f) : undefined;
+    if (midi !== l.midi) {
+      changed = true;
+      return { ...l, midi: midi! };
     }
     return l;
   });
@@ -92,7 +99,7 @@ export function applyBypass(patch: Patch, node: NodeId, bypass: boolean): Patch 
   return mapSlot(patch, node, (s) => ({ ...s, bypass }));
 }
 
-/** Reorder an FX within its chain (optimistic preview for move_fx). */
+/** Reorder an FX or MIDI processor within its own chain (optimistic preview for move_fx). */
 export function applyMoveFx(patch: Patch, node: NodeId, to: number): Patch {
   const move = (fx: FxSlot[]) => {
     const from = fx.findIndex((f) => f.node === node);
@@ -104,7 +111,9 @@ export function applyMoveFx(patch: Patch, node: NodeId, to: number): Patch {
   };
   const layers = patch.layers.map((l) => {
     const fx = move(l.fx);
-    return fx === l.fx ? l : { ...l, fx };
+    if (fx !== l.fx) return { ...l, fx };
+    const midi = l.midi ? move(l.midi) : undefined;
+    return midi === l.midi ? l : { ...l, midi: midi! };
   });
   const mfx = move(patch.master.fx);
   return { ...patch, layers, master: mfx === patch.master.fx ? patch.master : { ...patch.master, fx: mfx } };

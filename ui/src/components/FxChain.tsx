@@ -3,19 +3,22 @@ import { actions, useEngine } from '../store';
 import type { FxSlot, ModuleInfo, NodeId } from '../protocol/types';
 import { insertionIndex, moveTarget } from '../lib/reorder';
 
-function AddFxMenu({ layer, onClose }: { layer: NodeId; onClose: () => void }) {
+/** Chain kind: audio effects (`fx`) or MIDI processors in front of the instrument (`layer.midi`, ARCHITECTURE §17). */
+export type ChainKind = 'effect' | 'midi';
+
+function AddFxMenu({ layer, kind, onClose }: { layer: NodeId; kind: ChainKind; onClose: () => void }) {
   const catalog = useEngine((s) => s.catalog);
   const ref = useRef<HTMLDivElement>(null);
   const groups = useMemo(() => {
     const m = new Map<string, ModuleInfo[]>();
     for (const mod of catalog) {
-      if (mod.kind !== 'effect') continue;
+      if (mod.kind !== kind) continue;
       const list = m.get(mod.category) ?? [];
       list.push(mod);
       m.set(mod.category, list);
     }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [catalog]);
+  }, [catalog, kind]);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -60,10 +63,12 @@ interface Props {
   vertical?: boolean;
   /** layer used for selection (master chain: undefined) */
   selectLayer?: NodeId;
+  /** default `effect`; `midi` = the layer's MIDI chain (added with the same `add_fx`, PROTOCOL.md) */
+  kind?: ChainKind;
 }
 
-/** FX chain: select, bypass, remove, drag to reorder, add from catalog by category. */
-export function FxChain({ layer, fx, vertical, selectLayer }: Props) {
+/** FX / MIDI chain: select, bypass, remove, drag to reorder, add from catalog by category. */
+export function FxChain({ layer, fx, vertical, selectLayer, kind = 'effect' }: Props) {
   const selected = useEngine((s) => s.selectedModule);
   const catalogMap = useEngine((s) => s.catalogMap);
   const [menu, setMenu] = useState(false);
@@ -108,7 +113,7 @@ export function FxChain({ layer, fx, vertical, selectLayer }: Props) {
   };
 
   return (
-    <div className={`fxchain ${vertical ? 'vertical' : ''} ${dragNode !== null ? 'is-dragging' : ''}`} ref={rowRef}>
+    <div className={`fxchain ${kind === 'midi' ? 'midichain' : ''} ${vertical ? 'vertical' : ''} ${dragNode !== null ? 'is-dragging' : ''}`} ref={rowRef}>
       {fx.map((f, i) => {
         const info = catalogMap[f.type];
         const sel = f.node === selected;
@@ -150,7 +155,7 @@ export function FxChain({ layer, fx, vertical, selectLayer }: Props) {
             <button
               type="button"
               className="fx-x"
-              aria-label="Remove effect"
+              aria-label={kind === 'midi' ? 'Remove MIDI processor' : 'Remove effect'}
               onClick={(e) => {
                 e.stopPropagation();
                 if (f.node !== undefined) void actions().removeFx(f.node);
@@ -163,9 +168,9 @@ export function FxChain({ layer, fx, vertical, selectLayer }: Props) {
       })}
       <div className="fx-add-wrap">
         <button type="button" className="fx-add" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu}>
-          + FX
+          {kind === 'midi' ? '+ MIDI' : '+ FX'}
         </button>
-        {menu && <AddFxMenu layer={layer} onClose={() => setMenu(false)} />}
+        {menu && <AddFxMenu layer={layer} kind={kind} onClose={() => setMenu(false)} />}
       </div>
     </div>
   );

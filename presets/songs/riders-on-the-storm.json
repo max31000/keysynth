@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "id": "riders-on-the-storm",
+  "title": "Riders on the Storm",
+  "artist": "The Doors",
+  "tempo": 104,
+  "time_sig": [
+    4,
+    4
+  ],
+  "key": "E Dorian",
+  "sections": [
+    {
+      "name": "Intro",
+      "preset": "presets/factory/e-piano/riders-on-the-storm-rhodes.json",
+      "drums": false,
+      "notes": "E–A bass ostinato"
+    },
+    {
+      "name": "Verse",
+      "preset": "presets/factory/splits-layers/doors-riders-split.json",
+      "pattern": "presets/patterns/riders-shuffle.json",
+      "drums": true
+    },
+    {
+      "name": "Solo",
+      "preset": "presets/factory/e-piano/riders-on-the-storm-rhodes.json",
+      "pattern": "presets/patterns/riders-shuffle.json",
+      "drums": true
+    },
+    {
+      "name": "Outro",
+      "preset": "presets/factory/splits-layers/doors-riders-on-the-storm-keys.json",
+      "drums": false
+    }
+  ]
+}

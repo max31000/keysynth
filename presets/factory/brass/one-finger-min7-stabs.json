@@ -1,0 +1,129 @@
+{
+  "format": 2,
+  "meta": {
+    "name": "One-Finger Min7 Stabs",
+    "category": "Brass",
+    "tags": [
+      "stab",
+      "chord",
+      "one-finger",
+      "80s"
+    ],
+    "description": "Every key plays an open minor-seventh chord (Chord tool: Min7, Open voicing) on the OB-Xa stack. Play single notes for full stabs.",
+    "author": "factory"
+  },
+  "tempo": 130,
+  "layers": [
+    {
+      "name": "OB-Xa",
+      "zone": {
+        "key_lo": 0,
+        "key_hi": 127,
+        "vel_lo": 1,
+        "vel_hi": 127,
+        "transpose": 0,
+        "channel": 0,
+        "volume_db": 0.0,
+        "pan": 0.0,
+        "mute": false,
+        "solo": false,
+        "sustain": true
+      },
+      "instrument": {
+        "type": "va",
+        "params": {
+          "osc1_wave": 0,
+          "osc2_wave": 0,
+          "osc2_level": 1.0,
+          "osc1_fine": -4,
+          "osc2_fine": 6,
+          "filter_model": 2,
+          "cutoff": 1300,
+          "resonance": 0.15,
+          "key_track": 0.6,
+          "filter_env_amt": 2.8,
+          "filter_vel": 0.5,
+          "fenv_attack": 0.003,
+          "fenv_decay": 0.45,
+          "fenv_sustain": 0.55,
+          "fenv_release": 0.3,
+          "amp_attack": 0.002,
+          "amp_decay": 0.6,
+          "amp_sustain": 0.9,
+          "amp_release": 0.28,
+          "amp_vel": 0.3,
+          "unison": 2,
+          "unison_detune": 8,
+          "unison_spread": 0.6,
+          "drift": 0.3,
+          "hpf_cutoff": 90,
+          "volume_db": -5.9
+        },
+        "state": {}
+      },
+      "fx": [],
+      "midi": [
+        {
+          "type": "chord",
+          "bypass": false,
+          "params": {
+            "type": 4,
+            "voicing": 1,
+            "inversion": 0
+          },
+          "state": {}
+        }
+      ]
+    }
+  ],
+  "master": {
+    "volume_db": -9.4,
+    "fx": [
+      {
+        "type": "chorus",
+        "bypass": false,
+        "params": {
+          "mode": 4,
+          "rate": 0.4,
+          "depth": 0.5,
+          "mix": 0.45,
+          "width": 1.0,
+          "hiss": 0.05
+        }
+      },
+      {
+        "type": "eq",
+        "bypass": false,
+        "params": {
+          "p3_hz": 3000,
+          "p3_db": 2.0,
+          "p3_q": 0.8,
+          "ls_hz": 120,
+          "ls_db": -1.5
+        }
+      },
+      {
+        "type": "reverb",
+        "bypass": false,
+        "params": {
+          "mode": 1,
+          "mix": 0.18,
+          "size": 0.55,
+          "decay": 1.8,
+          "predelay_ms": 25,
+          "damp_hf": 0.45,
+          "low_cut_hz": 120,
+          "high_cut_hz": 9000
+        }
+      },
+      {
+        "type": "limiter",
+        "bypass": false,
+        "params": {
+          "ceiling_db": -1,
+          "release_ms": 80
+        }
+      }
+    ]
+  }
+}

@@ -67,6 +67,15 @@ public:
     const RhythmControls& rhythm() const noexcept { return rhythm_; }
     // Sequencer step / bar for telemetry (-1 = stopped or counting in).
     int currentStep() const noexcept { return sequencer_.currentStep(); }
+    // Song control keys (ARCHITECTURE §18): note-ons of these keys (-1 = none) are removed from the stream and
+    // counted; the control thread polls the counters (index 0 = prev, 1 = next).
+    void setControlKeys(int prev, int next) noexcept {
+        controlKeys_[0].store(prev, std::memory_order_relaxed);
+        controlKeys_[1].store(next, std::memory_order_relaxed);
+    }
+    uint32_t controlKeyPresses(int which) const noexcept {
+        return controlPresses_[static_cast<size_t>(which & 1)].load(std::memory_order_relaxed);
+    }
     Telemetry& telemetry() noexcept { return telemetry_; }
     int64_t sampleTime() const noexcept { return sampleTimeShared_.load(std::memory_order_relaxed); }
 
@@ -95,6 +104,8 @@ private:
     std::array<std::unique_ptr<SpscQueue<MidiEvent>>, kMaxMidiSources> sources_;
     std::array<std::atomic<bool>, kMaxMidiSources> sourceActive_{};
     std::atomic<uint32_t> panicRequests_{0};
+    std::array<std::atomic<int>, 2> controlKeys_{-1, -1};
+    std::array<std::atomic<uint32_t>, 2> controlPresses_{0u, 0u};
     uint32_t panicSeen_ = 0;
 
     std::array<ChannelState, 17> channels_{};

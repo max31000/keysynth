@@ -64,6 +64,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapDeviceEndpoints();
 app.MapSampleEndpoints();
 app.MapPresetEndpoints();
+app.MapSongEndpoints();
 app.MapRelayEndpoint();
 
 app.Run();

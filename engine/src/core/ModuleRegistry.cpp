@@ -2,7 +2,13 @@
 
 namespace ks {
 
-const char* toString(ModuleKind k) noexcept { return k == ModuleKind::Instrument ? "instrument" : "effect"; }
+const char* toString(ModuleKind k) noexcept {
+    switch (k) {
+    case ModuleKind::Instrument: return "instrument";
+    case ModuleKind::Midi: return "midi";
+    default: return "effect";
+    }
+}
 
 nlohmann::json toJson(const ModuleInfo& info) {
     nlohmann::json params = nlohmann::json::array();

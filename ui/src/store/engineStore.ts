@@ -2,7 +2,7 @@
 // Param/zone changes are optimistic and coalesced per animation frame before being sent.
 
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { EngineClient, type ConnectionStatus } from '../protocol/client';
+import { EngineClient, EngineError, type ConnectionStatus } from '../protocol/client';
 import {
   MASTER_NODE,
   PROTOCOL_VERSION,
@@ -91,6 +91,8 @@ export interface EngineState {
   addFx(layer: NodeId, module: string, index?: number): Promise<void>;
   removeFx(node: NodeId): Promise<void>;
   moveFx(node: NodeId, to: number): Promise<void>;
+  /** `chord_learn`: held notes → the chord's memory. Resolves to the error code (`no_notes`, …) or null. */
+  chordLearn(node: NodeId): Promise<string | null>;
   note(on: boolean, note: number, velocity: number): void;
   panic(): void;
   listDevices(): Promise<void>;
@@ -521,6 +523,16 @@ export function createEngineStore(deps: StoreDeps): EngineStore {
         const { patch } = get();
         if (patch) set({ patch: applyMoveFx(patch, node, to) });
         await structural(() => client.request({ type: 'move_fx', node, to }, { expect: 'state' }));
+      },
+
+      async chordLearn(node) {
+        try {
+          get().flush();
+          await client.request({ type: 'chord_learn', node }, { expect: 'chord_learn_ok', strictId: true });
+          return null;
+        } catch (e) {
+          return e instanceof EngineError ? e.code : 'error';
+        }
       },
 
       note(on, note, velocity) {

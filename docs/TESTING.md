@@ -56,7 +56,7 @@ build/bin/Release/ks-tests.exe --list-tests
 ```
 
 Tags: `[spsc] [params] [voice] [patch] [graph] [paths] [preset] [swap] [stress] [rt] [render] [protocol] [dsp]
-[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll] [cloud] [sync] [samplecache] [desktop]`. `[cloud]` tests
+[transport] [sequencer] [drums] [sampler] [plugins] [faust] [dll] [cloud] [sync] [samplecache] [desktop] [midi] [songs]`. `[cloud]` tests
 (trust rules, Host check, manifest path fuzz, DPAPI, link flow, sync algorithm, downloader/resume/delete, sampler
 auto-fetch) run against an in-memory fake API (`engine/tests/FakeCloud.h`, no network). Hidden `[.cloud-live]`
 (`ks-tests "[cloud-live]"`) uses the real HTTPS transport: `$env:KS_CLOUD_TOKEN` (device token) and optional

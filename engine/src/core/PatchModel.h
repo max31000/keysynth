@@ -25,6 +25,7 @@ class PatchModel {
 public:
     static constexpr int kMaxLayers = 16;
     static constexpr int kMaxFxPerChain = 16;
+    static constexpr int kMaxMidiPerChain = 8; // MIDI processors per layer (ARCHITECTURE §17)
     // Layer / master `volume_db` range; out-of-range values are clamped (with a load warning in setPatch).
     static constexpr float kMinVolumeDb = -96.0f;
     static constexpr float kMaxVolumeDb = 12.0f;
@@ -45,9 +46,10 @@ public:
     NodeId addLayer(std::optional<int> index, const std::string& instrumentType = "basic");
     void removeLayer(NodeId layer);
     void setInstrument(NodeId layer, const std::string& type);
-    NodeId addFx(NodeId layer, const std::string& type, std::optional<int> index); // layer 0 = master
-    void removeFx(NodeId fx);
-    void moveFx(NodeId fx, int to);
+    // layer 0 = master. A module of kind Midi goes into the layer's MIDI chain (not allowed on the master).
+    NodeId addFx(NodeId layer, const std::string& type, std::optional<int> index);
+    void removeFx(NodeId fx);              // effect or MIDI processor
+    void moveFx(NodeId fx, int to);        // within its own chain
     void setModuleState(NodeId node, const nlohmann::json& state);
     // A module's loadState wrote params (fm .syx voice, Module::loadStateWroteParams): take its params and state
     // into the patch. Does not mark the patch dirty. False if the node is gone.
@@ -65,9 +67,11 @@ public:
 
     // --- queries ---
     const Layer* findLayer(NodeId layer) const;
-    const ModuleSlot* findSlot(NodeId node) const; // instrument, fx (any chain) or the rhythm kit
-    // Chain owning an fx node: layer node id, or kMasterNode. nullopt if not an fx.
+    const ModuleSlot* findSlot(NodeId node) const; // instrument, fx / MIDI processor (any chain) or the rhythm kit
+    // Owner of an fx or MIDI-processor node: layer node id, or kMasterNode. nullopt if neither.
     std::optional<NodeId> chainOf(NodeId fx) const;
+    // The layer owning a MIDI-processor node; nullptr if `node` is not one.
+    const Layer* layerOfMidi(NodeId node) const;
 
     bool dirty() const noexcept { return dirty_; }
     void setDirty(bool d) noexcept { dirty_ = d; }
@@ -79,6 +83,7 @@ private:
     Layer* layerMut(NodeId layer);
     ModuleSlot* slotMut(NodeId node);
     std::vector<ModuleSlot>* chainMut(NodeId layerOrMaster);
+    std::vector<ModuleSlot>* chainContaining(NodeId node); // fx or MIDI chain holding `node`
     void normalizeSlot(ModuleSlot& s, ModuleKind expected, std::vector<std::string>* warnings, const std::string& where);
     ModuleSlot makeSlot(const std::string& type, ModuleKind expected);
 
