@@ -348,7 +348,7 @@ Effects v1: `chorus` (Juno BBD I/II/I+II, custom, Dimension), `ensemble` (string
 `tremolo` (amp trem with L/R phase / equal-power autopan; sine/tri/smoothed square; free or tempo-synced),
 `compressor` (VCA/opto, `gr_db` meter), `eq` (HP/LS/3 bells/HS/LP), `limiter` (master safety, fixed).
 Effects v2: `vocoder` (channel vocoder, 8/16/20/32 bands: modulator = the device input bus (§6) or an internal
-vowel/noise source; carrier = the layer's audio; 4th-order band-pass pairs (`dsp/TptFilters` SVF), envelope
+vowel/noise source; carrier = the layer's audio; 4th-order band-pass pairs (two `dsp/Svf` stages), envelope
 followers with attack/release, formant shift of the carrier bands, sibilance noise for unvoiced consonants, carrier
 mix, input gain + gate, input L/R/mono), `wah` (inductor wah, Cry Baby / Vox curves: resonant band-pass + low-pass
 body, pedal from the param, mod wheel or CC11 expression; auto-wah envelope; LFO with `sync`), `echo` (Binson

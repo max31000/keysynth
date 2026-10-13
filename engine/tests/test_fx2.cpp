@@ -558,6 +558,18 @@ TEST_CASE("Echo: tap times per heads setting, sync, swell regeneration", "[fx2][
         r.run(*m, s);
         REQUIRE(maxStep(s.l, static_cast<size_t>(0.3 * kSr)) < 1.3 * ref);
     }
+    // Same for `delay` (dsp::OnePoleSmoother keeps converging on large targets): a time change glides click-free.
+    {
+        auto m = make("delay", {{"time", 375.0f}, {"feedback", 0.0f}, {"mix", 1.0f}, {"high_cut_hz", 20000.0f},
+                                {"low_cut_hz", 20.0f}});
+        Stereo s = sine(200.0, 0.5, static_cast<size_t>(4 * kSr));
+        const double ref = maxStep(s.l);
+        Runner r;
+        r.run(*m, s, nullptr, kBlock, 0, static_cast<size_t>(kSr));
+        setP(*m, "time", 350.0f);
+        r.run(*m, s, nullptr, kBlock, static_cast<size_t>(kSr));
+        REQUIRE(maxStep(s.l, static_cast<size_t>(0.5 * kSr)) < 1.5 * ref);
+    }
     // Swell: head 1 regenerates at multiples of the spacing, each repeat quieter.
     {
         const Stereo s = tapsOf(0, 120.0f, 0.6f);

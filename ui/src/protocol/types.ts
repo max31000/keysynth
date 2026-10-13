@@ -251,6 +251,7 @@ export interface SetAudioDeviceMsg { type: 'set_audio_device'; id?: number; devi
 export interface OpenAudioPanelMsg { type: 'open_audio_panel'; id?: number }
 /** Closes + reopens the audio device with the driver's current buffer/rate → `devices`, then `state` to all. */
 export interface RestartAudioMsg { type: 'restart_audio'; id?: number }
+export interface SetAudioInputMsg { type: 'set_audio_input'; id?: number; channels: number[]; name?: string }
 
 // ── Cloud & samples (PROTOCOL.md "Cloud & samples") ──
 
@@ -271,7 +272,7 @@ export type ClientMsg =
   | SetPatchMsg | AddLayerMsg | RemoveLayerMsg | SetZoneMsg | SetInstrumentMsg | AddFxMsg | RemoveFxMsg
   | MoveFxMsg | SetFxBypassMsg | RescanMidiMsg | NoteMsg | CcMsg | TransportMsg | ListDevicesMsg
   | SetAudioDeviceMsg | PanicMsg | ListPatternsMsg | GetPatternMsg | SetPatternMsg | SavePatternMsg
-  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg
+  | ListPluginsMsg | ReloadPluginMsg | OpenAudioPanelMsg | RestartAudioMsg | SetAudioInputMsg
   | CloudLinkMsg | CloudUnlinkMsg | SyncNowMsg | SamplesListMsg | SamplesFetchMsg | SamplesCancelMsg
   | SamplesDeleteMsg;
 

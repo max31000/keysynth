@@ -3,14 +3,14 @@
 Update when a chunk of work lands. Newest first inside each section.
 
 ## Done
-- (WIP, branch fx2) Effects v2 + audio input (ARCHITECTURE §6 *Audio input*, §7; PROTOCOL *Audio input*):
+- Effects v2 + audio input (ARCHITECTURE §6 *Audio input*, §7; PROTOCOL *Audio input*):
   `vocoder`, `wah`, `echo` (Binson Echorec), `tapestop`; `dsp/EnvelopeFollower`; device input bus
   (`ProcessContext::input`, `Engine::process(inputs…)`, `set_audio_input`, settings, `telemetry.meters.input`, UI
-  audio-dialog input selector + meter); tests `test_fx2.cpp`, audio-host / protocol / trust cases; 9 factory presets
-  (loudness applied). Engine tests all passed before the UI edits. Open: UI test/typecheck/lint/build not run yet,
-  loudness `--check` over all presets, ks-tests `[full]`, opus review, merge of main.
-  Pre-existing issue found: `dsp::OnePoleSmoother` stalls a few samples short of large targets (delay times in
-  samples) and then snaps, so `delay` time changes click at the end of the glide (`echo` uses a double glide).
+  audio-dialog input selector + meter); tests `test_fx2.cpp` (`[fx2]`), audio-host / protocol / trust cases; 9 factory
+  presets (vocoder ×3, Echorec ×2, wah ×3, tape stop). Not verified live: a real mic on the UR22C (the fake ASIO
+  driver test covers open/persist/meter).
+- Fix: `dsp::OnePoleSmoother` keeps its state in double — the float version stalled a few samples short of large
+  targets (delay times in samples) and then snapped, so `delay` time changes clicked at the end of the glide.
 - v0.2.0 remote control via relay (spec docs/specs/2026-10-12-remote.md): server RelayHub `/api/relay`
   (R-A), engine relay host over WinHTTP WebSocket with remote trust (R-B), UI RelayTransport + touch «Пульт»
   view (R-C), nginx WS location (mvv42-infra PR #3). Engine E2E against the real API: `KS_TESTS_ENGINE=1`.
