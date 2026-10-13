@@ -4,7 +4,8 @@
 
 import { connectEngine, reconnectEngine, useCloud, useEngine, useRemote } from '../../store';
 import { RelayCard } from '../remote/RelayCard';
-import { DOWNLOAD_URL } from '../../platform/version';
+import { downloadUrl } from '../../platform/version';
+import { OS } from '../../platform/os';
 import { PLATFORM_URL } from '../../platform/mode';
 import { INSIDE_SHELL } from '../../platform/PlatformBridge';
 import type { EnginePhase } from '../../platform/discovery';
@@ -12,7 +13,25 @@ import { AccountButton } from './AccountButton';
 
 const LOCAL_UI = 'http://127.0.0.1:7340/';
 
+/** Where the user starts an installed engine. */
+const START_HINT = OS === 'mac' ? 'из папки «Программы»' : 'из меню «Пуск»';
+
 function Steps() {
+  if (OS === 'mac')
+    return (
+      <ol className="gate-steps">
+        <li>
+          Открыть <code>keysynth-macos.dmg</code>, перетащить keysynth в <q>Программы</q>.
+        </li>
+        <li>
+          Первый запуск: macOS не даст открыть приложение без подписи Apple → Системные настройки → Конфиденциальность и
+          безопасность → <q>Всё равно открыть</q>.
+        </li>
+        <li>
+          Значок keysynth появится в строке меню; запрос доступа к локальной сети — <q>Разрешить</q>.
+        </li>
+      </ol>
+    );
   return (
     <ol className="gate-steps">
       <li>
@@ -29,7 +48,7 @@ function Steps() {
 }
 
 function LaunchLink() {
-  // Custom protocol from the sandboxed shell iframe is unreliable: there the Start-menu hint is enough.
+  // Custom protocol from the sandboxed shell iframe is unreliable: there the Start-menu / Applications hint is enough.
   if (INSIDE_SHELL) return null;
   return (
     <a className="btn ghost" href="keysynth://open" title="keysynth://open">
@@ -48,6 +67,12 @@ function DeniedHelp() {
         <li>
           <b>Brave:</b> щиты для mvv42.ru → <q>Localhost access</q>.
         </li>
+        {OS === 'mac' && (
+          <li>
+            <b>Safari:</b> если страница не видит запущенный движок — откройте локальный интерфейс (ниже) или
+            Chrome.
+          </li>
+        )}
         {INSIDE_SHELL && (
           <li>
             <a href={PLATFORM_URL} target="_blank" rel="noopener">
@@ -79,9 +104,11 @@ function NotKeysynth() {
       </p>
       <ul>
         <li>
-          Закройте её (Диспетчер задач{info?.pid ? `, PID ${info.pid}` : ''}; mock: <code>scripts/stop-dev.ps1</code>).
+          Закройте её ({OS === 'mac' ? 'Мониторинг системы' : 'Диспетчер задач'}
+          {info?.pid ? `, PID ${info.pid}` : ''}; mock:{' '}
+          <code>{OS === 'mac' ? 'scripts/stop-dev.sh' : 'scripts/stop-dev.ps1'}</code>).
         </li>
-        <li>Запустите keysynth из меню «Пуск» — страница переподключится сама.</li>
+        <li>Запустите keysynth {START_HINT} — страница переподключится сама.</li>
       </ul>
     </div>
   );
@@ -145,18 +172,18 @@ export function EngineGate({ notKeysynth = false }: { notKeysynth?: boolean }) {
           {notKeysynth && <NotKeysynth />}
           {!notKeysynth && phase === 'not-running' && (
             <p className="gate-lead">
-              Нет ответа на <code>127.0.0.1:7341</code>. Запустите keysynth из меню «Пуск». Запущен, но связи нет — обновите.
+              Нет ответа на <code>127.0.0.1:7341</code>. Запустите keysynth {START_HINT}. Запущен, но связи нет — обновите.
             </p>
           )}
           {!notKeysynth && phase === 'permission-denied' && <DeniedHelp />}
 
           <div className="gate-actions">
             {showDownload && (
-              <a className="btn primary big" href={DOWNLOAD_URL} rel="noopener">
+              <a className="btn primary big" href={downloadUrl(OS)} rel="noopener">
                 <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
                   <path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M3 13h10" fill="none" stroke="currentColor" strokeWidth="1.6" />
                 </svg>
-                Скачать для Windows
+                {OS === 'mac' ? 'Скачать для macOS' : 'Скачать для Windows'}
               </a>
             )}
             {!busy && (

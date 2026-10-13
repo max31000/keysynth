@@ -1,9 +1,18 @@
 // Engine version vs the latest GitHub release (spec §11: the UI queries GitHub directly).
 
+import type { DesktopOs } from './os';
+
 export const RELEASES_API: string =
   (import.meta.env.VITE_KS_RELEASES_API as string | undefined) ??
   'https://api.github.com/repos/max31000/keysynth/releases/latest';
-export const DOWNLOAD_URL = 'https://github.com/max31000/keysynth/releases/latest/download/keysynth-setup.exe';
+const LATEST_DOWNLOAD = 'https://github.com/max31000/keysynth/releases/latest/download/';
+/** Fixed-name release assets (scripts/build_installer.ps1, scripts/build_app_macos.sh). */
+export const DOWNLOAD_URLS = {
+  windows: LATEST_DOWNLOAD + 'keysynth-setup.exe',
+  mac: LATEST_DOWNLOAD + 'keysynth-macos.dmg',
+} as const;
+/** Download for this OS; other OSes (no engine build) get the Windows installer link as before. */
+export const downloadUrl = (os: DesktopOs): string => (os === 'mac' ? DOWNLOAD_URLS.mac : DOWNLOAD_URLS.windows);
 export const RELEASES_PAGE = 'https://github.com/max31000/keysynth/releases/latest';
 
 export type Semver = [number, number, number];

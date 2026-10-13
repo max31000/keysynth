@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cloudActions, useCloud, useEngine } from '../../store';
 import { findEntry, formatBytes, formatEta, formatRate, jobForEntry, jobFraction, patchSampleEntries } from '../../lib/samples';
-import { DOWNLOAD_URL } from '../../platform/version';
+import { downloadUrl } from '../../platform/version';
+import { OS } from '../../platform/os';
 
 /** PROTOCOL.md `cloud_link` step 3: re-linking to another account needs an explicit yes. */
 export function LinkConfirm() {
@@ -70,7 +71,7 @@ export function UpdateBanner() {
         )}
         .
       </span>
-      <a className="btn small primary" href={DOWNLOAD_URL} rel="noopener">
+      <a className="btn small primary" href={downloadUrl(OS)} rel="noopener">
         Скачать
       </a>
       <a className="btn small ghost" href={latest.url} target="_blank" rel="noopener">

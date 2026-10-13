@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- keysynth.app (scripts/build_app_macos.sh replaces @VERSION@). Counterpart of installer/keysynth.iss. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>keysynth</string>
+    <key>CFBundleDisplayName</key>
+    <string>keysynth</string>
+    <key>CFBundleIdentifier</key>
+    <string>ru.mvv42.keysynth</string>
+    <key>CFBundleExecutable</key>
+    <string>keysynth-engine</string>
+    <key>CFBundleIconFile</key>
+    <string>keysynth</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@VERSION@</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSArchitecturePriority</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <!-- Menu bar app: no Dock icon, no app menu (ARCHITECTURE §16). -->
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- keysynth:// links from the web UI start / wake the app (an Apple Event, see DesktopIntegration_mac.mm). -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>ru.mvv42.keysynth</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>keysynth</string>
+            </array>
+        </dict>
+    </array>
+    <!-- Audio input (vocoder, input bus): macOS asks once when an input device is opened. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>keysynth uses the audio input you select (vocoder, external instruments).</string>
+</dict>
+</plist>

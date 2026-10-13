@@ -7,6 +7,9 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+#include <unistd.h>
 #endif
 
 #include <cstdio>
@@ -35,6 +38,18 @@ void setupGuiOutput(const std::filesystem::path& logsDir, bool rotate) {
         setvbuf(stdout, nullptr, _IONBF, 0); // MSVC has no line buffering; crash-safe log
         if (_wfreopen(log.c_str(), L"a", stderr) != nullptr) setvbuf(stderr, nullptr, _IONBF, 0);
     }
+#elif defined(KS_GUI_SUBSYSTEM) && defined(__APPLE__)
+    // Started from Finder / login item / a link: stdout and stderr go nowhere (no terminal). From a terminal they
+    // stay there, like an attached console on Windows.
+    if (isatty(STDOUT_FILENO) || isatty(STDERR_FILENO)) return;
+    std::error_code ec;
+    std::filesystem::create_directories(logsDir, ec);
+    const auto log = logsDir / "engine.log";
+    if (rotate) std::filesystem::rename(log, logsDir / "engine.prev.log", ec);
+    if (std::freopen(log.c_str(), "a", stdout) != nullptr) {
+        setvbuf(stdout, nullptr, _IOLBF, 0);
+        if (std::freopen(log.c_str(), "a", stderr) != nullptr) setvbuf(stderr, nullptr, _IONBF, 0);
+    }
 #else
     (void)logsDir;
     (void)rotate;
@@ -47,6 +62,14 @@ void reportFatal(const std::string& message) {
 #if defined(KS_GUI_SUBSYSTEM) && defined(_WIN32)
     const juce::String text = juce::String::fromUTF8(message.c_str());
     MessageBoxW(nullptr, text.toWideCharPointer(), L"keysynth", MB_OK | MB_ICONERROR);
+#elif defined(KS_GUI_SUBSYSTEM) && defined(__APPLE__)
+    // Blocking alert without a run loop (fatal startup errors exit right after).
+    CFStringRef text = CFStringCreateWithCString(nullptr, message.c_str(), kCFStringEncodingUTF8);
+    CFOptionFlags response = 0;
+    CFUserNotificationDisplayAlert(0, kCFUserNotificationStopAlertLevel, nullptr, nullptr, nullptr, CFSTR("keysynth"),
+                                   text ? text : CFSTR("keysynth failed to start"), nullptr, nullptr, nullptr,
+                                   &response);
+    if (text) CFRelease(text);
 #endif
 }
 

@@ -6,6 +6,8 @@ namespace ks::app {
 
 extern const unsigned char kTrayIconPng[]; // generated from assets/icon/keysynth-32.png (engine/CMakeLists.txt)
 extern const std::size_t kTrayIconPngSize;
+extern const unsigned char kTrayTemplatePng[]; // assets/icon/keysynth-tray-template.png (macOS menu bar)
+extern const std::size_t kTrayTemplatePngSize;
 
 namespace {
 juce::String u8(const char* s) { return juce::String::fromUTF8(s); }
@@ -19,7 +21,9 @@ bool trayRussian() {
 
 Tray::Tray(TrayActions actions, std::string version) : a_(std::move(actions)), version_(std::move(version)) {
     const juce::Image icon = juce::ImageFileFormat::loadFrom(kTrayIconPng, kTrayIconPngSize);
-    setIconImage(icon, icon);
+    // macOS draws the template image (tinted for light/dark menu bars); Windows the colour one.
+    const juce::Image tmpl = juce::ImageFileFormat::loadFrom(kTrayTemplatePng, kTrayTemplatePngSize);
+    setIconImage(icon, tmpl);
     refreshTooltip();
     startTimerHz(10);
 }
@@ -31,9 +35,15 @@ void Tray::notify(const std::string& title, const std::string& text) {
 }
 
 void Tray::mouseDown(const juce::MouseEvent& e) {
+#if defined(__APPLE__)
+    // Menu bar convention: any click shows the menu ("Open keysynth" is its first item).
+    (void)e;
+    showMenu();
+#else
     // Left click opens the UI (like other tray apps); right click shows the menu.
     if (e.mods.isPopupMenu()) showMenu();
     else if (a_.openUi) a_.openUi();
+#endif
 }
 
 void Tray::showMenu() {
@@ -51,15 +61,23 @@ void Tray::showMenu() {
         refreshTooltip();
     });
     const bool autostart = a_.autostartEnabled && a_.autostartEnabled();
+#if defined(__APPLE__)
+    m.addItem(tr("Открывать при входе", "Open at Login"), true, autostart, [this, autostart] {
+#else
     m.addItem(tr("Автозапуск", "Start with Windows"), true, autostart, [this, autostart] {
+#endif
         if (a_.setAutostart && !a_.setAutostart(!autostart))
             notify("keysynth", trayRussian() ? "Не удалось изменить автозапуск" : "Could not change autostart");
     });
     m.addSeparator();
     m.addItem(tr("Выход", "Quit"), [this] { if (a_.quit) a_.quit(); });
+#if defined(__APPLE__)
+    showDropdownMenu(m); // native NSMenu under the status item
+#else
     // Foreground first, or the menu does not close when the user clicks elsewhere.
     juce::Process::makeForegroundProcess();
     m.showMenuAsync(juce::PopupMenu::Options().withMousePosition());
+#endif
 }
 
 void Tray::timerCallback() {

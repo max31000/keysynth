@@ -1,8 +1,9 @@
 // keysynth-engine: JUCE app without windows (optional tray icon). Wiring only — see docs/ARCHITECTURE.md §2, §16.
 //   --tray               desktop mode without opening the browser (autostart). Installed mode defaults to desktop
-//                        mode + open the UI. Desktop mode = tray icon + single instance (named mutex).
+//                        mode + open the UI. Desktop mode = tray icon + single instance (named mutex / lock file).
 //   --no-tray            no tray / single instance even when installed (headless, CI, tests)
 //   --quit               ask the running desktop instance to quit (exit code 1 if none), then exit
+//   --version            print "keysynth X.Y.Z" and exit
 //   keysynth://...       protocol launch (web page "start" button): desktop mode without opening the browser
 //   --no-audio           drive the engine from a timer thread (null device), for UI/protocol work
 //   --port N             WebSocket port (default 7341); --http-port N static UI port (default 7340, 0 = off)
@@ -55,7 +56,7 @@ std::atomic<bool> g_quit{false};
 extern "C" void onSignal(int) { g_quit.store(true); }
 
 struct Args {
-    bool noAudio = false, noMidi = false, noPlugins = false, noCloud = false, help = false;
+    bool noAudio = false, noMidi = false, noPlugins = false, noCloud = false, help = false, version = false;
     bool tray = false, noTray = false, quit = false, protocol = false;
     int wsPort = 7341, httpPort = 7340;
     std::optional<int> buffer;
@@ -107,6 +108,7 @@ Args parseArgs(int argc, char** argv, std::string& err) {
             else if (s == "--no-tray") a.noTray = true;
             else if (s == "--quit") a.quit = true;
             else if (s == "--help" || s == "-h") a.help = true;
+            else if (s == "--version") a.version = true;
             else err = "unknown argument " + s;
         } catch (...) {
             err = "bad value for " + s;
@@ -254,8 +256,12 @@ int main(int argc, char** argv) {
         if (!err.empty()) std::fprintf(stderr, "error: %s\n", err.c_str());
         std::printf("usage: keysynth-engine [--no-audio] [--no-midi] [--port N] [--http-port N] [--buffer N]\n"
                     "                       [--sample-rate HZ] [--preset PATH] [--root DIR] [--no-plugins] [--no-cloud]\n"
-                    "                       [--tray | --no-tray] [--quit] [keysynth://open]\n");
+                    "                       [--tray | --no-tray] [--quit] [--version] [keysynth://open]\n");
         return err.empty() ? 0 : 2;
+    }
+    if (args.version) {
+        std::printf("keysynth %s\n", ks::engineVersion());
+        return 0;
     }
     if (args.quit) return ks::platform::SingleInstance::send(ks::platform::SingleInstance::Command::Quit) ? 0 : 1;
     std::signal(SIGINT, onSignal);
@@ -294,6 +300,18 @@ int main(int argc, char** argv) {
     if (desktop) ks::platform::initApplication(true); // macOS: menu bar app, no Dock icon
     // After the instance check: only the primary desktop instance rotates the log.
     ks::app::setupGuiOutput(paths.logsDir, desktop);
+#if defined(__APPLE__)
+    // The Windows installer copies the example plugins into the data dir (onlyifdoesntexist); a dragged-in .app
+    // has no installer, so the first start does it (never over an existing plugins dir).
+    if (paths.installed()) {
+        std::error_code ec;
+        const auto examples = paths.root / "plugins";
+        if (std::filesystem::is_directory(examples, ec) && !std::filesystem::exists(paths.pluginsDir, ec)) {
+            std::filesystem::copy(examples, paths.pluginsDir, std::filesystem::copy_options::recursive, ec);
+            if (ec) std::fprintf(stderr, "plugins: could not copy the examples: %s\n", ec.message().c_str());
+        }
+    }
+#endif
     std::printf("keysynth-engine — root %s%s\n", ks::pathToUtf8(paths.root).c_str(),
                 ks::rt::checksEnabled() ? " (RT checks on)" : "");
 

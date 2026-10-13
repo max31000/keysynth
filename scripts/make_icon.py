@@ -1,7 +1,8 @@
 """Generate the keysynth app icon (assets/icon/): a rounded dark tile with a piano-keys glyph.
 
 Each size is drawn separately (fewer keys at <= 24 px so the glyph stays legible) at 8x and downsampled.
-Outputs keysynth.ico (16..256) and keysynth-<n>.png. Requires Pillow. Re-run after changing the design:
+Outputs keysynth.ico (16..256), keysynth-<n>.png and the macOS menu-bar template keysynth-tray-template.png (black
+glyph on transparent: macOS tints template images by their alpha). Requires Pillow. Re-run after changing the design:
 
     python scripts/make_icon.py
 """
@@ -67,10 +68,33 @@ def draw(size: int) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 
+def draw_template(size: int) -> Image.Image:
+    """Menu-bar template image: the keys as an opaque silhouette, black keys cut out, no tile."""
+    s = size * SS
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    n_white = 4
+    kx0, kx1 = s * 0.06, s * 0.94
+    ky0, ky1 = s * 0.12, s * 0.88
+    gap = round(s * 0.06)
+    kw = (kx1 - kx0 - gap * (n_white - 1)) / n_white
+    r = round(s * 0.06)
+    for i in range(n_white):
+        x0 = kx0 + i * (kw + gap)
+        d.rounded_rectangle([x0, ky0, x0 + kw, ky1], radius=r, fill=(0, 0, 0, 255))
+    bw = kw * 0.62 + gap
+    bh = (ky1 - ky0) * 0.56
+    for i in range(n_white - 1):
+        cx = kx0 + (i + 1) * (kw + gap) - gap / 2
+        d.rounded_rectangle([cx - bw / 2, ky0 - SS, cx + bw / 2, ky0 + bh], radius=r, fill=(0, 0, 0, 0))
+    return img.resize((size, size), Image.LANCZOS)
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     for n in PNG_SIZES:
         draw(n).save(OUT / f"keysynth-{n}.png", optimize=True)
+    draw_template(36).save(OUT / "keysynth-tray-template.png", optimize=True)  # 18 pt menu bar @2x
     imgs = [draw(n) for n in ICO_SIZES]
     big = imgs[-1]
     big.save(OUT / "keysynth.ico", format="ICO", sizes=[(n, n) for n in ICO_SIZES], append_images=imgs[:-1])
