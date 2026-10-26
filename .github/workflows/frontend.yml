@@ -39,8 +39,8 @@ jobs:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           [ -f "$DIST/index.html" ] || { echo "::error::$DIST/index.html not found"; exit 1; }
           grep -q '/keysynth/assets/' "$DIST/index.html" || { echo "::error::build is not based at /keysynth/"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:
           name: ui-platform
@@ -89,7 +89,7 @@ jobs:
       group: deploy-static-keysynth
       cancel-in-progress: false # never kill a run in the middle of the swap
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ui-platform
           path: _deploy
@@ -100,7 +100,7 @@ jobs:
           [ -f _deploy/index.html ] || { echo "::error::_deploy/index.html missing"; exit 1; }
 
       - name: Upload to staging dir /var/www/.keysynth.new-*
-        uses: appleboy/scp-action@v1
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
           host: ${{ secrets.VDS_HOST }}
           username: ${{ secrets.VDS_USER }}
@@ -112,7 +112,7 @@ jobs:
           rm: true
 
       - name: Swap into /var/www/keysynth
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         env:
           RUN_TAG: ${{ github.run_id }}-${{ github.run_attempt }}
         with:
